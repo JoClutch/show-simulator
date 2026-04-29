@@ -111,6 +111,20 @@ function onTribalDone(eliminatedContestant) {
   gameState.eliminated.push(eliminatedContestant);
   removeFromTribes(eliminatedContestant);
 
+  // Event log: every elimination is recorded. The player sees only their own
+  // game-over (this stays out of dev panel as well-noised; AI-only eliminations
+  // are still recorded so dev panel can show full history).
+  const isPlayer = eliminatedContestant.id === gameState.player?.id;
+  logEvent(gameState, {
+    category: "tribal",
+    type:     isPlayer ? "player-eliminated" : "contestant-eliminated",
+    text: isPlayer
+      ? "You were voted out."
+      : `${eliminatedContestant.name} was voted out.`,
+    playerVisible: isPlayer,
+    meta: { eliminatedId: eliminatedContestant.id, mergedAtTime: gameState.merged },
+  });
+
   // Prune the eliminated contestant from every alliance they were in.
   // Alliances dropping below 2 members are dissolved automatically.
   removeMemberFromAlliances(gameState, eliminatedContestant.id);
@@ -202,6 +216,14 @@ function doMerge() {
   // Any tribal idol still hidden in an abandoned camp is now permanently lost.
   // Idols that were already found (status "held") carry over to the merge.
   expirePreMergeIdols(gameState);
+
+  logEvent(gameState, {
+    category: "merge",
+    type:     "occurred",
+    text:     `The tribes have merged into ${SEASON_CONFIG.mergeTribeName}.`,
+    playerVisible: true,
+    meta: { count: all.length },
+  });
 }
 
 // ── Tribe swap ────────────────────────────────────────────────────────────────
@@ -242,6 +264,21 @@ function doSwap() {
   gameState.tribes.B   = newB;
   gameState.swapped    = true;
   gameState.swapRound  = gameState.round;
+
+  // Player-visible: identify which new tribe they ended up on so the log
+  // entry reads as a personal milestone, not just a generic event.
+  const player        = gameState.player;
+  const playerNewTribe = newA.find(c => c.id === player?.id) ? "A" : "B";
+  const newTribeName   = SEASON_CONFIG.tribeNames[playerNewTribe];
+  logEvent(gameState, {
+    category: "swap",
+    type:     "occurred",
+    text:     `Tribe Swap. You're now on ${newTribeName} with ${
+      (playerNewTribe === "A" ? newA : newB).length - 1
+    } other players.`,
+    playerVisible: true,
+    meta: { round: gameState.swapRound, playerNewTribe },
+  });
 
   // Note: alliances spanning the new tribes are NOT actively dissolved.
   // They quietly become harder to maintain because cross-tribe members can no

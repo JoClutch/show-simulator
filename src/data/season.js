@@ -129,6 +129,13 @@ function createSeasonState() {
     // Each bloc: { id, memberIds, targetId, formedRound, crossesAlliances }
     // See detectVotingBlocs() in engine/alliances.js.
     votingBlocs: [],
+
+    // ── Event log ──────────────────────────────────────────
+    // Unified chronological record of season milestones (idols, alliances,
+    // swap, merge, eliminations). Each entry: { round, day, category, type,
+    // text, playerVisible, meta }. Engine pushes via logEvent(); UI reads.
+    // See engine/eventLog.js.
+    eventLog: [],
   };
 }
 

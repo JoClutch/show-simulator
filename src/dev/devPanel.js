@@ -286,12 +286,30 @@ window.DEV_CONFIG = {
         return isMe ? `${name}★` : name;
       }).join(", ") || "(empty)";
 
-      // Staleness column: rounds since the alliance was last reinforced by a
-      // positive member interaction. ≥2 means the alliance is bleeding from
-      // neglect (visible cue: dev-lo class).
       const lastReinforced = a.lastReinforcedRound ?? a.formedRound;
       const staleRounds    = (g.round ?? 0) - lastReinforced;
       const stCls          = staleRounds >= 2 ? "dev-lo" : staleRounds >= 1 ? "dev-mid" : "dev-dim";
+
+      // v3.8: natural-fit columns. Average pair rel and trust within the
+      // alliance — these are what updateAlliances drifts strength TOWARD.
+      // High avg (rel ≥ 8 AND trust ≥ 5) → +0.5 next round; low → bleed.
+      let avgRel = 0, avgTrust = 0;
+      if (a.memberIds.length >= 2) {
+        let pairs = 0, relSum = 0, trustSum = 0;
+        for (let i = 0; i < a.memberIds.length; i++) {
+          for (let j = i + 1; j < a.memberIds.length; j++) {
+            relSum   += getRelationship(g, a.memberIds[i], a.memberIds[j]);
+            trustSum += getTrust(g, a.memberIds[i], a.memberIds[j]);
+            pairs++;
+          }
+        }
+        if (pairs > 0) {
+          avgRel = relSum / pairs;
+          avgTrust = trustSum / pairs;
+        }
+      }
+      const relCls   = avgRel >= 8     ? "dev-hi" : avgRel < 0    ? "dev-lo" : "dev-mid";
+      const trustCls = avgTrust >= 5   ? "dev-hi" : avgTrust < 3  ? "dev-lo" : "dev-mid";
 
       return `<tr>
         <td class="dev-dim">${a.id}</td>
@@ -299,15 +317,17 @@ window.DEV_CONFIG = {
         <td class="${cls}">${a.strength.toFixed(1)}</td>
         <td class="dev-dim">${status}</td>
         <td class="${stCls}">${staleRounds}</td>
+        <td class="${relCls}">${avgRel.toFixed(1)}</td>
+        <td class="${trustCls}">${avgTrust.toFixed(1)}</td>
         <td>${members}</td>
       </tr>`;
     }).join("");
 
     return `
       <div class="dev-section">
-        <div class="dev-section-hd">Alliances &nbsp;<span class="dev-dim" style="font-weight:normal">stale = rounds since reinforced</span></div>
+        <div class="dev-section-hd">Alliances &nbsp;<span class="dev-dim" style="font-weight:normal">avg rel/trust = drift target</span></div>
         <table class="dev-table">
-          <thead><tr><th>ID</th><th>Name</th><th>Str</th><th>Status</th><th>Stale</th><th>Members</th></tr></thead>
+          <thead><tr><th>ID</th><th>Name</th><th>Str</th><th>Status</th><th>Stale</th><th>avgRel</th><th>avgTrust</th><th>Members</th></tr></thead>
           <tbody>${rows}</tbody>
         </table>
       </div>`;
@@ -319,17 +339,26 @@ window.DEV_CONFIG = {
     const blocs = g?.votingBlocs ?? [];
     if (blocs.length === 0) return "";
 
+    // v3.8: flag the largest bloc as "Maj" — the de-facto majority that
+    // drove the elimination (ignoring idol plays / ties).
+    const maxSize = Math.max(...blocs.map(b => b.memberIds.length));
+
     const rows = blocs.map(b => {
       const targetName = allKnownPlayers().find(c => c.id === b.targetId)?.name ?? b.targetId;
       const memberNames = b.memberIds.map(id =>
         allKnownPlayers().find(c => c.id === id)?.name ?? id
       ).join(", ");
+      const isMaj   = b.memberIds.length === maxSize;
+      const flagCls = isMaj ? "dev-hi" : "dev-dim";
+      const flag    = isMaj ? "MAJ" : "—";
       const noteCls = b.crossesAlliances ? "dev-mid" : "dev-dim";
       const note    = b.crossesAlliances ? "cross-alliance" : "—";
       return `<tr>
         <td class="dev-dim">${b.id}</td>
         <td>→ ${targetName}</td>
+        <td class="dev-dim">${b.memberIds.length}</td>
         <td>${memberNames}</td>
+        <td class="${flagCls}">${flag}</td>
         <td class="${noteCls}">${note}</td>
       </tr>`;
     }).join("");
@@ -338,7 +367,37 @@ window.DEV_CONFIG = {
       <div class="dev-section">
         <div class="dev-section-hd">Voting blocs (last tribal)</div>
         <table class="dev-table">
-          <thead><tr><th>ID</th><th>Target</th><th>Members</th><th>Note</th></tr></thead>
+          <thead><tr><th>ID</th><th>Target</th><th>Size</th><th>Members</th><th>Maj</th><th>Note</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  }
+
+  // v3.8: full event log including non-player-visible events. Latest first.
+  // The eye column shows "👁" for player-visible events vs blank for hidden.
+  function renderEventLog(g) {
+    const events = g?.eventLog ?? [];
+    if (events.length === 0) return "";
+
+    // Latest 25 to keep the table manageable; the season produces ~25 events total.
+    const recent = events.slice(-25).reverse();
+
+    const rows = recent.map(e => {
+      const visTag = e.playerVisible ? "👁" : "·";
+      const visCls = e.playerVisible ? "dev-hi" : "dev-dim";
+      return `<tr>
+        <td class="dev-dim">R${e.round}·D${e.day}</td>
+        <td class="dev-dim">${e.category}/${e.type}</td>
+        <td>${e.text}</td>
+        <td class="${visCls}" title="${e.playerVisible ? "player-visible" : "hidden from player"}">${visTag}</td>
+      </tr>`;
+    }).join("");
+
+    return `
+      <div class="dev-section">
+        <div class="dev-section-hd">Event log (latest ${recent.length} of ${events.length}) &nbsp;<span class="dev-dim" style="font-weight:normal">👁 = player sees</span></div>
+        <table class="dev-table">
+          <thead><tr><th>When</th><th>Kind</th><th>Text</th><th>Vis</th></tr></thead>
           <tbody>${rows}</tbody>
         </table>
       </div>`;
@@ -375,19 +434,32 @@ window.DEV_CONFIG = {
         idol.status === "hidden" && available ? "dev-mid" :
         "dev-dim";
 
+      // v3.8: per-scope search history (player-only since AIs don't search)
+      const searches = g.idolSearches?.[idol.scope] ?? 0;
+      const searchCls = searches >= 3 ? "dev-mid" : "dev-dim";
+
+      // v3.8: round when found / played, when applicable
+      const roundInfo =
+        idol.status === "played"  ? `played R${idol.playedRound ?? "?"}` :
+        idol.status === "held"    ? `found R${idol.foundRound ?? "?"}`   :
+        idol.status === "expired" ? "expired" :
+        "—";
+
       return `<tr>
         <td class="dev-dim">${idol.id}</td>
         <td>${scopeName}</td>
         <td class="${statusCls}">${statusLabel}</td>
         <td>${holderName}</td>
+        <td class="${searchCls}">${searches}</td>
+        <td class="dev-dim">${roundInfo}</td>
       </tr>`;
     }).join("");
 
     return `
       <div class="dev-section">
-        <div class="dev-section-hd">Idols &nbsp;<span class="dev-dim" style="font-weight:normal">✦ = active</span></div>
+        <div class="dev-section-hd">Idols &nbsp;<span class="dev-dim" style="font-weight:normal">✦ = active &nbsp;·&nbsp; searches = player attempts</span></div>
         <table class="dev-table">
-          <thead><tr><th>ID</th><th>Scope</th><th>Status</th><th>Holder</th></tr></thead>
+          <thead><tr><th>ID</th><th>Scope</th><th>Status</th><th>Holder</th><th>Searches</th><th>History</th></tr></thead>
           <tbody>${rows}</tbody>
         </table>
       </div>`;
@@ -469,6 +541,8 @@ window.DEV_CONFIG = {
       ${renderAlliances(g)}
 
       ${renderVotingBlocs(g)}
+
+      ${renderEventLog(g)}
 
       ${juryHTML}
     `;

@@ -84,6 +84,20 @@ function createAlliance(state, members, founderId, initialStrength = 5) {
     status:              "active",
   };
   state.alliances.push(alliance);
+
+  // Event log: surface to the player only if they're a member; AI-only
+  // alliances are recorded for dev visibility but not the Season Log.
+  const playerInvolved = state.player && members.some(m => m.id === state.player.id);
+  logEvent(state, {
+    category:      "alliance",
+    type:          "formed",
+    text: playerInvolved
+      ? `You formed an alliance — "${alliance.name}".`
+      : `${members.map(m => m.name).join(" + ")} formed "${alliance.name}".`,
+    playerVisible: playerInvolved,
+    meta: { allianceId: alliance.id, memberIds: alliance.memberIds.slice() },
+  });
+
   return alliance;
 }
 
@@ -146,13 +160,29 @@ function strengthenSharedAlliances(state, idA, idB, delta) {
 // Removes a contestant from every alliance they belong to. Called when
 // someone is eliminated. Alliances dropping below 2 members are dissolved.
 function removeMemberFromAlliances(state, contestantId) {
+  const removed = findContestant(state, contestantId);
   for (const a of state.alliances ?? []) {
     const idx = a.memberIds.indexOf(contestantId);
     if (idx === -1) continue;
+
+    // Snapshot membership BEFORE removal so we can determine whether the
+    // player was in this alliance when the dissolution happens.
+    const wasPlayerMember = state.player && a.memberIds.includes(state.player.id);
+
     a.memberIds.splice(idx, 1);
-    if (a.memberIds.length < 2) {
+
+    if (a.memberIds.length < 2 && a.status !== "dissolved") {
       a.status   = "dissolved";
       a.strength = 0;
+      logEvent(state, {
+        category:      "alliance",
+        type:          "dissolved",
+        text: wasPlayerMember
+          ? `Your alliance "${a.name}" dissolved when ${removed?.name ?? "a member"} was voted out.`
+          : `"${a.name}" dissolved when ${removed?.name ?? "a member"} was voted out.`,
+        playerVisible: wasPlayerMember,
+        meta: { allianceId: a.id, reason: "member-eliminated", eliminatedId: contestantId },
+      });
     }
   }
 }
@@ -325,10 +355,41 @@ function processVotingAftermath(state, allVotes) {
       adjustAllianceStrength(a, -3);
       const idx = a.memberIds.indexOf(voterId);
       if (idx !== -1) a.memberIds.splice(idx, 1);
+
+      // Event log: the player only sees betrayals involving their alliance.
+      const playerInAlliance = state.player && memberSnapshot.includes(state.player.id);
+      const betrayer = findContestant(state, voterId);
+      const betrayed = findContestant(state, targetId);
+      const playerIsBetrayer = state.player && voterId === state.player.id;
+      const playerIsBetrayed = state.player && targetId === state.player.id;
+
+      let text;
+      if (playerIsBetrayer)        text = `You broke from "${a.name}" — voting against ${betrayed?.name ?? "an ally"}.`;
+      else if (playerIsBetrayed)   text = `${betrayer?.name ?? "An ally"} betrayed you, voting against you in "${a.name}".`;
+      else                         text = `${betrayer?.name ?? "Someone"} betrayed "${a.name}" — voting against ${betrayed?.name ?? "an ally"}.`;
+
+      logEvent(state, {
+        category:      "alliance",
+        type:          "betrayal",
+        text,
+        playerVisible: playerInAlliance,
+        meta: { allianceId: a.id, betrayerId: voterId, betrayedId: targetId },
+      });
     }
 
     // Post-ejection sanity: alliance may have collapsed.
     if (a.memberIds.length < 2) {
+      const playerWasMember = state.player && memberSnapshot.includes(state.player.id);
+      logEvent(state, {
+        category:      "alliance",
+        type:          "dissolved",
+        text: playerWasMember
+          ? `Your alliance "${a.name}" has dissolved.`
+          : `"${a.name}" has dissolved.`,
+        playerVisible: playerWasMember,
+        meta: { allianceId: a.id, reason: "betrayal-cascade" },
+      });
+
       a.status = "dissolved";
       a.strength = 0;
       continue;

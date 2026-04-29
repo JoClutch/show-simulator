@@ -245,6 +245,19 @@ function idolSearch(player, state) {
   idol.holder     = player.id;
   idol.foundRound = state.round;
 
+  // Event log: only the player searches in v3.x, so this is always a player
+  // milestone. The dev panel sees the same event with full meta detail.
+  const scopeLabel = scope === "merged"
+    ? SEASON_CONFIG.mergeTribeName
+    : SEASON_CONFIG.tribeNames[scope];
+  logEvent(state, {
+    category: "idol",
+    type:     "found",
+    text:     `You found a Hidden Immunity Idol at the ${scopeLabel} camp.`,
+    playerVisible: true,
+    meta: { idolId: idol.id, scope, holderId: player.id },
+  });
+
   return { found: true, idol };
 }
 
@@ -268,6 +281,20 @@ function idolPlay(idol, state) {
 
   idol.status      = "played";
   idol.playedRound = state.round;
+
+  // Event log: idol plays are public moments — the player witnesses every
+  // tribal they attend. Always visible; text varies for self vs other.
+  const isPlayer = state.player && idol.holder === state.player.id;
+  const holder   = isPlayer ? null : findContestant(state, idol.holder);
+  logEvent(state, {
+    category: "idol",
+    type:     isPlayer ? "played-self" : "played-by-other",
+    text: isPlayer
+      ? "You played your Hidden Immunity Idol at Tribal Council."
+      : `${holder?.name ?? "A contestant"} played a Hidden Immunity Idol at Tribal Council.`,
+    playerVisible: true,
+    meta: { idolId: idol.id, holderId: idol.holder },
+  });
 
   // v3.3 simplification: always self-play. The holder is the protected target.
   return idol.holder;

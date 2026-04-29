@@ -192,8 +192,21 @@ function renderCampLifeScreen(container, state) {
           <span class="camp-tribe-tag" style="color:${tribeColor}">${tribeName} tribe</span>
           <span class="camp-step-note">${stepNote}</span>
         </div>
-        <div id="actions-counter" class="actions-counter">
-          ${actionsLeft} of ${maxActions} actions left
+        <div class="camp-header-right">
+          <div id="actions-counter" class="actions-counter">
+            ${actionsLeft} of ${maxActions} actions left
+          </div>
+          <button class="season-log-btn" id="season-log-btn" title="Season Log">📜 Log</button>
+        </div>
+      </div>
+
+      <div class="season-log-overlay hidden" id="season-log-overlay">
+        <div class="season-log-panel">
+          <div class="season-log-header">
+            <span class="season-log-title">Season Log</span>
+            <button class="season-log-close" id="season-log-close-btn" title="Close">✕</button>
+          </div>
+          <div class="season-log-list" id="season-log-list"></div>
         </div>
       </div>
 
@@ -228,6 +241,47 @@ function renderCampLifeScreen(container, state) {
 
   container.querySelector("#continue-btn")
     .addEventListener("click", () => onCampLifeDone());
+
+  // ── Season Log modal ──────────────────────────────────────────────────────
+  // Player-visible event entries only. Refreshed each time the modal opens so
+  // a search-then-open shows the latest find right away.
+  const logOverlay  = container.querySelector("#season-log-overlay");
+  const logListEl   = container.querySelector("#season-log-list");
+  const logBtn      = container.querySelector("#season-log-btn");
+  const logCloseBtn = container.querySelector("#season-log-close-btn");
+
+  function refreshSeasonLog() {
+    const events = getPlayerVisibleEvents(state).slice().reverse();   // newest first
+    if (events.length === 0) {
+      logListEl.innerHTML =
+        `<p class="season-log-empty muted">No events yet — the season is just beginning.</p>`;
+      return;
+    }
+    logListEl.innerHTML = events.map(e => {
+      const tag = e.category[0].toUpperCase() + e.category.slice(1);
+      return `
+        <div class="season-log-entry season-log-entry-${e.category}">
+          <div class="season-log-entry-meta">
+            <span class="season-log-entry-day">Day ${e.day}</span>
+            <span class="season-log-entry-tag">${tag}</span>
+          </div>
+          <div class="season-log-entry-text">${e.text}</div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  logBtn.addEventListener("click", () => {
+    refreshSeasonLog();
+    logOverlay.classList.remove("hidden");
+  });
+  logCloseBtn.addEventListener("click", () => {
+    logOverlay.classList.add("hidden");
+  });
+  // Backdrop click closes too — but don't close when clicking inside the panel.
+  logOverlay.addEventListener("click", e => {
+    if (e.target === logOverlay) logOverlay.classList.add("hidden");
+  });
 
   showActionButtons();
 

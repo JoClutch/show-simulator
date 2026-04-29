@@ -496,6 +496,144 @@ button:disabled {
   text-align: right;
 }
 
+/* ── Camp Life: Season Log button + modal (v3.8) ── */
+/* Header layout adjustment to fit the log button next to the actions counter. */
+.camp-header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-shrink: 0;
+}
+
+.season-log-btn {
+  background: transparent;
+  border: 1px solid var(--border-mid);
+  color: var(--text-dim);
+  padding: 0.35rem 0.7rem;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: border-color 0.1s ease, color 0.1s ease;
+}
+
+.season-log-btn:hover {
+  border-color: var(--text-dim);
+  color: var(--text-primary);
+}
+
+/* Modal overlay — fixed position, dark backdrop. Click outside to close. */
+.season-log-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 1rem;
+}
+
+.season-log-overlay.hidden {
+  display: none;
+}
+
+.season-log-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border-mid);
+  border-radius: 6px;
+  width: 100%;
+  max-width: 540px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.season-log-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--border-dim);
+}
+
+.season-log-title {
+  font-weight: bold;
+  font-size: 1rem;
+  letter-spacing: 0.02em;
+}
+
+.season-log-close {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 0.15rem 0.4rem;
+  border-radius: 3px;
+}
+
+.season-log-close:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.season-log-list {
+  overflow-y: auto;
+  padding: 0.6rem 1rem 1rem;
+  flex: 1;
+}
+
+.season-log-empty {
+  text-align: center;
+  padding: 1.5rem 0;
+  font-style: italic;
+}
+
+.season-log-entry {
+  border-left: 3px solid var(--border-dim);
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.5rem;
+  background: var(--bg-raised);
+  border-radius: 0 3px 3px 0;
+}
+
+/* Per-category accent colors */
+.season-log-entry-idol     { border-left-color: var(--gold-dim); }
+.season-log-entry-alliance { border-left-color: #5fa86f; }
+.season-log-entry-swap     { border-left-color: #c8884a; }
+.season-log-entry-merge    { border-left-color: var(--mergeAccent, #9b59b6); }
+.season-log-entry-tribal   { border-left-color: #c07080; }
+.season-log-entry-game     { border-left-color: var(--gold); }
+
+.season-log-entry-meta {
+  display: flex;
+  gap: 0.6rem;
+  margin-bottom: 0.2rem;
+}
+
+.season-log-entry-day {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+}
+
+.season-log-entry-tag {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: bold;
+}
+
+.season-log-entry-text {
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
 /* Stale alliance — no positive interaction in 2+ rounds. */
 .camp-alliance-stale {
   opacity: 0.78;
