@@ -54,16 +54,24 @@ function onContestantSelected(contestant) {
 function onCampLifeDone() {
   if (gameState.campPhase === 1) {
     showScreen("challenge");
-  } else if (gameState.merged) {
-    // Post-merge: every player attends Tribal Council every round.
+    return;
+  }
+
+  // Phase 2 → tribal council ahead. Run a single gossip pass before votes
+  // crystallise: close allies share what they suspect about idol possession.
+  // Pre-merge it only matters for the tribe actually voting (the losing tribe);
+  // post-merge the entire merged tribe is voting.
+  if (gameState.merged) {
+    spreadIdolSuspicion(gameState, gameState.tribes.merged);
+    showScreen("tribal");
+  } else if (getPlayerTribeLabel() === gameState.tribalTribe) {
+    spreadIdolSuspicion(gameState, gameState.tribes[gameState.tribalTribe]);
     showScreen("tribal");
   } else {
-    // Pre-merge: only the losing tribe attends.
-    if (getPlayerTribeLabel() === gameState.tribalTribe) {
-      showScreen("tribal");
-    } else {
-      advanceRound();
-    }
+    // Player's tribe won — they don't see the other tribe's tribal, but the
+    // losing tribe still gossips overnight before they vote.
+    spreadIdolSuspicion(gameState, gameState.tribes[gameState.tribalTribe]);
+    advanceRound();
   }
 }
 

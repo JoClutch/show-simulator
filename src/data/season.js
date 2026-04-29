@@ -87,6 +87,15 @@ function createSeasonState() {
     // Range 0–10. Starts at 3 (slight baseline goodwill, not yet earned).
     // Affects: intel quality from askVote, effectiveness of confide/strategy.
     trust: {},
+
+    // ── Idol suspicion ─────────────────────────────────────
+    // Each contestant's private belief about whether each OTHER contestant
+    // holds a hidden immunity idol. Asymmetric (A's belief about B is
+    // independent of B's belief about A).
+    // Structure: { [observerId]: { [holderId]: number } }
+    // Range 0–10. Default 0 (unaware) — populated lazily by
+    // adjustIdolSuspicion() in engine/relationships.js as events occur.
+    idolSuspicion: {},
   };
 }
 

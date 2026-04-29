@@ -157,8 +157,16 @@ window.DEV_CONFIG = {
     const socialThreat    = candidate.social    * (voter.strategy / 15);
     const challengeThreat = candidate.challenge * (voter.strategy / 25);
 
+    // Idol suspicion factor — must mirror pickVoteTarget exactly.
+    const idolSusp = getIdolSuspicion(g, voter.id, candidate.id);
+    let idolFactor = 0;
+    if (idolSusp >= 7)      idolFactor = voter.strategy >= 6 ? -4 : +6;
+    else if (idolSusp >= 3) idolFactor = voter.strategy >= 6 ? -2 : +3;
+
     // No noise — fully deterministic for inspection.
-    return rel + bondProtection + trustFactor - suspicion - socialThreat - challengeThreat;
+    return rel + bondProtection + trustFactor
+         - suspicion - socialThreat - challengeThreat
+         + idolFactor;
   }
 
   // Returns the 1-2 dominant reasons a voter targets a candidate.
@@ -170,7 +178,11 @@ window.DEV_CONFIG = {
     const susp      = target.suspicion ?? 0;
     const socThreat = target.social    * (voter.strategy / 15);
     const chalThreat= target.challenge * (voter.strategy / 25);
+    const idolSusp  = getIdolSuspicion(g, voter.id, target.id);
     const parts = [];
+    // Idol-flush is the most narratively interesting reason — surface it first.
+    if (idolSusp >= 7 && voter.strategy >= 6) parts.push("flush idol");
+    else if (idolSusp >= 3 && voter.strategy >= 6) parts.push("idol hunch");
     if (rel   < -5)  parts.push(`rel ${rel.toFixed(0)}`);
     if (trust < 2.5) parts.push(`trust ${trust.toFixed(0)}`);
     if (susp  >= 5)  parts.push(`susp ${susp.toFixed(0)}`);
@@ -362,23 +374,28 @@ window.DEV_CONFIG = {
       </option>`;
     }).join("");
 
-    // Relationship / trust / suspicion table
+    // Relationship / trust / general susp / idol susp table
+    // The "IdolSusp" column is current → c: how strongly the perspective
+    // person believes c holds an idol. (0=unaware, 3+=suspect, 7+=confident.)
     const others = all.filter(c => c.id !== current.id);
     const relRows = others.map(c => {
-      const rel   = getRelationship(g, current.id, c.id);
-      const trust = getTrust(g, current.id, c.id);
-      const susp  = c.suspicion ?? 0;
-      const isElim = g.eliminated?.some(e => e.id === c.id);
+      const rel       = getRelationship(g, current.id, c.id);
+      const trust     = getTrust(g, current.id, c.id);
+      const susp      = c.suspicion ?? 0;
+      const idolSusp  = getIdolSuspicion(g, current.id, c.id);
+      const isElim    = g.eliminated?.some(e => e.id === c.id);
 
       const rCls = signClass(rel,   10, -5);
       const tCls = signClass(trust,  6,  2);
       const sCls = susp >= 5 ? "dev-lo" : susp >= 2 ? "dev-mid" : "";
+      const iCls = idolSusp >= 7 ? "dev-lo" : idolSusp >= 3 ? "dev-mid" : "dev-dim";
 
       return `<tr class="${isElim ? "dev-row-elim" : ""}">
         <td>${c.name}${isElim ? " <span class='dev-dim'>†</span>" : ""}</td>
         <td class="${rCls}">${rel.toFixed(1)}</td>
         <td class="${tCls}">${trust.toFixed(1)}</td>
         <td class="${sCls}">${susp.toFixed(1)}</td>
+        <td class="${iCls}">${idolSusp.toFixed(0)}</td>
       </tr>`;
     }).join("");
 
@@ -416,9 +433,9 @@ window.DEV_CONFIG = {
       </div>
 
       <div class="dev-section">
-        <div class="dev-section-hd">${current.name} → others (rel / trust / susp)</div>
+        <div class="dev-section-hd">${current.name} → others (rel / trust / susp / idol susp)</div>
         <table class="dev-table">
-          <thead><tr><th>Name</th><th>Rel</th><th>Trust</th><th>Susp</th></tr></thead>
+          <thead><tr><th>Name</th><th>Rel</th><th>Trust</th><th>Susp</th><th>Idol</th></tr></thead>
           <tbody>${relRows}</tbody>
         </table>
       </div>

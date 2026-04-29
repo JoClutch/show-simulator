@@ -105,6 +105,22 @@ function pickVoteTarget(state, voter, tribe) {
     const socialThreat    = c.social    * (voter.strategy / 15);
     const challengeThreat = c.challenge * (voter.strategy / 25);
 
+    // Idol suspicion: how strongly THIS voter believes c is holding an idol.
+    // Strategic voters (strategy ≥ 6) lean into a flush — a suspected idol
+    // holder is MORE attractive to vote (lower score). Less strategic voters
+    // avoid wasting a vote on someone who'll likely play it (higher score).
+    //
+    //   suspicion 0–2 (unaware)  : no effect
+    //   suspicion 3–6 (suspect)  : strategic ±2 swing
+    //   suspicion 7–10 (confident): strategic flush −4, non-strategic avoid +6
+    const idolSusp = getIdolSuspicion(state, voter.id, c.id);
+    let idolFactor = 0;
+    if (idolSusp >= 7) {
+      idolFactor = voter.strategy >= 6 ? -4 : +6;
+    } else if (idolSusp >= 3) {
+      idolFactor = voter.strategy >= 6 ? -2 : +3;
+    }
+
     // Noise: scaled inversely by strategy, then multiplied by DEV_CONFIG override.
     // Strategy 10 → ±1.5; strategy 1 → ±7.5. Set voteNoiseMultiplier=0 for
     // fully deterministic votes (useful for tuning AI behaviour).
@@ -114,6 +130,7 @@ function pickVoteTarget(state, voter, tribe) {
 
     const score = rel + bondProtection + trustFactor
                 - suspicion - socialThreat - challengeThreat
+                + idolFactor
                 + noise;
 
     if (VOTE_DEBUG) {
@@ -121,8 +138,8 @@ function pickVoteTarget(state, voter, tribe) {
         `  [SCORE] ${voter.name} → ${c.name}: ` +
         `rel=${rel.toFixed(1)} bond=+${bondProtection} trust=${trustFactor.toFixed(1)} ` +
         `susp=${(-suspicion).toFixed(1)} soc=${(-socialThreat).toFixed(1)} ` +
-        `chal=${(-challengeThreat).toFixed(1)} noise=${noise.toFixed(1)} ` +
-        `= ${score.toFixed(1)}`
+        `chal=${(-challengeThreat).toFixed(1)} idol=${idolFactor.toFixed(1)} ` +
+        `noise=${noise.toFixed(1)} = ${score.toFixed(1)}`
       );
     }
 

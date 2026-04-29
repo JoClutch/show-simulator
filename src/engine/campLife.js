@@ -211,6 +211,38 @@ function actionSearchIdol(state, player, tribemates) {
   adjustRelationship(state, player.id, witness.id, relHit);
   adjustTrust(state, player.id, witness.id, trustHit);
 
+  // ── Idol suspicion ────────────────────────────────────────────────────────
+  //
+  // The witness directly observed the player's behaviour. Their belief that
+  // the player holds (or might soon hold) an idol jumps:
+  //
+  //   base       : rand(1, 2)
+  //   strategist : +1 if witness.strategy ≥ 7 (pattern-aware)
+  //   smooth     : –1 if player.social ≥ 8   (great cover)
+  //   repeat     : +1 if prior searches in this scope ≥ 1
+  //   tell       : +1 on success if player.social < 6 (couldn't quite hide it)
+  //
+  // Range: typically 1–5 added to the witness's idol suspicion of the player.
+  const witnessGain =
+    rand(1, 2)
+    + (witness.strategy >= 7 ? 1 : 0)
+    + (player.social   >= 8 ? -1 : 0)
+    + (prevSearches    >= 1 ? 1 : 0)
+    + (found && player.social < 6 ? 1 : 0);
+  adjustIdolSuspicion(state, witness.id, player.id, Math.max(1, witnessGain));
+
+  // Ambient bleed: from the second repeat onward, other tribemates start
+  // noticing the pattern even without seeing the search directly. Each
+  // non-witness tribemate has a 40% chance to gain +1 idol suspicion.
+  if (prevSearches >= 2) {
+    for (const mate of tribemates) {
+      if (mate.id === witness.id) continue;
+      if (Math.random() < 0.40) {
+        adjustIdolSuspicion(state, mate.id, player.id, 1);
+      }
+    }
+  }
+
   // ── Feedback ──────────────────────────────────────────────────────────────
   if (found) {
     return { feedback: pickFrom([
@@ -415,6 +447,11 @@ function actionConfide(state, player, target) {
   adjustTrust(state, player.id, target.id, trustGain);
   adjustRelationship(state, player.id, target.id, rand(1, 3));
 
+  // Genuine vulnerability undercuts idol suspicion — someone who opens up about
+  // their life back home doesn't read like someone playing idol games. Drop
+  // the target's idol suspicion of the player by 1 (or 2 on a deep connection).
+  adjustIdolSuspicion(state, target.id, player.id, trustGain >= 4 ? -2 : -1);
+
   if (trustGain >= 4) {
     return { feedback: pickFrom([
       `You and ${target.name} sat by the water for a long time. You told them something real. They did too. You felt a genuine shift.`,
@@ -498,6 +535,10 @@ function actionLayLow(state, player, tribemates) {
   if (tribemates.length > 0) {
     const witness = pickFrom(tribemates);
     adjustRelationship(state, player.id, witness.id, 1);
+
+    // Visibly mundane behaviour eases idol suspicion — that one tribemate's
+    // mental picture of the player as "schemer" softens by a notch.
+    adjustIdolSuspicion(state, witness.id, player.id, -1);
   }
 
   return { feedback: pickFrom([

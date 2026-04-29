@@ -94,3 +94,84 @@ function adjustSuspicion(state, id, delta) {
   if (!c) return;
   c.suspicion = Math.max(0, Math.min(10, (c.suspicion ?? 0) + delta));
 }
+
+// ── Idol suspicion API ───────────────────────────────────────────────────────
+//
+// Each contestant privately tracks how strongly they believe each other
+// contestant holds a hidden immunity idol. Asymmetric — A's belief about B is
+// independent of B's belief about A.
+//
+//   state.idolSuspicion[observerId][holderId] = number   // 0–10, default 0
+//
+// Tiers (by score):
+//   0–2  unaware  : no real reason to suspect them
+//   3–6  suspect  : a hunch — saw something, heard something
+//   7–10 confident: pretty sure they have one
+//
+// At tribal council, voters with high idol suspicion of a candidate adjust
+// their vote (see vote.js): strategic voters lean into a flush, less strategic
+// voters avoid wasting a vote. See spreadIdolSuspicion below for how beliefs
+// propagate between close allies overnight.
+
+function getIdolSuspicion(state, observerId, holderId) {
+  return state.idolSuspicion?.[observerId]?.[holderId] ?? 0;
+}
+
+// Applies a delta clamped to [0, 10].
+// Lazily creates the inner observer object — no need to pre-init for every pair.
+function adjustIdolSuspicion(state, observerId, holderId, delta) {
+  if (!state.idolSuspicion) state.idolSuspicion = {};
+  if (!state.idolSuspicion[observerId]) state.idolSuspicion[observerId] = {};
+  const cur = state.idolSuspicion[observerId][holderId] ?? 0;
+  state.idolSuspicion[observerId][holderId] = Math.max(0, Math.min(10, cur + delta));
+}
+
+// Returns the categorical tier name for an idol suspicion score.
+function idolSuspicionTier(score) {
+  if (score >= 7) return "confident";
+  if (score >= 3) return "suspect";
+  return "unaware";
+}
+
+// ── Idol suspicion: gossip / spread ──────────────────────────────────────────
+//
+// Once per pre-tribal step, close allies in the same active pool may share
+// what they suspect about idol possession. Suspicion ≥5 in observer A about
+// holder X has a chance to nudge each close-ally B's suspicion of X up by 1.
+//
+// "Close ally" gate: relationship ≥5 AND trust ≥4 between A and B.
+// Spread chance scales lightly with the gossiper's social skill — natural
+// communicators get their read across more reliably.
+//
+// pool — the array of contestants among whom gossip happens (one tribe pre-merge,
+//        the merged tribe post-merge).
+//
+// This is intentionally restrained: only meaningful suspicions spread, only to
+// already-close allies, and only one point at a time. Suspicion forms slow,
+// realistic clusters around alliances rather than spreading like wildfire.
+function spreadIdolSuspicion(state, pool) {
+  if (!pool || pool.length < 2) return;
+
+  for (const gossiper of pool) {
+    const beliefs = state.idolSuspicion?.[gossiper.id];
+    if (!beliefs) continue;
+
+    for (const [holderId, score] of Object.entries(beliefs)) {
+      if (score < 5) continue;   // only meaningful suspicion is worth sharing
+
+      for (const listener of pool) {
+        if (listener.id === gossiper.id || listener.id === holderId) continue;
+
+        const rel   = getRelationship(state, gossiper.id, listener.id);
+        const trust = getTrust(state, gossiper.id, listener.id);
+        if (rel < 5 || trust < 4) continue;   // only close allies trade reads
+
+        // Base 20%, +2% per gossiper social point — capped at 40%.
+        const chance = Math.min(0.40, 0.20 + gossiper.social * 0.02);
+        if (Math.random() < chance) {
+          adjustIdolSuspicion(state, listener.id, holderId, 1);
+        }
+      }
+    }
+  }
+}
