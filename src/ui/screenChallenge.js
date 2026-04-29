@@ -18,7 +18,8 @@ function renderChallengeScreen(container, state) {
 
   container.innerHTML = `
     <div class="screen">
-      <h2>Episode ${state.round} — Immunity Challenge</h2>
+      <p class="screen-eyebrow">Episode ${state.round} · Day ${getDay(state) + DAY_OFFSETS.challenge}</p>
+      <h2>Immunity Challenge</h2>
       <p class="challenge-type-label">${result.name}</p>
 
       <div class="event-log">

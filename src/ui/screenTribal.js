@@ -15,10 +15,10 @@ function renderTribalScreen(container, state) {
   container.innerHTML = `
     <div class="screen">
       <div class="tribal-header">
+        <p class="screen-eyebrow">Episode ${state.round} · Day ${getDay(state) + DAY_OFFSETS.tribal}</p>
         <h2>Tribal Council</h2>
         <div class="tribal-meta">
           <span style="color:${tribeColor}">${tribeName}</span>
-          &nbsp;·&nbsp; Episode ${state.round}
           &nbsp;·&nbsp; ${tribe.length} members attending
         </div>
       </div>
@@ -28,7 +28,7 @@ function renderTribalScreen(container, state) {
         Once your vote is cast it cannot be changed.
       </p>
 
-      <div class="contestant-grid" id="vote-grid"></div>
+      <div class="contestant-grid-2col" id="vote-grid"></div>
 
       <div class="spacer">
         <button id="cast-btn" disabled>Cast My Vote</button>
@@ -46,17 +46,20 @@ function renderTribalScreen(container, state) {
       <div class="card-name">${c.name}</div>
       <div class="card-stats">
         <div class="stat-row">
-          <span class="stat-label">CHA</span>
+          <span class="stat-label">Challenge</span>
           <span class="stat-value">${c.challenge}</span>
         </div>
+        <div class="stat-bar"><div class="stat-bar-fill" style="width:${c.challenge * 10}%"></div></div>
         <div class="stat-row">
-          <span class="stat-label">SOC</span>
+          <span class="stat-label">Social</span>
           <span class="stat-value">${c.social}</span>
         </div>
+        <div class="stat-bar"><div class="stat-bar-fill" style="width:${c.social * 10}%"></div></div>
         <div class="stat-row">
-          <span class="stat-label">STR</span>
+          <span class="stat-label">Strategy</span>
           <span class="stat-value">${c.strategy}</span>
         </div>
+        <div class="stat-bar"><div class="stat-bar-fill" style="width:${c.strategy * 10}%"></div></div>
       </div>
     `;
     card.addEventListener("click", () => {
@@ -73,7 +76,7 @@ function renderTribalScreen(container, state) {
     if (!playerVote) return;
 
     // Compute everything before the reveal so the ordering is deterministic.
-    const allVotes    = collectAiVotes(state, tribe, tribe, playerVote, player);
+    const allVotes    = collectAiVotes(state, tribe, playerVote, player);
     const eliminated  = tallyVotes(allVotes, state);
     const revealOrder = buildRevealOrder(allVotes, eliminated.id);
 
@@ -88,6 +91,7 @@ function renderRevealPhase(container, state, revealOrder, eliminated) {
 
   container.innerHTML = `
     <div class="screen">
+      <p class="screen-eyebrow">Episode ${state.round} · Day ${getDay(state) + DAY_OFFSETS.tribal}</p>
       <h2>Reading the Votes</h2>
       <p class="tribal-reading-note muted">Jeff reaches into the urn…</p>
 

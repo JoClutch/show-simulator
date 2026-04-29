@@ -6,7 +6,7 @@ function renderEliminationScreen(container, state) {
   const totalPlayers = 16;                                   // fixed for Phase 1
   const placement    = totalPlayers - state.eliminated.length + 1;
   const remaining    = totalPlayers - state.eliminated.length;
-  const tribalDay    = getDay(state);                        // first day of this round
+  const tribalDay    = getDay(state) + DAY_OFFSETS.tribal;   // Tribal Council night
   const nextEpisode  = state.round + 1;
 
   const tribeName  = SEASON_CONFIG.tribeNames[eliminated.tribe];
@@ -33,6 +33,7 @@ function renderEliminationScreen(container, state) {
 
   container.innerHTML = `
     <div class="screen">
+      <p class="screen-eyebrow">Episode ${state.round} · Day ${tribalDay}</p>
       <h2>${headline}</h2>
 
       <div class="elim-card">
@@ -57,7 +58,7 @@ function renderEliminationScreen(container, state) {
         </div>
         <div class="elim-status-row">
           <span class="elim-status-label">Day</span>
-          <span class="elim-status-value">${tribalDay + 2}</span>
+          <span class="elim-status-value">${tribalDay}</span>
         </div>
         <div class="elim-status-row tribe-breakdown">
           <span class="elim-status-label">Tribe sizes</span>

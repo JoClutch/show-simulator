@@ -2,14 +2,15 @@
 
 // ── Vote collection ───────────────────────────────────────────────────────────
 
-// Collects one vote per tribe member. The player's vote is already decided.
+// Collects one vote per tribe member. The player's vote is already decided
+// and prepended; every other tribe member votes via the AI.
 // Returns an array of { voter, target } objects.
-function collectAiVotes(state, tribe, candidates, playerVoteTarget, player) {
+function collectAiVotes(state, tribe, playerVoteTarget, player) {
   const votes = [{ voter: player, target: playerVoteTarget }];
 
   for (const voter of tribe) {
     if (voter.id === player.id) continue;
-    votes.push({ voter, target: pickVoteTarget(state, voter, candidates) });
+    votes.push({ voter, target: pickVoteTarget(state, voter, tribe) });
   }
 
   return votes;
@@ -103,6 +104,14 @@ function buildRevealOrder(votes, eliminatedId) {
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
+// Fisher-Yates shuffle — produces a uniformly random permutation.
+// The sort-based alternative (sort(() => Math.random() - 0.5)) is biased
+// because JS sort algorithms assume a consistent comparator.
 function shuffleArray(arr) {
-  return [...arr].sort(() => Math.random() - 0.5);
+  const result = [...arr];
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
 }

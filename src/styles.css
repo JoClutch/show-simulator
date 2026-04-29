@@ -5,11 +5,32 @@
   padding: 0;
 }
 
+/* ── Design tokens ── */
+:root {
+  --bg-base:      #1a1a2e;
+  --bg-card:      #16213e;
+  --bg-raised:    #1e2d50;
+  --border-dim:   #2e4070;
+  --border-mid:   #3a5080;
+  --text-primary: #e0d7c6;
+  --text-dim:     #c8c0b0;
+  --text-muted:   #888;
+  --text-faint:   #555;
+  --gold:         #f4c542;
+  --gold-dim:     #e0b030;
+  --green-bg:     #14231a;
+  --green-border: #2a5a38;
+  --green-text:   #7dba8f;
+  --red-bg:       #1a1525;
+  --red-border:   #5a2a3a;
+  --red-text:     #c07080;
+}
+
 /* ── Base ── */
 body {
   font-family: Georgia, serif;
-  background-color: #1a1a2e;
-  color: #e0d7c6;
+  background-color: var(--bg-base);
+  color: var(--text-primary);
   min-height: 100vh;
   display: flex;
   justify-content: center;
@@ -20,15 +41,21 @@ body {
 /* ── Typography ── */
 h1 {
   font-size: 2rem;
-  color: #f4c542;
+  color: var(--gold);
   margin-bottom: 0.5rem;
   text-align: center;
 }
 
 h2 {
   font-size: 1.4rem;
-  color: #f4c542;
-  margin-bottom: 1rem;
+  color: var(--gold);
+  margin-bottom: 0.35rem;
+}
+
+h3 {
+  font-size: 1rem;
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
 }
 
 p {
@@ -36,13 +63,24 @@ p {
   margin-bottom: 0.75rem;
 }
 
+/* Small all-caps label shown above a screen's main heading.
+   Provides episode/day context at a glance on every gameplay screen. */
+.screen-eyebrow {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-faint);
+  margin-bottom: 0.3rem;
+  margin-top: 0;
+}
+
 /* ── Buttons ── */
 button {
-  background-color: #f4c542;
+  background-color: var(--gold);
   color: #1a1a2e;
   border: none;
   border-radius: 4px;
-  padding: 0.6rem 1.2rem;
+  padding: 0.7rem 1.4rem;
   font-size: 1rem;
   font-family: Georgia, serif;
   cursor: pointer;
@@ -50,28 +88,40 @@ button {
 }
 
 button:hover {
-  background-color: #e0b030;
+  background-color: var(--gold-dim);
 }
 
 button:disabled {
-  background-color: #555;
-  color: #999;
+  background-color: #444;
+  color: #777;
   cursor: not-allowed;
 }
 
-/* ── Home / Select Screen ── */
+/* ── App shell ── */
 #app {
   width: 100%;
-  max-width: 960px;  /* wider to fit 4-column tribe grids */
+  max-width: 960px;
 }
 
+/* ── Screen base ── */
+.screen {
+  animation: fadeIn 0.3s ease;
+  padding-bottom: 2.5rem;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Home / Select Screen ── */
 .select-header {
   text-align: center;
   margin-bottom: 2rem;
 }
 
 .select-subtitle {
-  color: #888;
+  color: var(--text-muted);
   font-size: 0.9rem;
   margin-bottom: 0.5rem;
 }
@@ -109,19 +159,27 @@ button:disabled {
   color: #666;
 }
 
-/* ── Contestant Grid (shared by select + tribal screens) ── */
+/* ── Contestant Grid ── */
+/* 4-col: used on the select screen */
 .contestant-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 0.75rem;
 }
 
+/* 2-col: used on the tribal voting screen (fewer candidates, needs more breathing room) */
+.contestant-grid-2col {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+}
+
 /* ── Contestant Cards ── */
 .contestant-card {
-  background-color: #16213e;
-  border: 2px solid #2e4070;
+  background-color: var(--bg-card);
+  border: 2px solid var(--border-dim);
   border-radius: 6px;
-  padding: 0.85rem 0.75rem;
+  padding: 0.9rem 0.85rem 0.8rem;
   cursor: pointer;
   transition: border-color 0.15s, background-color 0.15s, box-shadow 0.15s;
   position: relative;
@@ -133,9 +191,9 @@ button:disabled {
 }
 
 .contestant-card.selected {
-  border-color: #f4c542;
-  background-color: #1e2d50;
-  box-shadow: 0 0 0 2px #f4c542;
+  border-color: var(--gold);
+  background-color: var(--bg-raised);
+  box-shadow: 0 0 0 2px var(--gold);
 }
 
 /* Thin tribe-color stripe at the top of each card */
@@ -151,7 +209,7 @@ button:disabled {
 .card-selected-indicator {
   display: none;
   font-size: 0.65rem;
-  color: #f4c542;
+  color: var(--gold);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   margin-bottom: 0.35rem;
@@ -163,44 +221,65 @@ button:disabled {
 }
 
 .card-name {
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   font-weight: bold;
-  color: #e0d7c6;
-  margin-bottom: 0.6rem;
+  color: var(--text-primary);
+  margin-bottom: 0.65rem;
   margin-top: 0.25rem;
   line-height: 1.2;
 }
 
-/* Stats table inside each card */
+/* Stats section inside each card */
 .card-stats {
   border-top: 1px solid #2a3a60;
-  padding-top: 0.5rem;
+  padding-top: 0.55rem;
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: 0.1rem;
 }
 
 .stat-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin-top: 0.3rem;
 }
 
 .stat-label {
-  font-size: 0.65rem;
+  font-size: 0.67rem;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #666;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
 }
 
 .stat-value {
   font-size: 0.85rem;
-  color: #c8c0b0;
+  color: var(--text-dim);
   font-variant-numeric: tabular-nums;
+  font-weight: bold;
 }
 
 .contestant-card.selected .stat-value {
-  color: #e0d7c6;
+  color: var(--text-primary);
+}
+
+/* Bar that visualises the stat value (0–10 maps to 0–100%) */
+.stat-bar {
+  height: 2px;
+  background-color: #253560;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 0.2rem;
+}
+
+.stat-bar-fill {
+  height: 100%;
+  background-color: #6a80cc;
+  border-radius: 2px;
+}
+
+.contestant-card.selected .stat-bar-fill {
+  background-color: #a0b0e0;
 }
 
 /* ── Selection Preview Bar ── */
@@ -209,11 +288,11 @@ button:disabled {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  background-color: #16213e;
-  border: 1px solid #2e4070;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-dim);
   border-radius: 6px;
-  padding: 0.85rem 1.25rem;
-  margin-top: 0.5rem;
+  padding: 0.9rem 1.25rem;
+  margin-top: 0.75rem;
 }
 
 .selection-preview.hidden {
@@ -231,7 +310,7 @@ button:disabled {
 .preview-name {
   font-size: 1rem;
   font-weight: bold;
-  color: #f4c542;
+  color: var(--gold);
   margin-right: 0.5rem;
 }
 
@@ -257,31 +336,40 @@ button:disabled {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 1.25rem;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.camp-heading-block {
+  flex: 1;
+  min-width: 0;
 }
 
 .camp-tribe-tag {
-  font-size: 0.8rem;
+  font-size: 0.82rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  display: block;
-}
-
-.camp-step-note {
-  font-size: 0.72rem;
-  color: #555;
   display: block;
   margin-top: 0.15rem;
 }
 
+.camp-step-note {
+  font-size: 0.72rem;
+  color: var(--text-faint);
+  display: block;
+  margin-top: 0.1rem;
+}
+
 .actions-counter {
-  font-size: 0.85rem;
-  background-color: #16213e;
-  border: 1px solid #2e4070;
+  font-size: 0.82rem;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-dim);
   border-radius: 4px;
-  padding: 0.35rem 0.75rem;
-  color: #f4c542;
+  padding: 0.4rem 0.85rem;
+  color: var(--gold);
   white-space: nowrap;
+  flex-shrink: 0;
+  align-self: flex-start;
 }
 
 /* Tribemate chip row */
@@ -290,56 +378,57 @@ button:disabled {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.4rem;
-  margin-bottom: 1.5rem;
-  padding: 0.65rem 0.85rem;
-  background-color: #16213e;
+  margin-bottom: 1.25rem;
+  padding: 0.6rem 0.9rem;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-dim);
   border-radius: 4px;
 }
 
 .camp-tribemates-label {
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #555;
+  color: var(--text-faint);
   margin-right: 0.25rem;
 }
 
 .tribe-chip {
   font-size: 0.78rem;
   background-color: #1a2540;
-  border: 1px solid #2e4070;
+  border: 1px solid var(--border-dim);
   border-radius: 3px;
-  padding: 0.15rem 0.5rem;
+  padding: 0.2rem 0.55rem;
   color: #aaa;
 }
 
 .tribe-chip-you {
-  border-color: #f4c542;
-  color: #f4c542;
+  border-color: var(--gold);
+  color: var(--gold);
 }
 
-/* Action button grid */
+/* Action button area */
 .action-area {
   margin-bottom: 1.25rem;
-  min-height: 110px;
 }
 
+/* Single-column layout: label + detail read left-to-right */
 .action-btn-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.6rem;
+  grid-template-columns: 1fr;
+  gap: 0.5rem;
 }
 
 .action-btn {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.2rem;
-  background-color: #16213e;
-  border: 1px solid #2e4070;
+  flex-direction: row;
+  align-items: center;
+  gap: 1rem;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-dim);
   border-radius: 5px;
-  padding: 0.7rem 0.9rem;
-  color: #e0d7c6;
+  padding: 0.75rem 1rem;
+  color: var(--text-primary);
   font-family: Georgia, serif;
   cursor: pointer;
   text-align: left;
@@ -348,30 +437,33 @@ button:disabled {
 
 .action-btn:hover {
   border-color: #8899cc;
-  background-color: #1e2d50;
+  background-color: var(--bg-raised);
 }
 
 .action-btn-label {
-  font-size: 0.88rem;
+  font-size: 0.9rem;
   font-weight: bold;
-  color: #e0d7c6;
+  color: var(--text-primary);
+  min-width: 150px;
+  flex-shrink: 0;
 }
 
 .action-btn-detail {
-  font-size: 0.72rem;
-  color: #555;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  line-height: 1.4;
 }
 
 /* Target picker */
 .target-picker {
-  background-color: #16213e;
-  border: 1px solid #2e4070;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-dim);
   border-radius: 5px;
   padding: 0.9rem 1rem;
 }
 
 .target-picker-prompt {
-  font-size: 0.88rem;
+  font-size: 0.9rem;
   color: #bbb;
   margin-bottom: 0.75rem;
 }
@@ -385,19 +477,19 @@ button:disabled {
 
 .target-chip {
   background-color: #1a2540;
-  border: 1px solid #3a5080;
+  border: 1px solid var(--border-mid);
   border-radius: 4px;
-  padding: 0.35rem 0.75rem;
-  font-size: 0.84rem;
-  color: #e0d7c6;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.88rem;
+  color: var(--text-primary);
   font-family: Georgia, serif;
   cursor: pointer;
   transition: border-color 0.15s, background-color 0.15s;
 }
 
 .target-chip:hover {
-  border-color: #f4c542;
-  background-color: #1e2d50;
+  border-color: var(--gold);
+  background-color: var(--bg-raised);
 }
 
 .cancel-btn {
@@ -423,35 +515,38 @@ button:disabled {
 .feedback-log {
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
+  gap: 0.5rem;
   margin-bottom: 1.25rem;
 }
 
 .feedback-entry {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
-  background-color: #16213e;
-  border-left: 3px solid #2e4070;
+  gap: 0.25rem;
+  background-color: var(--bg-card);
+  border-left: 3px solid var(--border-mid);
   border-radius: 0 4px 4px 0;
-  padding: 0.65rem 0.9rem;
+  padding: 0.65rem 1rem;
 }
 
 .feedback-action-tag {
   font-size: 0.68rem;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #555;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
 }
 
 .feedback-text {
   font-size: 0.9rem;
-  color: #c8c0b0;
+  color: var(--text-dim);
   line-height: 1.55;
 }
 
 .camp-footer {
-  text-align: right;
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-dim);
 }
 
 /* ── Challenge Screen ── */
@@ -473,83 +568,84 @@ button:disabled {
 
 .challenge-outcome-cell {
   border-radius: 5px;
-  padding: 0.9rem 1rem;
+  padding: 1.1rem 1rem;
   text-align: center;
 }
 
 .outcome-win {
-  background-color: #16213e;
-  border: 1px solid #2e4070;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-dim);
 }
 
 .outcome-loss {
-  background-color: #1a1525;
-  border: 1px solid #3d2a2a;
+  background-color: var(--red-bg);
+  border: 1px solid var(--red-border);
 }
 
 .outcome-label {
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  color: #555;
-  margin-bottom: 0.35rem;
+  color: var(--text-faint);
+  margin-bottom: 0.4rem;
 }
 
 .outcome-tribe {
-  font-size: 1.15rem;
+  font-size: 1.2rem;
   font-weight: bold;
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.3rem;
 }
 
 .outcome-sub {
   font-size: 0.75rem;
-  color: #555;
+  color: var(--text-faint);
 }
 
 .challenge-player-status {
   border-radius: 5px;
-  padding: 0.75rem 1rem;
+  padding: 0.85rem 1.1rem;
   font-size: 0.95rem;
   line-height: 1.5;
 }
 
 .status-safe {
-  background-color: #14231a;
-  border: 1px solid #2a5a38;
-  color: #7dba8f;
+  background-color: var(--green-bg);
+  border: 1px solid var(--green-border);
+  color: var(--green-text);
 }
 
 .status-danger {
-  background-color: #1a1525;
-  border: 1px solid #5a2a3a;
-  color: #c07080;
+  background-color: var(--red-bg);
+  border: 1px solid var(--red-border);
+  color: var(--red-text);
 }
 
 /* Camp Life phase 2 status banners */
 .camp-status-banner {
   border-radius: 4px;
-  padding: 0.6rem 0.9rem;
-  font-size: 0.85rem;
-  margin-bottom: 1.1rem;
+  padding: 0.65rem 1rem;
+  font-size: 0.88rem;
+  margin-bottom: 1rem;
+  line-height: 1.45;
 }
 
 .camp-status-danger {
-  background-color: #1a1525;
-  border: 1px solid #5a2a3a;
-  color: #c07080;
+  background-color: var(--red-bg);
+  border: 1px solid var(--red-border);
+  color: var(--red-text);
 }
 
 .camp-status-safe {
-  background-color: #14231a;
-  border: 1px solid #2a5a38;
-  color: #7dba8f;
+  background-color: var(--green-bg);
+  border: 1px solid var(--green-border);
+  color: var(--green-text);
 }
 
-/* ── Event Log (Camp Life / Tribal) ── */
+/* ── Event Log ── */
 .event-log {
-  background-color: #16213e;
-  border-left: 3px solid #f4c542;
-  padding: 1rem 1.25rem;
+  background-color: var(--bg-card);
+  border-left: 3px solid var(--gold);
+  padding: 0.9rem 1.25rem;
   margin-bottom: 1rem;
   border-radius: 0 4px 4px 0;
 }
@@ -561,7 +657,7 @@ button:disabled {
 
 .tribal-meta {
   font-size: 0.82rem;
-  color: #666;
+  color: var(--text-faint);
   margin-top: 0.25rem;
 }
 
@@ -570,6 +666,10 @@ button:disabled {
   color: #bbb;
   margin-bottom: 1.25rem;
   line-height: 1.55;
+  padding: 0.75rem 1rem;
+  background-color: var(--bg-card);
+  border-left: 3px solid #3a3a60;
+  border-radius: 0 4px 4px 0;
 }
 
 /* ── Vote reveal cards ── */
@@ -586,12 +686,12 @@ button:disabled {
 }
 
 .reveal-card {
-  background-color: #16213e;
-  border: 1px solid #2e4070;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-dim);
   border-radius: 4px;
-  padding: 0.45rem 0.85rem;
+  padding: 0.5rem 1rem;
   font-size: 0.9rem;
-  color: #e0d7c6;
+  color: var(--text-primary);
   opacity: 0;
   transform: translateY(6px);
   transition: opacity 0.35s ease, transform 0.35s ease;
@@ -602,20 +702,20 @@ button:disabled {
   transform: translateY(0);
 }
 
-/* Vote that goes against the player */
+/* Vote cast against the player */
 .reveal-card.reveal-card-danger {
   border-color: #7a2a2a;
   color: #e07070;
 }
 
-/* The final decisive vote — slightly heavier border */
+/* The final decisive vote */
 .reveal-card.reveal-card-decisive {
   border-width: 2px;
-  border-color: #f4c542;
-  color: #f4c542;
+  border-color: var(--gold);
+  color: var(--gold);
 }
 
-/* Danger + decisive (rare but handle it) */
+/* Danger + decisive (rare) */
 .reveal-card.reveal-card-danger.reveal-card-decisive {
   border-color: #cc3333;
   color: #ff6666;
@@ -623,12 +723,12 @@ button:disabled {
 
 /* ── Running tally ── */
 .tally-board {
-  border-top: 1px solid #2e4070;
+  border-top: 1px solid var(--border-dim);
   padding-top: 0.85rem;
   margin-bottom: 1.25rem;
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.4rem;
   min-height: 2rem;
 }
 
@@ -641,19 +741,19 @@ button:disabled {
 
 .tally-name {
   width: 140px;
-  color: #c8c0b0;
+  color: var(--text-dim);
   flex-shrink: 0;
 }
 
 .tally-pips {
-  color: #f4c542;
+  color: var(--gold);
   letter-spacing: 0.1em;
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   flex: 1;
 }
 
 .tally-count {
-  color: #888;
+  color: var(--text-muted);
   font-size: 0.8rem;
   width: 1.5rem;
   text-align: right;
@@ -662,15 +762,15 @@ button:disabled {
 
 /* ── Finish button ── */
 .reveal-footer {
-  margin-top: 0.5rem;
+  margin-top: 0.75rem;
 }
 
 .tribal-finish-btn {
-  background-color: #f4c542;
+  background-color: var(--gold);
   color: #1a1a2e;
   border: none;
   border-radius: 4px;
-  padding: 0.65rem 1.4rem;
+  padding: 0.7rem 1.4rem;
   font-size: 1rem;
   font-family: Georgia, serif;
   cursor: pointer;
@@ -678,24 +778,24 @@ button:disabled {
 }
 
 .tribal-finish-btn:hover {
-  background-color: #e0b030;
+  background-color: var(--gold-dim);
 }
 
 /* ── Elimination Screen ── */
 .elim-card {
-  background-color: #16213e;
-  border: 1px solid #2e4070;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-dim);
   border-radius: 6px;
-  padding: 1rem 1.25rem;
-  margin-bottom: 1.25rem;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.5rem;
   text-align: center;
 }
 
 .elim-name {
-  font-size: 1.4rem;
+  font-size: 1.6rem;
   font-weight: bold;
-  color: #f4c542;
-  margin-bottom: 0.35rem;
+  color: var(--gold);
+  margin-bottom: 0.4rem;
 }
 
 .elim-tribe {
@@ -707,18 +807,18 @@ button:disabled {
 .elim-body {
   font-size: 0.95rem;
   color: #bbb;
-  margin-bottom: 1.25rem;
+  margin-bottom: 1.5rem;
   line-height: 1.6;
 }
 
 .elim-status {
-  background-color: #16213e;
-  border: 1px solid #2e4070;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-dim);
   border-radius: 5px;
-  padding: 0.75rem 1rem;
+  padding: 0.85rem 1.1rem;
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.5rem;
   margin-bottom: 1rem;
 }
 
@@ -726,35 +826,30 @@ button:disabled {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 0.86rem;
+  font-size: 0.88rem;
 }
 
 .elim-status-label {
-  color: #555;
+  color: var(--text-faint);
 }
 
 .elim-status-value {
-  color: #c8c0b0;
+  color: var(--text-dim);
   font-variant-numeric: tabular-nums;
 }
 
 /* ── Utility ── */
-.screen {
-  animation: fadeIn 0.3s ease;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
 .spacer {
-  margin-top: 1.5rem;
+  margin-top: 1.75rem;
 }
 
 .muted {
-  color: #888;
+  color: var(--text-muted);
   font-size: 0.85rem;
+}
+
+.event-log p:last-child {
+  margin-bottom: 0;
 }
 
 /* ── Phase 1 end screen ── */
@@ -764,7 +859,7 @@ button:disabled {
 
 .phase1-end-badge {
   display: inline-block;
-  background: #f4c542;
+  background: var(--gold);
   color: #1a1a2e;
   font-size: 0.75rem;
   font-weight: bold;
@@ -799,7 +894,7 @@ button:disabled {
   font-size: 0.9rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #888;
+  color: var(--text-muted);
   margin-bottom: 0.75rem;
 }
 

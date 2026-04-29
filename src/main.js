@@ -49,7 +49,8 @@ function onChallengeResolved(losingTribeLabel) {
 }
 
 function onTribalDone(eliminatedContestant) {
-  eliminatedContestant.active = false;
+  // state.tribes is the source of truth for who is active.
+  // removeFromTribes() is what actually excludes them from future logic.
   gameState.eliminated.push(eliminatedContestant);
   removeFromTribes(eliminatedContestant);
   showScreen("elimination");
@@ -110,20 +111,27 @@ function showScreen(name) {
 // ── End states ────────────────────────────────────────────────────────────────
 
 // Called when ≤ 3 players remain.
+//
+// Note: advanceRound() increments gameState.round before calling this, so
+// getDay(gameState) returns the first day of the never-played next episode.
+// Subtract 1 to get the last real in-game day (the Tribal Council night).
 function showGameOver() {
-  const player          = gameState.player;
-  const isInFinal3      = getAllActive().find(c => c.id === player.id);
-  const episodesPlayed  = gameState.round - 1;
-  const dayReached      = getDay(gameState);
-  const outlasted       = gameState.eliminated.length;
+  const player         = gameState.player;
+  const isInFinal3     = getAllActive().find(c => c.id === player.id);
+  const episodesPlayed = gameState.round - 1;
+  const lastDay        = getDay(gameState) - 1;  // tribal night of the last episode
+  const outlasted      = gameState.eliminated.length;
 
   const headline = isInFinal3
     ? "You Made the Final 3!"
     : "Game Over";
 
+  // The !isInFinal3 branch is currently unreachable: an eliminated player sees
+  // the elimination screen with no Continue button and never calls advanceRound().
+  // It is kept here as a placeholder for Phase 4 (jury / post-merge endgame).
   const summary = isInFinal3
-    ? `You survived all ${episodesPlayed} episodes and reached Day ${dayReached}. You outlasted ${outlasted} other players.`
-    : `You were voted out on Day ${dayReached - 3}. You lasted ${episodesPlayed} episode${episodesPlayed !== 1 ? "s" : ""} and outlasted ${outlasted - 1} player${outlasted - 1 !== 1 ? "s" : ""}.`;
+    ? `You survived all ${episodesPlayed} episodes and reached Day ${lastDay}. You outlasted ${outlasted} other players.`
+    : `You were voted out on Day ${lastDay}. You lasted ${episodesPlayed} episode${episodesPlayed !== 1 ? "s" : ""} and outlasted ${outlasted - 1} player${outlasted - 1 !== 1 ? "s" : ""}.`;
 
   const remainingNames = getAllActive().map(c => c.name).join(", ");
   const finalNote = isInFinal3
@@ -177,7 +185,7 @@ function isPhase1Complete() {
 // Shown when isPhase1Complete() triggers. Remove this function when Phase 2 is ready.
 function showPhase1End() {
   const episodesPlayed = gameState.round - 1;
-  const dayReached     = getDay(gameState);
+  const dayReached     = getDay(gameState) - 1;  // subtract 1: round was already incremented
   const remaining      = getAllActive().length;
   const countA         = gameState.tribes.A.length;
   const countB         = gameState.tribes.B.length;
@@ -245,13 +253,6 @@ function removeFromTribes(contestant) {
       c => c.id !== contestant.id
     );
   }
-}
-
-// Derives the in-game day from the round number.
-// Each episode spans 3 days. Day 1 is the very start of the game.
-//   Round 1 → Day 1   Round 2 → Day 4   Round 3 → Day 7 …
-function getDay(state) {
-  return (state.round - 1) * 3 + 1;
 }
 
 // Returns true when the remaining player count falls to or below the merge

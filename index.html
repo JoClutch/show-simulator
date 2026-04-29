@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Survivor Simulator</title>
+  <link rel="stylesheet" href="src/styles.css" />
+</head>
+<body>
+
+  <div id="app">
+    <!-- Screens are injected here by ui/ scripts -->
+    <p>Loading...</p>
+  </div>
+
+  <!-- Data -->
+  <script src="src/data/contestants.js"></script>
+  <script src="src/data/season.js"></script>
+
+  <!-- Engine -->
+  <script src="src/engine/relationships.js"></script>
+  <script src="src/engine/campLife.js"></script>
+  <script src="src/engine/challenge.js"></script>
+  <script src="src/engine/vote.js"></script>
+
+  <!-- UI -->
+  <script src="src/ui/screenSelect.js"></script>
+  <script src="src/ui/screenCampLife.js"></script>
+  <script src="src/ui/screenChallenge.js"></script>
+  <script src="src/ui/screenTribal.js"></script>
+  <script src="src/ui/screenElimination.js"></script>
+
+  <!-- Boot -->
+  <script src="src/main.js"></script>
+
+</body>
+</html>

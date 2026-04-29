@@ -49,8 +49,9 @@ function renderCampLifeScreen(container, state) {
     <div class="screen" id="camp-screen">
 
       <div class="camp-header">
-        <div>
-          <h2>Episode ${state.round} — ${phaseLabel}</h2>
+        <div class="camp-heading-block">
+          <p class="screen-eyebrow">Episode ${state.round} · Day ${getDay(state) + (isPhase2 ? DAY_OFFSETS.campPhase2 : DAY_OFFSETS.campPhase1)}</p>
+          <h2>${phaseLabel}</h2>
           <span class="camp-tribe-tag" style="color:${tribeColor}">${tribeName} tribe</span>
           <span class="camp-step-note">${stepNote}</span>
         </div>

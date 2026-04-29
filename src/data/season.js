@@ -1,9 +1,11 @@
-// season.js — static season config and the season state factory
+// season.js — static season config, state factory, and day utilities
 //
 // SEASON_CONFIG  : never changes during a playthrough (names, colors, rules)
+// DAY_OFFSETS    : named positions within a 3-day episode (use instead of magic numbers)
 // createSeasonState() : call once at game start to get a fresh mutable state object
 // assignTribes()      : randomly splits contestants into two tribes and stamps
 //                       the tribe field on each contestant object
+// getDay(state)  : derives the first in-game day of the current episode
 
 const SEASON_CONFIG = {
   name: "Season 1: Broken Compass",
@@ -55,9 +57,31 @@ function createSeasonState() {
   };
 }
 
+// How many days into a 3-day episode each phase takes place.
+// Add to getDay(state) instead of hard-coding +1 / +2 in UI files.
+// If the episode structure ever changes, update these values here only.
+const DAY_OFFSETS = {
+  campPhase1: 0,  // Day 1 — morning before the challenge
+  challenge:  1,  // Day 2 — immunity challenge
+  campPhase2: 2,  // Day 3 — evening after the challenge
+  tribal:     2,  // Day 3 — Tribal Council night (same evening as camp phase 2)
+};
+
+// Derives the first in-game day of the current episode.
+// Episode 1 starts on Day 1; each episode adds 3 days.
+// Add a DAY_OFFSETS value to get the exact day for a specific phase.
+function getDay(state) {
+  return (state.round - 1) * 3 + 1;
+}
+
 // Randomly splits contestants into two equal tribes.
 // Stamps contestant.tribe = "A" or "B" on each object.
 // Populates state.tribes.A and state.tribes.B.
+//
+// NOTE: this mutates the shared CONTESTANTS objects directly.
+// Restarting without a page refresh would re-stamp tribes on the same objects,
+// which is fine because assignTribes overwrites the field. A future "play again"
+// button must call assignTribes again (or reset CONTESTANTS separately).
 function assignTribes(contestants, state) {
   const shuffled = [...contestants].sort(() => Math.random() - 0.5);
 

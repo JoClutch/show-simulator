@@ -126,17 +126,20 @@ function buildCard(contestant, tribeColor) {
     <div class="card-name">${contestant.name}</div>
     <div class="card-stats">
       <div class="stat-row">
-        <span class="stat-label">CHA</span>
+        <span class="stat-label">Challenge</span>
         <span class="stat-value">${contestant.challenge}</span>
       </div>
+      <div class="stat-bar"><div class="stat-bar-fill" style="width:${contestant.challenge * 10}%"></div></div>
       <div class="stat-row">
-        <span class="stat-label">SOC</span>
+        <span class="stat-label">Social</span>
         <span class="stat-value">${contestant.social}</span>
       </div>
+      <div class="stat-bar"><div class="stat-bar-fill" style="width:${contestant.social * 10}%"></div></div>
       <div class="stat-row">
-        <span class="stat-label">STR</span>
+        <span class="stat-label">Strategy</span>
         <span class="stat-value">${contestant.strategy}</span>
       </div>
+      <div class="stat-bar"><div class="stat-bar-fill" style="width:${contestant.strategy * 10}%"></div></div>
     </div>
   `;
 
