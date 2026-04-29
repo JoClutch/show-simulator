@@ -339,6 +339,52 @@ button:disabled {
   line-height: 1.5;
 }
 
+/* ── Camp Life: hidden immunity idol badge ── */
+/* Shown when the player holds at least one idol. Private knowledge only — */
+/* other players don't see this. Sits between the opener and status banner. */
+.camp-idol-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: linear-gradient(135deg, #1a1a0a, #252510);
+  border: 1px solid #a08020;
+  border-radius: 4px;
+  padding: 0.55rem 0.9rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.85rem;
+}
+
+.camp-idol-icon {
+  color: var(--gold);
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+.camp-idol-label {
+  color: var(--gold);
+  font-weight: bold;
+  letter-spacing: 0.01em;
+}
+
+.camp-idol-scope {
+  font-weight: normal;
+  color: var(--gold-dim);
+  font-style: italic;
+}
+
+/* ── Camp Life: unavailable action button ── */
+/* Used for "Search for idol" when the scope idol is already held. */
+.action-btn-unavail {
+  opacity: 0.4;
+  cursor: not-allowed;
+  border-style: dashed;
+}
+
+.action-btn-unavail:hover {
+  border-color: var(--border-dim);
+  background-color: var(--bg-card);
+}
+
 /* ── Camp Life Screen ── */
 .camp-header {
   display: flex;

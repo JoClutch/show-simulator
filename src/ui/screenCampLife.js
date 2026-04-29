@@ -88,6 +88,34 @@ function renderCampLifeScreen(container, state) {
 
   let actionsLeft = maxActions;
 
+  // ── Idol state for this screen ────────────────────────────────────────────
+  //
+  // idolScope: the scope the player can search at their current camp.
+  //            Matches tribeLabel exactly ("A" | "B" | "merged").
+  //
+  // buildIdolBadgeHTML() and the currentHoldsScope check inside
+  // showActionButtons() both re-read live state on every call — the player
+  // may find an idol mid-session, which must update the badge and button
+  // immediately without a full screen re-render.
+  const idolScope = tribeLabel;
+
+  // Badge HTML — shown whenever the player holds at least one idol.
+  // Uses a named container so showActionButtons() can refresh it after each
+  // action (the player may find an idol mid-session).
+  function buildIdolBadgeHTML() {
+    const held = getHeldIdols(state, player.id);
+    if (held.length === 0) return "";
+    const labels = held.map(i => {
+      const scopeLabel = i.scope === "merged"
+        ? SEASON_CONFIG.mergeTribeName
+        : SEASON_CONFIG.tribeNames[i.scope];
+      return `<span class="camp-idol-label">You hold a Hidden Immunity Idol <span class="camp-idol-scope">(${scopeLabel})</span></span>`;
+    }).join("");
+    return `<div class="camp-idol-badge"><span class="camp-idol-icon">◆</span>${labels}</div>`;
+  }
+
+  const idolBadgeHTML = buildIdolBadgeHTML();
+
   // ── Shell ─────────────────────────────────────────────────────────────────
 
   container.innerHTML = `
@@ -106,6 +134,8 @@ function renderCampLifeScreen(container, state) {
       </div>
 
       ${episodeOpener}
+
+      <div id="idol-badge-container">${idolBadgeHTML}</div>
 
       ${statusBanner}
 
@@ -138,6 +168,14 @@ function renderCampLifeScreen(container, state) {
   // ── Render phases ─────────────────────────────────────────────────────────
 
   function showActionButtons() {
+    // Refresh the idol badge — the player may have just found one this action.
+    const badgeContainer = container.querySelector("#idol-badge-container");
+    if (badgeContainer) badgeContainer.innerHTML = buildIdolBadgeHTML();
+
+    // Re-read live idol state for the search button — same reason.
+    const currentHoldsScope = getHeldIdols(state, player.id)
+      .some(i => i.scope === idolScope);
+
     actionArea.innerHTML = "";
 
     if (actionsLeft === 0) {
@@ -152,11 +190,29 @@ function renderCampLifeScreen(container, state) {
     for (const action of CAMP_ACTIONS) {
       const btn = document.createElement("button");
       btn.className = "action-btn";
+
+      // The search action is disabled once there is nothing left to find in
+      // the current scope. The badge already tells the player they have it,
+      // so the detail text just confirms why this option is locked.
+      let detailText  = action.detail;
+      let unavailable = false;
+      if (action.id === "searchidol" && currentHoldsScope) {
+        detailText  = "You already hold the idol hidden at this camp.";
+        unavailable = true;
+      }
+
       btn.innerHTML = `
         <span class="action-btn-label">${action.label}</span>
-        <span class="action-btn-detail">${action.detail}</span>
+        <span class="action-btn-detail">${detailText}</span>
       `;
-      btn.addEventListener("click", () => onActionClick(action));
+
+      if (unavailable) {
+        btn.disabled = true;
+        btn.classList.add("action-btn-unavail");
+      } else {
+        btn.addEventListener("click", () => onActionClick(action));
+      }
+
       grid.appendChild(btn);
     }
 

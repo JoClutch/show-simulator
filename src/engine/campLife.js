@@ -166,33 +166,82 @@ function actionImprovecamp(state, player, tribemates) {
   ]), hint: null };
 }
 
-// SEARCH FOR IDOL — high-risk recon action. No idol found yet (Phase 2+).
+// SEARCH FOR IDOL — strategic risk/reward action.
 //
-// A random tribemate always notices the absence. Their relationship and trust
-// both drop — they saw you sneak away and now they're wondering why.
-// The player's own suspicion increases based on how socially unaware they are.
-// Players with very low social (< 4) were noticeably less subtle.
+// Calls idolSearch() (engine/idols.js) to resolve discovery. That function
+// owns the success roll and all idol state changes. This function owns the
+// social cost and feedback — consistent with every other camp action here.
 //
-// Formula:
-//   witness relationship: −rand(1, 2)
-//   witness trust in player: −1
-//   player suspicion: +rand(1, 2) base, +1 extra if social < 4
+// Success formula (owned by idols.js):
+//   base 20% + strategy×2.5% + (prior searches in scope)×8%, capped at 65%
+//
+// Suspicion formula (owned here):
+//   Player suspicion: +1 base; +1 if social < 4 (anxious, easy to read);
+//                     +1 if ≥2 prior searches in this scope (tribe notices pattern)
+//   Witness rel:      −rand(1,2) first search; −rand(2,3) repeat
+//   Witness trust:    −1 first/second; −2 third+ (pattern erodes trust)
+//
+// Social skill affects how much suspicion is generated — better cover, less heat.
+// Strategy determines find chance. Even a successful search costs suspicion;
+// you cannot vanish for an hour without someone wondering why.
 function actionSearchIdol(state, player, tribemates) {
   if (tribemates.length === 0) {
     return { feedback: "There was no chance to slip away from camp today.", hint: null };
   }
 
+  // Read search count BEFORE idolSearch() increments it so feedback tiers
+  // correctly reflect "this is your Nth attempt" from the player's perspective.
+  const scope        = state.merged ? "merged" : player.tribe;
+  const prevSearches = state.idolSearches?.[scope] ?? 0;
+
+  // Attempt discovery. idolSearch() updates idol state on success and
+  // increments state.idolSearches[scope] regardless of outcome.
+  const { found, idol } = idolSearch(player, state);
+
+  // ── Social costs (always paid — found or not) ─────────────────────────────
   const witness = pickFrom(tribemates);
-  adjustRelationship(state, player.id, witness.id, -rand(1, 2));
-  adjustTrust(state, player.id, witness.id, -1);
 
-  const suspicionGain = rand(1, 2) + (player.social < 4 ? 1 : 0);
-  adjustSuspicion(state, player.id, suspicionGain);
+  const baseSusp   = 1;
+  const lowSocial  = player.social < 4 ? 1 : 0;
+  const repeatHeat = prevSearches >= 2 ? 1 : 0;
+  adjustSuspicion(state, player.id, baseSusp + lowSocial + repeatHeat);
 
+  const relHit   = prevSearches >= 1 ? -rand(2, 3) : -rand(1, 2);
+  const trustHit = prevSearches >= 2 ? -2 : -1;
+  adjustRelationship(state, player.id, witness.id, relHit);
+  adjustTrust(state, player.id, witness.id, trustHit);
+
+  // ── Feedback ──────────────────────────────────────────────────────────────
+  if (found) {
+    return { feedback: pickFrom([
+      `You ducked into the jungle and dug around the base of a large tree. Your fingers hit something hard — wrapped in cloth, wedged into a hollow root. A hidden immunity idol. You pocketed it and slipped back to camp. ${witness.name} gave you a searching look when you emerged from the trees.`,
+      `You told the others you needed firewood and slipped away. After nearly an hour of methodical searching, you found it — nestled beneath a distinctive rock formation. An immunity idol. You tucked it into your bag and rejoined camp. ${witness.name} was watching when you came out of the trees.`,
+      `You had a hunch and followed it. Deep in the jungle, wedged into a crevice exactly where you thought it might be — a hidden immunity idol. You concealed it and headed back. ${witness.name} seemed very curious about where you had been.`,
+    ]), hint: "idol:found" };
+  }
+
+  // Failure — feedback varies by how many times they have searched.
+  if (prevSearches === 0) {
+    return { feedback: pickFrom([
+      `You slipped away into the jungle and searched for nearly an hour. You found nothing — and ${witness.name} was watching when you got back.`,
+      `An hour in the trees, hands in the dirt. Nothing. ${witness.name} gave you a long look when you returned to camp.`,
+      `You told the tribe you were getting water, then spent an hour searching the tree line. ${witness.name} seemed skeptical when you came back empty-handed.`,
+    ]), hint: null };
+  }
+
+  if (prevSearches === 1) {
+    return { feedback: pickFrom([
+      `You slipped away again. Another hour of searching, nothing to show for it. ${witness.name} was at the tree line when you returned — they'd clearly been watching.`,
+      `You made another pass through the jungle. Still nothing. ${witness.name} didn't say a word when you came back, but they didn't have to.`,
+      `You searched every corner of the jungle you hadn't tried yet. Empty-handed again. ${witness.name} had that look — the one that means they noticed.`,
+    ]), hint: null };
+  }
+
+  // Third+ attempt — the tribe is starting to put it together.
   return { feedback: pickFrom([
-    `You slipped away into the jungle to search. You found nothing — and ${witness.name} was watching when you got back.`,
-    `An hour in the trees, hands in the dirt. Nothing. ${witness.name} gave you a long look when you returned to camp.`,
-    `You told the tribe you were getting water, then spent an hour searching. ${witness.name} seemed skeptical.`,
+    `You searched again. This is becoming a pattern — and ${witness.name} made no effort to hide their suspicion when you returned. People are starting to talk.`,
+    `Another hour in the jungle, another fruitless search. ${witness.name} wasn't the only one watching this time. You're drawing too much attention.`,
+    `You came back empty-handed again. ${witness.name} looked at you the way they look at someone they've already figured out. You need to be more careful.`,
   ]), hint: null };
 }
 

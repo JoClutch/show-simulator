@@ -188,38 +188,72 @@ function expireHeldIdols(state) {
   }
 }
 
-// ── Extension points (not yet active) ────────────────────────────────────────
-//
-// These stubs define the intended API for the future search and play phases.
-// They are commented out and not called anywhere — implement and uncomment
-// them in the appropriate v3.x phase.
+// ── Search ────────────────────────────────────────────────────────────────────
 
-// Extension point: idol search
+// Attempts idol discovery for a contestant at their current camp.
+// Called by actionSearchIdol() in campLife.js on each search action.
 //
-// Called when a contestant chooses a "search for idol" camp action.
-// Returns the found idol object on success, or null if nothing was found.
+// Handles only idol state changes (status, holder, foundRound, search count).
+// Suspicion and relationship penalties stay in campLife.js, which owns all
+// social-cost logic for camp actions.
 //
-// Implementation notes for future phase:
-//   — Determine the contestant's current scope from their tribe:
-//       scope = state.merged ? "merged" : contestant.tribe
-//   — Call hasHiddenIdolInScope(state, scope) first; return null if nothing hidden
-//   — Roll a probability check weighted by contestant stats or held clues
-//   — On success: update the idol object directly:
-//       idol.status     = "held";
-//       idol.holder     = contestant.id;
-//       idol.foundRound = state.round;
-//   — Return the idol so the caller can show a discovery message
+// Returns:
+//   { found: true,  idol }       — player found it; idol object is now "held"
+//   { found: false, idol: null } — nothing found this time
 //
-// function idolSearch(contestant, state) {
-//   return null;
-// }
+// ── Success formula ───────────────────────────────────────────────────────────
+//
+//   scope   : "A" | "B" (pre-merge, from player.tribe) or "merged" (post-merge)
+//   base    : 20% — there is always meaningful uncertainty
+//   strategy: +2.5% per point — methodical, pattern-aware searching
+//   persist : +8% per prior search in this scope — each attempt narrows the area
+//   cap     : 65% — finding an idol can never be a sure thing
+//
+// Strategy is the right driver here: it represents game awareness and the
+// ability to read the environment methodically. Social skill is instead used
+// by campLife.js to modulate how much suspicion the search generates.
+function idolSearch(player, state) {
+  // Determine which scope the player can search — their current camp.
+  const scope = state.merged ? "merged" : player.tribe;
 
-// Extension point: idol play
+  // Find the idol for this scope. Undefined if the scope has no idol defined.
+  const idol = state.idols.find(i => i.scope === scope);
+
+  // Nothing available: idol was never placed here, is already held/played,
+  // or expired when the tribe camp was abandoned at merge.
+  if (!idol || !isIdolAvailable(idol, state)) {
+    return { found: false, idol: null };
+  }
+
+  // How many times has the player searched here before this attempt?
+  // Capture BEFORE incrementing so campLife.js can use it for feedback tiers.
+  const prevSearches = state.idolSearches[scope] ?? 0;
+  state.idolSearches[scope] = prevSearches + 1;
+
+  // ── Roll ──────────────────────────────────────────────────────────────────
+  const baseChance   = 0.20;
+  const stratBonus   = player.strategy * 0.025;   // strategy 10 → +25%
+  const persistBonus = prevSearches    * 0.08;    // 3rd search    → +16%
+  const findChance   = Math.min(baseChance + stratBonus + persistBonus, 0.65);
+
+  if (Math.random() >= findChance) {
+    return { found: false, idol: null };
+  }
+
+  // ── Found ─────────────────────────────────────────────────────────────────
+  idol.status     = "held";
+  idol.holder     = player.id;
+  idol.foundRound = state.round;
+
+  return { found: true, idol };
+}
+
+// ── Extension point: idol play (not yet active) ───────────────────────────────
 //
 // Called when a contestant plays an idol at Tribal Council, before votes are read.
 // Should return true on success so the caller can proceed with the protected result.
 //
-// Implementation notes for future phase:
+// Implementation notes for v3.2+:
 //   — Call isIdolPlayable(idol, state, contestant.id) first; return false if invalid
 //   — The idol can be played on the holder themselves OR on another contestant:
 //       const protectedId = targetContestantId ?? contestant.id;
@@ -227,8 +261,8 @@ function expireHeldIdols(state) {
 //       idol.status      = "played";
 //       idol.playedRound = state.round;
 //   — Instruct the vote tallier to strip all votes against protectedId:
-//       This can be done by filtering allVotes in collectAiVotes / tallyVotes,
-//       or by passing a Set of "immune" ids alongside the immunity necklace holder
+//       Pass a "protectedIds" Set into collectAiVotes / tallyVotes alongside
+//       the immunity necklace holder so both immunities are handled uniformly.
 //   — The UI (screenTribal.js) needs a reveal sequence for the played idol
 //
 // function idolPlay(idol, targetContestantId, state) {

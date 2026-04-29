@@ -68,6 +68,13 @@ function createSeasonState() {
     // See engine/idols.js for full documentation and lifecycle rules.
     idols: [],
 
+    // How many times the player has searched for an idol per scope.
+    // Structure: { [scope]: number }  e.g. { "A": 2, "merged": 1 }
+    // Drives the persistence bonus in idolSearch() and feedback tier in
+    // actionSearchIdol(). Persists across rounds — searching twice in the
+    // pre-merge counts even if Tribal Council separates the attempts.
+    idolSearches: {},
+
     // ── Relationships ──────────────────────────────────────
     // Populated by initRelationships() in engine/relationships.js after tribes are assigned.
     // Structure: { [contestantId]: { [otherContestantId]: number } }
