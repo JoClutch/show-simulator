@@ -83,6 +83,20 @@ function onMergeDone() {
 function onTribalDone(eliminatedContestant) {
   gameState.eliminated.push(eliminatedContestant);
   removeFromTribes(eliminatedContestant);
+
+  // Post-merge eliminations are sent to the jury.
+  // removeFromTribes() has already run, so getAllActive() returns only survivors —
+  // that is the correct population for the sentiment snapshot.
+  if (gameState.merged) {
+    eliminatedContestant.juryNumber = gameState.jury.length + 1;
+    eliminatedContestant.sentiment  = buildJurySentiment(
+      gameState,
+      eliminatedContestant,
+      getAllActive()
+    );
+    gameState.jury.push(eliminatedContestant);
+  }
+
   showScreen("elimination");
 }
 
@@ -166,6 +180,7 @@ function showGameOver() {
   const episodesPlayed = gameState.round - 1;
   const lastDay        = getDay(gameState) - 1;
   const outlasted      = gameState.eliminated.length;
+  const jury           = gameState.jury;
 
   const headline = isInFinal3 ? "You Made the Final 3!" : "Game Over";
 
@@ -177,8 +192,31 @@ function showGameOver() {
     : `You were voted out on Day ${lastDay}. You lasted ${episodesPlayed} episode${episodesPlayed !== 1 ? "s" : ""} and outlasted ${outlasted - 1} player${outlasted - 1 !== 1 ? "s" : ""}.`;
 
   const remainingNames = getAllActive().map(c => c.name).join(", ");
+
+  // Jury stub — lists jurors and their snapshotted sentiment toward the player.
+  // Full Final Tribal Council voting comes in Phase 4.
+  const jurySection = jury.length > 0 ? `
+    <div class="gameover-jury">
+      <h3>The Jury (${jury.length})</h3>
+      <div class="gameover-jury-list">
+        ${jury.map(j => {
+          const score = isInFinal3 && j.sentiment ? j.sentiment[player.id] : undefined;
+          const tier  = score !== undefined ? sentimentTier(score) : "mixed";
+          const label = score !== undefined ? sentimentLabel(tier)  : "—";
+          return `
+            <div class="gameover-juror">
+              <span class="gameover-juror-name">${j.name}</span>
+              <span class="gameover-juror-sentiment" data-tier="${tier}">${label}</span>
+            </div>
+          `;
+        }).join("")}
+      </div>
+      <p class="muted gameover-jury-note">Final Tribal Council jury voting coming in Phase 4.</p>
+    </div>
+  ` : "";
+
   const finalNote = isInFinal3
-    ? `<p class="muted">Full jury and Final Tribal Council coming in a later phase.</p>`
+    ? jurySection
     : `<p class="muted">Final 3: ${remainingNames}</p>`;
 
   document.getElementById("app").innerHTML = `

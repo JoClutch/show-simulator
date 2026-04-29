@@ -3,14 +3,13 @@
 function renderEliminationScreen(container, state) {
   const eliminated   = state.eliminated[state.eliminated.length - 1];
   const isPlayer     = eliminated.id === state.player.id;
-  const totalPlayers = 16;                                    // fixed cast size
+  const totalPlayers = 16;
   const placement    = totalPlayers - state.eliminated.length + 1;
   const remaining    = totalPlayers - state.eliminated.length;
   const tribalDay    = getDay(state) + DAY_OFFSETS.tribal;
   const nextEpisode  = state.round + 1;
 
-  // After the merge, eliminated.tribe = "merged".
-  // Show the merged tribe name/color; use originalTribe for flavour if present.
+  // Tribe display — post-merge uses merged tribe name/color.
   const isMerged   = state.merged;
   const tribeName  = isMerged
     ? SEASON_CONFIG.mergeTribeName
@@ -20,7 +19,7 @@ function renderEliminationScreen(container, state) {
     : SEASON_CONFIG.tribeColors[eliminated.tribe];
 
   // Pre-merge: show remaining A / B tribe sizes.
-  // Post-merge: show merged cast count only (A and B are both empty).
+  // Post-merge: show merged cast count.
   const tribeStatusRow = isMerged
     ? `
       <div class="elim-status-row">
@@ -45,7 +44,6 @@ function renderEliminationScreen(container, state) {
     ? `You were voted out ${ordinal(placement)} overall. Your game ends here.`
     : `${eliminated.name} was voted out ${ordinal(placement)} overall.`;
 
-  // Show original pre-merge tribe as extra flavour when available.
   const originalLabel = isMerged && eliminated.originalTribe
     ? ` · Originally ${SEASON_CONFIG.tribeNames[eliminated.originalTribe]}`
     : "";
@@ -86,6 +84,8 @@ function renderEliminationScreen(container, state) {
         ${tribeStatusRow}
       </div>
 
+      ${buildJuryPanelHTML(state, eliminated, isPlayer)}
+
       <div class="spacer">
         ${nextBtn}
       </div>
@@ -98,6 +98,92 @@ function renderEliminationScreen(container, state) {
     });
   }
 }
+
+// ── Jury panel ────────────────────────────────────────────────────────────────
+
+// Renders the jury panel below the status block.
+// Only shown on post-merge elimination screens (state.jury.length > 0).
+//
+// The just-eliminated player is already in state.jury when this renders
+// (added in onTribalDone before showScreen was called), so we separate:
+//   - newJuror     : the person who just joined (show join message)
+//   - priorJurors  : previous jurors (show as chips with sentiment dots)
+//
+// Sentiment dots show each juror's disposition toward the human player.
+// Hidden when the player was the one eliminated (they have no further stake).
+function buildJuryPanelHTML(state, eliminated, isPlayer) {
+  if (state.jury.length === 0) return "";
+
+  const player      = state.player;
+  const newJuror    = state.jury.find(j => j.id === eliminated.id);
+  const priorJurors = state.jury.filter(j => j.id !== eliminated.id);
+
+  // Show sentiment dots only when the player is still alive.
+  // We show dots for priorJurors (not the new one — their seat just opened).
+  const showSentiment = !isPlayer;
+
+  // Build the prior-juror chip list.
+  const priorChips = priorJurors.map(j => {
+    const origColor = j.originalTribe
+      ? SEASON_CONFIG.tribeColors[j.originalTribe]
+      : SEASON_CONFIG.mergeTribeColor;
+    const origName = j.originalTribe
+      ? SEASON_CONFIG.tribeNames[j.originalTribe]
+      : "";
+
+    let dotHTML = "";
+    if (showSentiment && j.sentiment) {
+      const score = j.sentiment[player.id];
+      if (score !== undefined) {
+        const tier = sentimentTier(score);
+        dotHTML = `<span class="jury-dot" data-tier="${tier}" title="${sentimentLabel(tier)}">●</span>`;
+      }
+    }
+
+    return `
+      <div class="jury-chip">
+        ${dotHTML}
+        <span class="jury-chip-name">${j.name}</span>
+        <span class="jury-chip-origin" style="color:${origColor}">${origName}</span>
+      </div>
+    `;
+  }).join("");
+
+  // If no prior jurors, show an introductory note instead of an empty list.
+  const priorSection = priorJurors.length > 0
+    ? `
+        <div class="jury-chip-list">${priorChips}</div>
+        ${showSentiment ? `
+          <p class="jury-legend muted">
+            <span class="jury-legend-dot" data-tier="favorable">●</span> Favorable &nbsp;
+            <span class="jury-legend-dot" data-tier="mixed">●</span> Mixed &nbsp;
+            <span class="jury-legend-dot" data-tier="unfavorable">●</span> Unfavorable
+            — toward you
+          </p>
+        ` : ""}
+      `
+    : `<p class="muted jury-empty-note">They will vote for the winner at Final Tribal Council.</p>`;
+
+  // Join message for the newly added juror.
+  const joinLine = newJuror
+    ? `<div class="jury-join-note">
+         ${eliminated.name} joins the jury as Juror ${newJuror.juryNumber}.
+       </div>`
+    : "";
+
+  return `
+    <div class="jury-panel">
+      <div class="jury-panel-header">
+        <span class="jury-panel-title">The Jury</span>
+        <span class="jury-panel-count">${state.jury.length} member${state.jury.length !== 1 ? "s" : ""}</span>
+      </div>
+      ${joinLine}
+      ${priorSection}
+    </div>
+  `;
+}
+
+// ── Utilities ─────────────────────────────────────────────────────────────────
 
 function ordinal(n) {
   const s = ["th", "st", "nd", "rd"];

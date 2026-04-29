@@ -38,7 +38,8 @@ function createSeasonState() {
       B:      [],    // active contestants on Tribe B (empty after merge)
       merged: [],    // active contestants after merge (empty before merge)
     },
-    eliminated: [],  // contestant objects in the order they were voted out
+    eliminated: [],  // contestant objects in elimination order (all boots, pre- and post-merge)
+    jury:       [],  // subset of eliminated: only post-merge boots, in jury-seat order
 
     // ── Round state ────────────────────────────────────────
     campPhase:      1,     // 1 = pre-challenge camp, 2 = post-challenge camp; reset each round

@@ -86,6 +86,9 @@ function renderMergedTribalScreen(container, state) {
         <div class="tribal-meta">
           <span style="color:${mergeColor}">${mergeName}</span>
           &nbsp;·&nbsp; ${tribe.length} players attending
+          ${state.jury.length > 0
+            ? `&nbsp;·&nbsp; Jury of ${state.jury.length}`
+            : ""}
         </div>
       </div>
 

@@ -1052,3 +1052,154 @@ button:disabled {
   font-size: 1rem;
   flex-shrink: 0;
 }
+
+/* ── Jury Panel (elimination screen) ── */
+.jury-panel {
+  margin-top: 1.25rem;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-dim);
+  border-left: 3px solid var(--gold);
+  border-radius: 0 5px 5px 0;
+  padding: 0.9rem 1.1rem;
+}
+
+.jury-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 0.6rem;
+}
+
+.jury-panel-title {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--gold);
+  font-weight: bold;
+}
+
+.jury-panel-count {
+  font-size: 0.72rem;
+  color: var(--text-faint);
+}
+
+/* "X joins the jury" line */
+.jury-join-note {
+  font-size: 0.88rem;
+  color: var(--text-dim);
+  margin-bottom: 0.65rem;
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid var(--border-dim);
+}
+
+.jury-empty-note {
+  margin-bottom: 0;
+}
+
+/* Chips for previous jurors */
+.jury-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+}
+
+.jury-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  background-color: var(--bg-raised);
+  border: 1px solid var(--border-dim);
+  border-radius: 4px;
+  padding: 0.3rem 0.65rem;
+  font-size: 0.82rem;
+}
+
+.jury-chip-name {
+  color: var(--text-primary);
+}
+
+.jury-chip-origin {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Sentiment dot (● character) next to each juror */
+.jury-dot {
+  font-size: 0.6rem;
+  line-height: 1;
+}
+
+.jury-dot[data-tier="favorable"]   { color: var(--green-text);  }
+.jury-dot[data-tier="mixed"]       { color: var(--text-faint);  }
+.jury-dot[data-tier="unfavorable"] { color: var(--red-text);    }
+
+/* Color-coded legend at the bottom of the chip list */
+.jury-legend {
+  font-size: 0.72rem;
+  margin-top: 0.25rem;
+  margin-bottom: 0;
+  line-height: 1.8;
+}
+
+.jury-legend-dot[data-tier="favorable"]   { color: var(--green-text);  }
+.jury-legend-dot[data-tier="mixed"]       { color: var(--text-faint);  }
+.jury-legend-dot[data-tier="unfavorable"] { color: var(--red-text);    }
+
+/* ── Game-over jury summary ── */
+.gameover-jury {
+  margin-top: 1.25rem;
+  border: 1px solid var(--border-dim);
+  border-left: 3px solid var(--gold);
+  border-radius: 0 5px 5px 0;
+  padding: 0.9rem 1.1rem;
+}
+
+.gameover-jury h3 {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--gold);
+  margin-bottom: 0.7rem;
+}
+
+.gameover-jury-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 0.75rem;
+}
+
+.gameover-juror {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.88rem;
+  padding: 0.25rem 0;
+  border-bottom: 1px solid var(--border-dim);
+}
+
+.gameover-juror:last-child {
+  border-bottom: none;
+}
+
+.gameover-juror-name {
+  color: var(--text-primary);
+}
+
+.gameover-juror-sentiment {
+  font-size: 0.78rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.gameover-juror-sentiment[data-tier="favorable"]   { color: var(--green-text);  }
+.gameover-juror-sentiment[data-tier="mixed"]       { color: var(--text-faint);  }
+.gameover-juror-sentiment[data-tier="unfavorable"] { color: var(--red-text);    }
+
+.gameover-jury-note {
+  margin-bottom: 0;
+  margin-top: 0.5rem;
+}

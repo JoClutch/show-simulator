@@ -78,10 +78,11 @@ function adjustTrust(state, idA, idB, delta) {
 // ── Suspicion API ─────────────────────────────────────────────────────────────
 
 // Looks up a contestant from the active tribes by id.
+// Searches A, B, and merged so this works both pre- and post-merge.
 // Returns null if not found (e.g. already eliminated — should not happen in practice).
 function findContestant(state, id) {
-  for (const label of ["A", "B"]) {
-    const c = state.tribes[label].find(c => c.id === id);
+  for (const label of ["A", "B", "merged"]) {
+    const c = state.tribes[label]?.find(c => c.id === id);
     if (c) return c;
   }
   return null;

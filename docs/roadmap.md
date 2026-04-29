@@ -44,7 +44,11 @@ Goal: Introduce the merge at a set number of players.
 - [x] Individual immunity challenges post-merge
 - [x] Camp Life works with full merged cast
 - [x] Tribal Council: full cast votes, immunity holder protected
-- [ ] Jury begins (eliminated players post-merge are jurors) — deferred to Phase 4
+- [x] v2.5: Jury tracking — post-merge boots join the jury
+- [x] v2.5: Jury sentiment snapshot (relationship + trust at elimination time)
+- [x] v2.5: Jury panel on elimination screen with sentiment dots
+- [x] v2.5: Jury summary on game-over screen
+- [x] v2.5: Bug fix — findContestant now searches merged tribe (suspicion post-merge)
 
 ---
 
