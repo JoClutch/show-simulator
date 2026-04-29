@@ -381,6 +381,14 @@ function checkForMerge() {
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
 window.addEventListener("DOMContentLoaded", () => {
+  // v4 groundwork: apply the default season template before the runtime is
+  // built. SEASON_CONFIG and CONTESTANTS are populated/reaffirmed from the
+  // template — for the bundled default this is functionally a no-op (values
+  // already match the inline defaults in season.js / contestants.js), but it
+  // establishes the template as the source of truth and lets future code
+  // swap in a different template by calling applyTemplate(...) before boot.
+  applyTemplate(DEFAULT_SEASON_TEMPLATE);
+
   gameState = createSeasonState();
   assignTribes(CONTESTANTS, gameState);
   initIdols(gameState);      // places one idol per tribal camp + one for merge
