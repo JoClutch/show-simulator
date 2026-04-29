@@ -63,6 +63,7 @@ window.DEV_CONFIG = {
     <div class="dev-tabs" role="tablist">
       <button class="dev-tab active" data-tab="state"   role="tab">State</button>
       <button class="dev-tab"        data-tab="inspect" role="tab">Inspect</button>
+      <button class="dev-tab"        data-tab="history" role="tab">History</button>
       <button class="dev-tab"        data-tab="balance" role="tab">Balance</button>
     </div>
 
@@ -70,6 +71,8 @@ window.DEV_CONFIG = {
       <div class="dev-pane active" id="dev-pane-state"></div>
       <div class="dev-pane"        id="dev-pane-inspect"
            data-perspective-id=""></div>
+      <div class="dev-pane"        id="dev-pane-history"
+           data-history-filter="all"></div>
       <div class="dev-pane"        id="dev-pane-balance"></div>
     </div>
 
@@ -126,6 +129,7 @@ window.DEV_CONFIG = {
   function refresh() {
     renderState();
     renderInspect();
+    renderHistory();
     renderBalance();
   }
 
@@ -594,10 +598,51 @@ window.DEV_CONFIG = {
       </option>`;
     }).join("");
 
+    // v4.7: standing summary for the perspective contestant — quick scan of
+    // their position before drilling into the full table below.
+    const summary = _computeStanding(g, current);
+    const summaryHTML = `
+      <div class="dev-section dev-inspect-summary">
+        <div class="dev-section-hd">${escapeHtml(current.name)}'s standing</div>
+        <div class="dev-summary-row">
+          <span class="dev-summary-stat">
+            <span class="dev-summary-label">Avg rel</span>
+            <span class="dev-summary-value">${summary.avgRel.toFixed(1)}</span>
+          </span>
+          <span class="dev-summary-stat">
+            <span class="dev-summary-label">Allies (≥8)</span>
+            <span class="dev-summary-value dev-hi">${summary.allies}</span>
+          </span>
+          <span class="dev-summary-stat">
+            <span class="dev-summary-label">Enemies (≤−3)</span>
+            <span class="dev-summary-value dev-lo">${summary.enemies}</span>
+          </span>
+          <span class="dev-summary-stat">
+            <span class="dev-summary-label">Suspicion</span>
+            <span class="dev-summary-value ${(current.suspicion ?? 0) >= 5 ? "dev-lo" : "dev-mid"}">${(current.suspicion ?? 0).toFixed(0)}</span>
+          </span>
+          <span class="dev-summary-stat">
+            <span class="dev-summary-label">Idols held</span>
+            <span class="dev-summary-value ${summary.idolsHeld > 0 ? "dev-hi" : "dev-dim"}">${summary.idolsHeld}</span>
+          </span>
+          <span class="dev-summary-stat">
+            <span class="dev-summary-label">Alliances</span>
+            <span class="dev-summary-value">${summary.allianceCount}</span>
+          </span>
+        </div>
+      </div>
+    `;
+
     // Relationship / trust / general susp / idol susp table
     // The "IdolSusp" column is current → c: how strongly the perspective
     // person believes c holds an idol. (0=unaware, 3+=suspect, 7+=confident.)
-    const others = all.filter(c => c.id !== current.id);
+    // v4.7: sorted by relationship descending — strongest allies at top, enemies
+    // at bottom — so the table reads as a friend/foe ranking at a glance.
+    const others = all
+      .filter(c => c.id !== current.id)
+      .sort((a, b) =>
+        getRelationship(g, current.id, b.id) - getRelationship(g, current.id, a.id)
+      );
     const relRows = others.map(c => {
       const rel       = getRelationship(g, current.id, c.id);
       const trust     = getTrust(g, current.id, c.id);
@@ -652,6 +697,8 @@ window.DEV_CONFIG = {
         </div>
       </div>
 
+      ${summaryHTML}
+
       <div class="dev-section">
         <div class="dev-section-hd">${current.name} → others (rel / trust / susp / idol susp)</div>
         <table class="dev-table">
@@ -674,6 +721,129 @@ window.DEV_CONFIG = {
       el.dataset.perspectiveId = e.target.value;
       renderInspect();
     });
+  }
+
+  // Helper for the Inspect summary row. Counts allies (rel ≥ 8) and enemies
+  // (rel ≤ −3) toward the perspective contestant, plus idols held and
+  // alliance memberships. Operates over allKnownPlayers so eliminated
+  // contestants are still represented (their old relationships still matter
+  // for jury sentiment and historical reads).
+  function _computeStanding(g, c) {
+    const others = allKnownPlayers().filter(p => p.id !== c.id);
+    let totalRel = 0, allies = 0, enemies = 0, count = 0;
+    for (const o of others) {
+      const rel = getRelationship(g, c.id, o.id);
+      totalRel += rel;
+      count++;
+      if (rel >= 8)        allies++;
+      else if (rel <= -3)  enemies++;
+    }
+    const idolsHeld = (g.idols ?? [])
+      .filter(i => i.holder === c.id && i.status === "held").length;
+    const allianceCount = (typeof getAlliancesForMember === "function")
+      ? getAlliancesForMember(g, c.id).length
+      : 0;
+    return {
+      avgRel: count > 0 ? totalRel / count : 0,
+      allies,
+      enemies,
+      idolsHeld,
+      allianceCount,
+    };
+  }
+
+  // ── Tab: History (v4.7) ──────────────────────────────────────────────────────
+  //
+  // Reads state.eventLog (populated by engine code throughout play) and
+  // groups entries by round so the season reads as a chronological summary
+  // rather than a flat dump. A category filter narrows to one type of event
+  // (idols, alliances, swap/merge, eliminations, game state) for tuning
+  // analysis. Visibility flag (👁) marks entries the player would also see
+  // in their own Season Log on the camp screen.
+
+  function renderHistory() {
+    const el = pane("history");
+    const g  = gs();
+    if (!g) { noGame(el); return; }
+
+    const events = g.eventLog ?? [];
+    if (events.length === 0) {
+      el.innerHTML = `<p class="dev-note dev-dim">
+        No events recorded yet — start a game to see season history here.
+      </p>`;
+      return;
+    }
+
+    const filter = el.dataset.historyFilter ?? "all";
+
+    // Group filtered events by round.
+    const byRound = {};
+    let visibleCount = 0;
+    for (const e of events) {
+      if (filter !== "all" && e.category !== filter) continue;
+      visibleCount++;
+      if (!byRound[e.round]) byRound[e.round] = [];
+      byRound[e.round].push(e);
+    }
+    const rounds = Object.keys(byRound).map(Number).sort((a, b) => b - a);
+
+    el.innerHTML = `
+      <div class="dev-section dev-history-controls">
+        <div class="dev-kv">
+          <label class="dev-k" for="dev-history-filter">Filter</label>
+          <select class="dev-select" id="dev-history-filter">
+            <option value="all"      ${filter === "all"      ? "selected" : ""}>All categories</option>
+            <option value="idol"     ${filter === "idol"     ? "selected" : ""}>Idols</option>
+            <option value="alliance" ${filter === "alliance" ? "selected" : ""}>Alliances</option>
+            <option value="swap"     ${filter === "swap"     ? "selected" : ""}>Swap</option>
+            <option value="merge"    ${filter === "merge"    ? "selected" : ""}>Merge</option>
+            <option value="tribal"   ${filter === "tribal"   ? "selected" : ""}>Eliminations</option>
+            <option value="game"     ${filter === "game"     ? "selected" : ""}>Game state</option>
+          </select>
+        </div>
+        <p class="dev-note dev-dim">
+          ${events.length} total event${events.length !== 1 ? "s" : ""}
+          ${filter !== "all" ? ` · ${visibleCount} match filter` : ""}
+          &nbsp;·&nbsp; 👁 = player-visible in Season Log
+        </p>
+      </div>
+
+      ${rounds.length === 0
+        ? `<p class="dev-note dev-dim">No events match the filter.</p>`
+        : rounds.map(r => _renderHistoryRound(r, byRound[r])).join("")
+      }
+    `;
+
+    // Wire filter — re-render so byRound regroups on the new filter.
+    el.querySelector("#dev-history-filter").addEventListener("change", e => {
+      el.dataset.historyFilter = e.target.value;
+      renderHistory();
+    });
+  }
+
+  function _renderHistoryRound(round, events) {
+    return `
+      <div class="dev-section dev-history-round">
+        <div class="dev-section-hd">
+          Round ${round}
+          <span class="dev-dim" style="font-weight:normal">
+            — ${events.length} event${events.length !== 1 ? "s" : ""}
+          </span>
+        </div>
+        <ul class="dev-history-events">
+          ${events.map(e => `
+            <li class="dev-history-event dev-history-event-${e.category}">
+              <span class="dev-history-cat dev-history-cat-${e.category}">${e.category}</span>
+              <span class="dev-history-text">${escapeHtml(e.text)}</span>
+              <span class="dev-history-vis ${e.playerVisible ? "dev-hi" : "dev-dim"}"
+                    title="${e.playerVisible ? "player-visible in Season Log" : "hidden from player"}">
+                ${e.playerVisible ? "👁" : "·"}
+              </span>
+            </li>
+          `).join("")}
+        </ul>
+      </div>
+    `;
   }
 
   // ── Tab: Balance ─────────────────────────────────────────────────────────────

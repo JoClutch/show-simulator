@@ -3386,6 +3386,110 @@ button:disabled {
   display: block;
 }
 
+/* ── Inspect tab: standing summary (v4.7) ── */
+.dev-inspect-summary .dev-summary-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  padding-top: 0.25rem;
+}
+
+.dev-summary-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  background: var(--bg-raised);
+  border: 1px solid var(--border-dim);
+  border-radius: 3px;
+  padding: 0.35rem 0.55rem;
+  min-width: 5.2rem;
+}
+
+.dev-summary-label {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.dev-summary-value {
+  font-size: 0.95rem;
+  font-weight: bold;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── History tab (v4.7) ── */
+.dev-history-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.dev-history-controls .dev-note {
+  margin-top: 0.1rem;
+}
+
+.dev-history-round {
+  /* Slightly tighter spacing than other sections — many rounds stacked. */
+  padding-top: 0.55rem;
+  padding-bottom: 0.55rem;
+}
+
+.dev-history-events {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.dev-history-event {
+  display: grid;
+  grid-template-columns: 5rem 1fr 1.2rem;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.3rem 0.5rem;
+  background: var(--bg-raised);
+  border-left: 3px solid var(--border-dim);
+  border-radius: 0 3px 3px 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+/* Per-category accents — match the player-facing Season Log conventions. */
+.dev-history-event-idol     { border-left-color: var(--gold-dim); }
+.dev-history-event-alliance { border-left-color: #5fa86f; }
+.dev-history-event-swap     { border-left-color: #c8884a; }
+.dev-history-event-merge    { border-left-color: #9b59b6; }
+.dev-history-event-tribal   { border-left-color: #c07080; }
+.dev-history-event-game     { border-left-color: var(--gold); }
+
+.dev-history-cat {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  font-weight: bold;
+  padding: 1px 0;
+}
+
+.dev-history-cat-idol     { color: var(--gold-dim); }
+.dev-history-cat-alliance { color: #5fa86f; }
+.dev-history-cat-swap     { color: #c8884a; }
+.dev-history-cat-merge    { color: #9b59b6; }
+.dev-history-cat-tribal   { color: #c07080; }
+.dev-history-cat-game     { color: var(--gold); }
+
+.dev-history-text {
+  color: var(--text-primary);
+}
+
+.dev-history-vis {
+  font-size: 0.85rem;
+  text-align: center;
+}
+
 /* Footer */
 .dev-footer {
   display: flex;
