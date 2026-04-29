@@ -1,0 +1,829 @@
+/* ── Reset ── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* ── Base ── */
+body {
+  font-family: Georgia, serif;
+  background-color: #1a1a2e;
+  color: #e0d7c6;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 2rem 1rem;
+}
+
+/* ── Typography ── */
+h1 {
+  font-size: 2rem;
+  color: #f4c542;
+  margin-bottom: 0.5rem;
+  text-align: center;
+}
+
+h2 {
+  font-size: 1.4rem;
+  color: #f4c542;
+  margin-bottom: 1rem;
+}
+
+p {
+  line-height: 1.6;
+  margin-bottom: 0.75rem;
+}
+
+/* ── Buttons ── */
+button {
+  background-color: #f4c542;
+  color: #1a1a2e;
+  border: none;
+  border-radius: 4px;
+  padding: 0.6rem 1.2rem;
+  font-size: 1rem;
+  font-family: Georgia, serif;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+button:hover {
+  background-color: #e0b030;
+}
+
+button:disabled {
+  background-color: #555;
+  color: #999;
+  cursor: not-allowed;
+}
+
+/* ── Home / Select Screen ── */
+#app {
+  width: 100%;
+  max-width: 960px;  /* wider to fit 4-column tribe grids */
+}
+
+.select-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.select-subtitle {
+  color: #888;
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+}
+
+.select-instructions {
+  color: #bbb;
+  font-size: 0.95rem;
+  max-width: 520px;
+  margin: 0 auto;
+}
+
+/* ── Tribe Sections ── */
+.tribe-section {
+  margin-bottom: 2.5rem;
+}
+
+.tribe-header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  border-left: 4px solid;        /* color set inline via JS */
+  padding: 0.4rem 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.tribe-header-name {
+  font-size: 1.1rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.tribe-header-count {
+  font-size: 0.8rem;
+  color: #666;
+}
+
+/* ── Contestant Grid (shared by select + tribal screens) ── */
+.contestant-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.75rem;
+}
+
+/* ── Contestant Cards ── */
+.contestant-card {
+  background-color: #16213e;
+  border: 2px solid #2e4070;
+  border-radius: 6px;
+  padding: 0.85rem 0.75rem;
+  cursor: pointer;
+  transition: border-color 0.15s, background-color 0.15s, box-shadow 0.15s;
+  position: relative;
+  overflow: hidden;
+}
+
+.contestant-card:hover {
+  border-color: #8899cc;
+}
+
+.contestant-card.selected {
+  border-color: #f4c542;
+  background-color: #1e2d50;
+  box-shadow: 0 0 0 2px #f4c542;
+}
+
+/* Thin tribe-color stripe at the top of each card */
+.card-tribe-pip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+}
+
+/* "▶ Your pick" badge — hidden until card is selected */
+.card-selected-indicator {
+  display: none;
+  font-size: 0.65rem;
+  color: #f4c542;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 0.35rem;
+  margin-top: 0.15rem;
+}
+
+.contestant-card.selected .card-selected-indicator {
+  display: block;
+}
+
+.card-name {
+  font-size: 0.9rem;
+  font-weight: bold;
+  color: #e0d7c6;
+  margin-bottom: 0.6rem;
+  margin-top: 0.25rem;
+  line-height: 1.2;
+}
+
+/* Stats table inside each card */
+.card-stats {
+  border-top: 1px solid #2a3a60;
+  padding-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.stat-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #666;
+}
+
+.stat-value {
+  font-size: 0.85rem;
+  color: #c8c0b0;
+  font-variant-numeric: tabular-nums;
+}
+
+.contestant-card.selected .stat-value {
+  color: #e0d7c6;
+}
+
+/* ── Selection Preview Bar ── */
+.selection-preview {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  background-color: #16213e;
+  border: 1px solid #2e4070;
+  border-radius: 6px;
+  padding: 0.85rem 1.25rem;
+  margin-top: 0.5rem;
+}
+
+.selection-preview.hidden {
+  display: none;
+}
+
+.preview-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #666;
+  margin-right: 0.5rem;
+}
+
+.preview-name {
+  font-size: 1rem;
+  font-weight: bold;
+  color: #f4c542;
+  margin-right: 0.5rem;
+}
+
+.preview-tribe-tag {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.no-selection-hint {
+  text-align: center;
+  color: #555;
+  font-size: 0.85rem;
+  margin-top: 1rem;
+}
+
+.no-selection-hint.hidden {
+  display: none;
+}
+
+/* ── Camp Life Screen ── */
+.camp-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1.25rem;
+}
+
+.camp-tribe-tag {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  display: block;
+}
+
+.camp-step-note {
+  font-size: 0.72rem;
+  color: #555;
+  display: block;
+  margin-top: 0.15rem;
+}
+
+.actions-counter {
+  font-size: 0.85rem;
+  background-color: #16213e;
+  border: 1px solid #2e4070;
+  border-radius: 4px;
+  padding: 0.35rem 0.75rem;
+  color: #f4c542;
+  white-space: nowrap;
+}
+
+/* Tribemate chip row */
+.camp-tribemates {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 1.5rem;
+  padding: 0.65rem 0.85rem;
+  background-color: #16213e;
+  border-radius: 4px;
+}
+
+.camp-tribemates-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #555;
+  margin-right: 0.25rem;
+}
+
+.tribe-chip {
+  font-size: 0.78rem;
+  background-color: #1a2540;
+  border: 1px solid #2e4070;
+  border-radius: 3px;
+  padding: 0.15rem 0.5rem;
+  color: #aaa;
+}
+
+.tribe-chip-you {
+  border-color: #f4c542;
+  color: #f4c542;
+}
+
+/* Action button grid */
+.action-area {
+  margin-bottom: 1.25rem;
+  min-height: 110px;
+}
+
+.action-btn-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}
+
+.action-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+  background-color: #16213e;
+  border: 1px solid #2e4070;
+  border-radius: 5px;
+  padding: 0.7rem 0.9rem;
+  color: #e0d7c6;
+  font-family: Georgia, serif;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+.action-btn:hover {
+  border-color: #8899cc;
+  background-color: #1e2d50;
+}
+
+.action-btn-label {
+  font-size: 0.88rem;
+  font-weight: bold;
+  color: #e0d7c6;
+}
+
+.action-btn-detail {
+  font-size: 0.72rem;
+  color: #555;
+}
+
+/* Target picker */
+.target-picker {
+  background-color: #16213e;
+  border: 1px solid #2e4070;
+  border-radius: 5px;
+  padding: 0.9rem 1rem;
+}
+
+.target-picker-prompt {
+  font-size: 0.88rem;
+  color: #bbb;
+  margin-bottom: 0.75rem;
+}
+
+.target-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-bottom: 0.75rem;
+}
+
+.target-chip {
+  background-color: #1a2540;
+  border: 1px solid #3a5080;
+  border-radius: 4px;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.84rem;
+  color: #e0d7c6;
+  font-family: Georgia, serif;
+  cursor: pointer;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+.target-chip:hover {
+  border-color: #f4c542;
+  background-color: #1e2d50;
+}
+
+.cancel-btn {
+  background-color: transparent;
+  border: 1px solid #333;
+  color: #666;
+  font-size: 0.78rem;
+  padding: 0.3rem 0.6rem;
+}
+
+.cancel-btn:hover {
+  background-color: transparent;
+  border-color: #666;
+  color: #999;
+}
+
+.camp-done-msg {
+  text-align: center;
+  padding: 1.25rem 0;
+}
+
+/* Feedback log */
+.feedback-log {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin-bottom: 1.25rem;
+}
+
+.feedback-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  background-color: #16213e;
+  border-left: 3px solid #2e4070;
+  border-radius: 0 4px 4px 0;
+  padding: 0.65rem 0.9rem;
+}
+
+.feedback-action-tag {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #555;
+}
+
+.feedback-text {
+  font-size: 0.9rem;
+  color: #c8c0b0;
+  line-height: 1.55;
+}
+
+.camp-footer {
+  text-align: right;
+}
+
+/* ── Challenge Screen ── */
+.challenge-type-label {
+  text-align: center;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #666;
+  margin-bottom: 1rem;
+}
+
+.challenge-outcome-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin: 1.25rem 0;
+}
+
+.challenge-outcome-cell {
+  border-radius: 5px;
+  padding: 0.9rem 1rem;
+  text-align: center;
+}
+
+.outcome-win {
+  background-color: #16213e;
+  border: 1px solid #2e4070;
+}
+
+.outcome-loss {
+  background-color: #1a1525;
+  border: 1px solid #3d2a2a;
+}
+
+.outcome-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #555;
+  margin-bottom: 0.35rem;
+}
+
+.outcome-tribe {
+  font-size: 1.15rem;
+  font-weight: bold;
+  margin-bottom: 0.25rem;
+}
+
+.outcome-sub {
+  font-size: 0.75rem;
+  color: #555;
+}
+
+.challenge-player-status {
+  border-radius: 5px;
+  padding: 0.75rem 1rem;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.status-safe {
+  background-color: #14231a;
+  border: 1px solid #2a5a38;
+  color: #7dba8f;
+}
+
+.status-danger {
+  background-color: #1a1525;
+  border: 1px solid #5a2a3a;
+  color: #c07080;
+}
+
+/* Camp Life phase 2 status banners */
+.camp-status-banner {
+  border-radius: 4px;
+  padding: 0.6rem 0.9rem;
+  font-size: 0.85rem;
+  margin-bottom: 1.1rem;
+}
+
+.camp-status-danger {
+  background-color: #1a1525;
+  border: 1px solid #5a2a3a;
+  color: #c07080;
+}
+
+.camp-status-safe {
+  background-color: #14231a;
+  border: 1px solid #2a5a38;
+  color: #7dba8f;
+}
+
+/* ── Event Log (Camp Life / Tribal) ── */
+.event-log {
+  background-color: #16213e;
+  border-left: 3px solid #f4c542;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+  border-radius: 0 4px 4px 0;
+}
+
+/* ── Tribal Council ── */
+.tribal-header {
+  margin-bottom: 1rem;
+}
+
+.tribal-meta {
+  font-size: 0.82rem;
+  color: #666;
+  margin-top: 0.25rem;
+}
+
+.tribal-prompt {
+  font-size: 0.9rem;
+  color: #bbb;
+  margin-bottom: 1.25rem;
+  line-height: 1.55;
+}
+
+/* ── Vote reveal cards ── */
+.tribal-reading-note {
+  margin-bottom: 1.25rem;
+}
+
+.reveal-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+  min-height: 3rem;
+}
+
+.reveal-card {
+  background-color: #16213e;
+  border: 1px solid #2e4070;
+  border-radius: 4px;
+  padding: 0.45rem 0.85rem;
+  font-size: 0.9rem;
+  color: #e0d7c6;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
+
+.reveal-card.revealed {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Vote that goes against the player */
+.reveal-card.reveal-card-danger {
+  border-color: #7a2a2a;
+  color: #e07070;
+}
+
+/* The final decisive vote — slightly heavier border */
+.reveal-card.reveal-card-decisive {
+  border-width: 2px;
+  border-color: #f4c542;
+  color: #f4c542;
+}
+
+/* Danger + decisive (rare but handle it) */
+.reveal-card.reveal-card-danger.reveal-card-decisive {
+  border-color: #cc3333;
+  color: #ff6666;
+}
+
+/* ── Running tally ── */
+.tally-board {
+  border-top: 1px solid #2e4070;
+  padding-top: 0.85rem;
+  margin-bottom: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-height: 2rem;
+}
+
+.tally-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.88rem;
+}
+
+.tally-name {
+  width: 140px;
+  color: #c8c0b0;
+  flex-shrink: 0;
+}
+
+.tally-pips {
+  color: #f4c542;
+  letter-spacing: 0.1em;
+  font-size: 0.7rem;
+  flex: 1;
+}
+
+.tally-count {
+  color: #888;
+  font-size: 0.8rem;
+  width: 1.5rem;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* ── Finish button ── */
+.reveal-footer {
+  margin-top: 0.5rem;
+}
+
+.tribal-finish-btn {
+  background-color: #f4c542;
+  color: #1a1a2e;
+  border: none;
+  border-radius: 4px;
+  padding: 0.65rem 1.4rem;
+  font-size: 1rem;
+  font-family: Georgia, serif;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.tribal-finish-btn:hover {
+  background-color: #e0b030;
+}
+
+/* ── Elimination Screen ── */
+.elim-card {
+  background-color: #16213e;
+  border: 1px solid #2e4070;
+  border-radius: 6px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.25rem;
+  text-align: center;
+}
+
+.elim-name {
+  font-size: 1.4rem;
+  font-weight: bold;
+  color: #f4c542;
+  margin-bottom: 0.35rem;
+}
+
+.elim-tribe {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.elim-body {
+  font-size: 0.95rem;
+  color: #bbb;
+  margin-bottom: 1.25rem;
+  line-height: 1.6;
+}
+
+.elim-status {
+  background-color: #16213e;
+  border: 1px solid #2e4070;
+  border-radius: 5px;
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+}
+
+.elim-status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.86rem;
+}
+
+.elim-status-label {
+  color: #555;
+}
+
+.elim-status-value {
+  color: #c8c0b0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Utility ── */
+.screen {
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.spacer {
+  margin-top: 1.5rem;
+}
+
+.muted {
+  color: #888;
+  font-size: 0.85rem;
+}
+
+/* ── Phase 1 end screen ── */
+.phase1-end-screen {
+  text-align: center;
+}
+
+.phase1-end-badge {
+  display: inline-block;
+  background: #f4c542;
+  color: #1a1a2e;
+  font-size: 0.75rem;
+  font-weight: bold;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  margin-bottom: 1rem;
+}
+
+.phase1-end-recap {
+  margin: 1.5rem auto;
+  max-width: 560px;
+  text-align: center;
+}
+
+.phase1-end-recap p + p {
+  margin-top: 0.4rem;
+}
+
+.phase1-end-roadmap {
+  margin: 2rem auto;
+  max-width: 480px;
+  text-align: left;
+  background: #252540;
+  border: 1px solid #3a3a5c;
+  border-radius: 8px;
+  padding: 1.25rem 1.5rem;
+}
+
+.phase1-end-roadmap h3 {
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #888;
+  margin-bottom: 0.75rem;
+}
+
+.phase1-end-roadmap ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.phase1-end-roadmap li {
+  font-size: 0.95rem;
+  color: #c8bfb0;
+}
+
+.phase-tag {
+  display: inline-block;
+  background: #3a3a5c;
+  color: #a0a8d0;
+  font-size: 0.72rem;
+  font-weight: bold;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  margin-right: 0.5rem;
+}
