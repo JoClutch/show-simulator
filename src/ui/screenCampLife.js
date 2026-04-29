@@ -123,7 +123,7 @@ function renderCampLifeScreen(container, state) {
     picker.className = "target-picker";
     picker.innerHTML = `
       <p class="target-picker-prompt">
-        <strong>${action.label}</strong> — choose someone:
+        <strong>${action.label}</strong> — ${action.targetPrompt ?? "choose someone"}:
       </p>
       <div class="target-chip-row" id="target-chips"></div>
       <button id="cancel-target-btn" class="cancel-btn">← Cancel</button>

@@ -19,19 +19,23 @@ function collectAiVotes(state, tribe, playerVoteTarget, player) {
 // AI picks who to vote against.
 //
 // Score for each candidate (lower = more likely to be voted for):
-//   - Relationship score     : main driver. Disliked people score low.
-//   - Threat penalty         : strategic players penalise high-challenge,
-//                              high-social opponents they can't control.
-//   - Random noise           : scaled inversely by the voter's strategy stat,
-//                              so high-strategy players vote more predictably.
+//   - Relationship score : main driver. Disliked people score low.
+//   - Threat penalty     : strategic voters penalise high-challenge,
+//                          high-social opponents they can't control.
+//   - Suspicion penalty  : each suspicion point subtracts 2 from score,
+//                          making a suspicious player a target even if
+//                          their relationships are otherwise decent.
+//   - Random noise       : scaled inversely by voter's strategy stat,
+//                          so high-strategy players vote more predictably.
 function pickVoteTarget(state, voter, candidates) {
   const others = candidates.filter(c => c.id !== voter.id);
 
   const scored = others.map(c => {
-    const rel    = getRelationship(state, voter.id, c.id);
-    const threat = (c.challenge + c.social) * (voter.strategy / 20);
-    const noise  = (Math.random() - 0.5) * (11 - voter.strategy) * 2;
-    return { contestant: c, score: rel - threat + noise };
+    const rel       = getRelationship(state, voter.id, c.id);
+    const threat    = (c.challenge + c.social) * (voter.strategy / 20);
+    const suspicion = (c.suspicion ?? 0) * 2;
+    const noise     = (Math.random() - 0.5) * (11 - voter.strategy) * 2;
+    return { contestant: c, score: rel - threat - suspicion + noise };
   });
 
   scored.sort((a, b) => a.score - b.score);

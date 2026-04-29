@@ -54,6 +54,13 @@ function createSeasonState() {
     // Structure: { [contestantId]: { [otherContestantId]: number } }
     // Scores range from roughly -50 to +50 and are hidden from the player.
     relationships: {},
+
+    // ── Trust ──────────────────────────────────────────────
+    // Populated by initRelationships() alongside relationships.
+    // Structure: { [contestantId]: { [otherContestantId]: number } }
+    // Range 0–10. Starts at 3 (slight baseline goodwill, not yet earned).
+    // Affects: intel quality from askVote, effectiveness of confide/strategy.
+    trust: {},
   };
 }
 
