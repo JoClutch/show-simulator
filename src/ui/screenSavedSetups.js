@@ -88,7 +88,7 @@ function drawList(container) {
         <div class="saved-setup-meta">
           <span class="saved-setup-date">Saved ${formatSavedDate(s.savedAt)}</span>
         </div>
-        <div class="saved-setup-summary">${escapeHtml(buildSummary(s.template))}</div>
+        <div class="saved-setup-summary">${escapeHtml(buildTemplateSummary(s.template))}</div>
         <div class="saved-setup-actions">
           <button class="saved-setup-load-btn"     data-id="${escapeHtml(s.id)}">Load</button>
           <button class="saved-setup-download-btn" data-id="${escapeHtml(s.id)}">Download</button>
@@ -111,22 +111,9 @@ function drawList(container) {
   });
 }
 
-// Builds a one-line summary of the template for display in the saved-setup card.
-// Format: "16 cast · 2 tribes (Kaleo, Vanta) · merges at 10 · Final 3"
-// Idols flag and swap state are appended when they differ from the default
-// expectation, keeping the line scannable for typical configurations.
-function buildSummary(t) {
-  const tribeNames = t.tribes.initial.map(tr => tr.name).join(", ");
-  const parts = [
-    `${t.cast.length} cast`,
-    `${t.tribes.initial.length} tribes (${tribeNames})`,
-    `merges at ${t.merge.triggerCount}`,
-    `Final ${t.finalTribal.finalists}`,
-  ];
-  if (!t.swap?.enabled) parts.push("no swap");
-  if (t.idols?.enabled === false) parts.push("idols off");
-  return parts.join(" · ");
-}
+// v4.8: summary now uses the shared buildTemplateSummary in seasonPresets.js
+// so the saved-setup card reads the same shorthand as the Active Setup panel
+// and the rules editor preview.
 
 // Friendly date formatting using the browser's locale.
 function formatSavedDate(iso) {

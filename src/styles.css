@@ -843,6 +843,111 @@ button:disabled {
   margin: 0.5rem 0 0.75rem;
 }
 
+/* ── Select screen: Active Setup summary panel (v4.8) ── */
+/* Sits between the header and the tribe sections; tells the user what season */
+/* they're about to start at one glance, before they pick a contestant.       */
+.select-active-setup {
+  background: var(--bg-card);
+  border: 1px solid var(--border-mid);
+  border-left: 3px solid var(--gold-dim);
+  border-radius: 4px;
+  padding: 0.7rem 0.95rem;
+  margin: 0.5rem 0 1.25rem;
+}
+
+.select-active-setup-header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-bottom: 0.2rem;
+}
+
+.select-active-setup-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.select-active-setup-name {
+  font-size: 0.95rem;
+  font-weight: bold;
+  color: var(--text-primary);
+  letter-spacing: 0.01em;
+}
+
+.select-active-setup-desc {
+  font-size: 0.82rem;
+  color: var(--text-dim);
+  font-style: italic;
+  margin-bottom: 0.35rem;
+  line-height: 1.45;
+}
+
+.select-active-setup-rules {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
+/* ── Rules editor: Resulting Season preview banner (v4.8) ── */
+/* Live banner at the top of the rules editor that updates as the user edits.
+   Mirrors the same summary string used by Active Setup so vocabulary stays
+   consistent across surfaces. */
+.rules-editor-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  background: linear-gradient(135deg, #1a1a0a, #252510);
+  border: 1px solid var(--gold-dim);
+  border-radius: 4px;
+  padding: 0.65rem 0.95rem;
+  margin-bottom: 1rem;
+}
+
+.rules-editor-preview-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--gold-dim);
+  font-weight: bold;
+}
+
+.rules-editor-preview-summary {
+  font-size: 0.88rem;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+/* Stacked label/input row variant — used for description textarea */
+.rules-row.rules-row-stack {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.3rem;
+}
+
+.rules-row.rules-row-stack label {
+  min-width: 0;
+}
+
+.rules-row.rules-row-stack textarea {
+  background: var(--bg-base);
+  border: 1px solid var(--border-mid);
+  color: var(--text-primary);
+  padding: 0.5rem 0.7rem;
+  border-radius: 3px;
+  font-family: inherit;
+  font-size: 0.88rem;
+  resize: vertical;
+  min-height: 2.6rem;
+}
+
+.rules-row.rules-row-stack textarea:focus {
+  outline: none;
+  border-color: var(--gold-dim);
+}
+
 /* ── Rules Editor (v4.2) ────────────────────────────────────────── */
 
 .rules-editor-screen {

@@ -113,6 +113,29 @@ function getActiveTemplate() {
   return _activeTemplate;
 }
 
+// One-line summary of a template's rules. Used by:
+//   • the Active Setup panel on the select screen (v4.8)
+//   • the live preview at the top of the rules editor (v4.8)
+//   • the saved-setups card summary (v4.4)
+//   • the templates screen card summary (v4.6)
+//
+// Centralized here so all surfaces speak the same shorthand. Extend cautiously
+// — adding a part here adds it everywhere it's read.
+function buildTemplateSummary(t) {
+  if (!t) return "";
+  const parts = [
+    `${t.cast?.length ?? 0} cast`,
+    t.swap?.enabled ? `Swap @${t.swap.triggerCount}` : "No swap",
+    `Merge @${t.merge?.triggerCount ?? "?"}`,
+    `Final ${t.finalTribal?.finalists ?? "?"}`,
+    t.idols?.enabled ? "Idols on" : "Idols off",
+    t.jury?.startTrigger === "custom"
+      ? `Jury @${t.jury.customStartCount}`
+      : "Jury at merge",
+  ];
+  return parts.join(" · ");
+}
+
 // ── Built-in templates (v4.6) ────────────────────────────────────────────────
 //
 // Each template is a complete SeasonTemplate (per schema.js). They all share

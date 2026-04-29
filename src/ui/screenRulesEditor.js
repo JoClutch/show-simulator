@@ -42,6 +42,16 @@ function renderRulesEditorScreen(container, state) {
   wireInputs(container);
   wireFooter(container);
   refreshConditionalRows(container);
+  refreshPreview(container);
+}
+
+// v4.8: regenerates the "Resulting season" summary from the current working
+// template. Called from a delegated listener that fires after specific input
+// handlers (because container-level listeners receive the bubble phase last),
+// so the working template is up-to-date by the time we read it.
+function refreshPreview(container) {
+  const previewEl = container.querySelector("#rules-editor-preview-summary");
+  if (previewEl) previewEl.textContent = buildTemplateSummary(_workingTemplate);
 }
 
 // ── Layout ────────────────────────────────────────────────────────────────────
@@ -58,12 +68,24 @@ function drawShell(container) {
 
       <div class="rules-editor-errors" id="rules-editor-errors"></div>
 
-      <!-- Season title -->
+      <!-- v4.8: live preview of the resulting season — sticky reference at the
+           top so the user can see how their edits compose without scrolling. -->
+      <div class="rules-editor-preview">
+        <span class="rules-editor-preview-label">Resulting season</span>
+        <span class="rules-editor-preview-summary" id="rules-editor-preview-summary"></span>
+      </div>
+
+      <!-- Season title + description -->
       <div class="rules-section">
         <h3 class="rules-section-title">Season</h3>
         <div class="rules-row">
           <label for="season-name">Season title</label>
           <input type="text" id="season-name" maxlength="40" />
+        </div>
+        <div class="rules-row rules-row-stack">
+          <label for="season-description">Description (optional)</label>
+          <textarea id="season-description" maxlength="240" rows="2"
+                    placeholder="A short note about this season's flavor or focus."></textarea>
         </div>
       </div>
 
@@ -180,8 +202,9 @@ function populateInputs(container) {
   const t = _workingTemplate;
   const $ = sel => container.querySelector(sel);
 
-  // Season title
-  $("#season-name").value = t.meta.name;
+  // Season title and description
+  $("#season-name").value         = t.meta.name;
+  $("#season-description").value  = t.meta.description ?? "";
 
   // Cast info — count + helpful note
   $("#rules-cast-info").innerHTML = `
@@ -244,6 +267,12 @@ function wireInputs(container) {
   // Season title — same trim-store pattern as tribe names below.
   $("#season-name").addEventListener("input", e => {
     _workingTemplate.meta.name = e.target.value.trim();
+  });
+
+  // Season description (optional) — preserved through round-trip and shown on
+  // the select screen's Active Setup panel as flavor text.
+  $("#season-description").addEventListener("input", e => {
+    _workingTemplate.meta.description = e.target.value.trim();
   });
 
   // Tribe rows — name, color, size for each.
@@ -322,6 +351,14 @@ function wireInputs(container) {
   $("#camp-actions").addEventListener("input", e => {
     _workingTemplate.pacing.campActionsPerRound = clampInt(e.target.value, 1, 10);
   });
+
+  // v4.8: delegated preview refresh.
+  // Listening at the container level means we don't need to call
+  // refreshPreview from every individual handler. Bubble-phase listeners run
+  // AFTER specific input handlers, so by the time this fires the working
+  // template already reflects the change.
+  container.addEventListener("input",  () => refreshPreview(container));
+  container.addEventListener("change", () => refreshPreview(container));
 }
 
 // Toggles visibility of conditional rows based on current flags.
@@ -345,6 +382,7 @@ function wireFooter(container) {
     _workingTemplate = JSON.parse(JSON.stringify(DEFAULT_SEASON_TEMPLATE));
     populateInputs(container);
     refreshConditionalRows(container);
+    refreshPreview(container);
     clearErrors(container);
   });
 

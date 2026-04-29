@@ -3,6 +3,14 @@
 function renderSelectScreen(container, state) {
   let selected = null;
 
+  // ── Active Setup summary (v4.8) ────────────────────────────────────────────
+  // Built from the active template — gives the user a clear one-glance answer
+  // to "what season am I about to start?" right above the contestant pick.
+  const activeTemplate = getActiveTemplate();
+  const activeName     = activeTemplate?.meta?.name ?? SEASON_CONFIG.name;
+  const activeDesc     = activeTemplate?.meta?.description ?? "";
+  const activeSummary  = buildTemplateSummary(activeTemplate);
+
   // ── Shell ────────────────────────────────────────────────────────────────
 
   container.innerHTML = `
@@ -24,6 +32,17 @@ function renderSelectScreen(container, state) {
           Choose one contestant to play as. You will see the game through their
           eyes for the entire season.
         </p>
+      </div>
+
+      <div class="select-active-setup">
+        <div class="select-active-setup-header">
+          <span class="select-active-setup-label">Starting season:</span>
+          <span class="select-active-setup-name">${escapeHtml(activeName)}</span>
+        </div>
+        ${activeDesc ? `
+          <div class="select-active-setup-desc">${escapeHtml(activeDesc)}</div>
+        ` : ""}
+        <div class="select-active-setup-rules">${escapeHtml(activeSummary)}</div>
       </div>
 
       <div id="tribe-a-section" class="tribe-section"></div>

@@ -58,7 +58,10 @@ function drawList(container) {
     // applied (helps avoid no-op re-picks).
     const isActive   = active && active.meta?.id === t.meta?.id;
     const isDefault  = t.meta?.isDefault === true;
-    const summary    = buildSummary(t);
+    // v4.8: shared summary format from seasonPresets.js — same vocabulary as
+    // the Active Setup panel and the rules editor preview, so users see the
+    // same shorthand wherever they look.
+    const summary    = buildTemplateSummary(t);
     const tagSpans   = [
       isDefault ? `<span class="template-tag template-tag-default">DEFAULT</span>` : "",
       isActive  ? `<span class="template-tag template-tag-active">CURRENT</span>` : "",
@@ -93,22 +96,9 @@ function drawList(container) {
   });
 }
 
-// One-line summary describing the rules so users can scan templates quickly.
-// Order chosen to put the most distinguishing facts first (cast size, swap,
-// merge, finalists), with idol/jury notes appended only when non-default.
-function buildSummary(t) {
-  const tribeNames = t.tribes.initial.map(tr => tr.name).join(", ");
-  const parts = [
-    `${t.cast.length} cast`,
-    `tribes: ${tribeNames}`,
-    t.swap.enabled ? `swap @${t.swap.triggerCount}` : "no swap",
-    `merge @${t.merge.triggerCount}`,
-    `Final ${t.finalTribal.finalists}`,
-  ];
-  if (!t.idols.enabled) parts.push("no idols");
-  if (t.jury.startTrigger === "custom") parts.push(`jury @${t.jury.customStartCount}`);
-  return parts.join(" · ");
-}
+// v4.8: summary lives in seasonPresets.js as buildTemplateSummary so all four
+// surfaces (Active Setup panel, rules editor preview, template cards, saved
+// setup cards) use the same vocabulary.
 
 // ── Event handlers ────────────────────────────────────────────────────────────
 
