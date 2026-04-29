@@ -15,17 +15,12 @@ const SEASON_CONFIG = {
   tribeSize:   8,
   campActionsPerRound: 3,
 
-  // ── Phase 1 prototype stop conditions ──────────────────────────────────────
-  // The game halts when EITHER condition is met (whichever comes first).
-  // Set a value to null to disable that condition.
-  // Remove both (or set both to null) when Phase 2 is ready to replace them.
-  phase1MaxRounds:    6,   // stop after this many episodes
-  phase1MinTribeSize: 5,   // stop when any tribe shrinks to this many members
-
-  // ── Phase 3+ merge hook ─────────────────────────────────────────────────────
-  // Set to a remaining-player count to trigger the merge screen.
-  // null means merge is disabled (Phase 1 behaviour).
-  mergeTriggerCount: null,
+  // ── Merge ──────────────────────────────────────────────────────────────────
+  // Merge fires when remaining players fall to or below this count.
+  // After merge: individual immunity replaces tribal, everyone votes each round.
+  mergeTriggerCount: 10,
+  mergeTribeName:    "Maji",
+  mergeTribeColor:   "#9b59b6",
 };
 
 // Returns a brand-new season state object. All fields start at their
@@ -34,20 +29,25 @@ function createSeasonState() {
   return {
     // ── Progress ───────────────────────────────────────────
     round:  1,       // increments after each Tribal Council
-    phase: "select", // "select" | "campLife" | "challenge" | "tribal" | "elimination"
+    phase: "select", // "select" | "campLife" | "challenge" | "tribal" | "elimination" | "merge"
 
     // ── People ─────────────────────────────────────────────
     player: null,    // the contestant object the human chose; set in onContestantSelected()
     tribes: {
-      A: [],         // array of active contestant objects on Tribe A
-      B: [],         // array of active contestant objects on Tribe B
+      A:      [],    // active contestants on Tribe A (empty after merge)
+      B:      [],    // active contestants on Tribe B (empty after merge)
+      merged: [],    // active contestants after merge (empty before merge)
     },
     eliminated: [],  // contestant objects in the order they were voted out
 
     // ── Round state ────────────────────────────────────────
-    campPhase:   1,     // 1 = pre-challenge camp, 2 = post-challenge camp; reset each round
-    immunityWon: null,  // "A" | "B" — set by the challenge; reset each round
-    tribalTribe: null,  // "A" | "B" — which tribe attends Tribal Council this round
+    campPhase:      1,     // 1 = pre-challenge camp, 2 = post-challenge camp; reset each round
+    immunityWon:    null,  // "A" | "B" — pre-merge: tribe that won immunity; reset each round
+    tribalTribe:    null,  // "A" | "B" | "merged" — who attends Tribal Council this round
+    immunityHolder: null,  // post-merge: contestant id who holds the necklace; reset each round
+
+    // ── Merge ──────────────────────────────────────────────
+    merged: false,   // true after merge fires; gates all post-merge logic
 
     // ── Relationships ──────────────────────────────────────
     // Populated by initRelationships() in engine/relationships.js after tribes are assigned.

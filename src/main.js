@@ -3,21 +3,35 @@
 // gameState is the single source of truth for the entire playthrough.
 // Engine functions mutate it. UI functions only read it.
 //
-// Round flow (repeats every episode):
-//
+// Pre-merge round flow:
 //   Camp Life (campPhase 1)
 //       ↓  onCampLifeDone
-//   Challenge
-//       ↓  onChallengeResolved  — writes tribalTribe, campPhase = 2
+//   Tribal Immunity Challenge
+//       ↓  onChallengeResolved(losingTribeLabel)
 //   Camp Life (campPhase 2)
 //       ↓  onCampLifeDone
 //   player's tribe lost? → Tribal Council → Elimination → advanceRound
-//   player's tribe won?  → advanceRound  (skip Tribal)
+//   player's tribe won?  → advanceRound (skip Tribal)
+//
+// Merge fires when remaining cast ≤ SEASON_CONFIG.mergeTriggerCount:
+//   advanceRound → doMerge() → showScreen("merge")
+//       ↓  onMergeDone
+//   [continues as post-merge rounds below]
+//
+// Post-merge round flow:
+//   Camp Life (campPhase 1)
+//       ↓  onCampLifeDone
+//   Individual Immunity Challenge
+//       ↓  onIndividualChallengeResolved(winnerId)
+//   Camp Life (campPhase 2)
+//       ↓  onCampLifeDone — everyone always goes to Tribal after merge
+//   Tribal Council (full cast votes, immune holder can't be targeted)
+//       ↓  onTribalDone → Elimination → advanceRound
 //
 // advanceRound checks:
-//   ≤ 3 players left     → end-of-game summary
-//   merge threshold hit  → merge placeholder (Phase 3+)
-//   otherwise            → next episode, Camp Life phase 1
+//   ≤ 3 players left    → showGameOver()
+//   merge threshold hit → doMerge() then showScreen("merge")
+//   otherwise           → next episode, Camp Life phase 1
 
 let gameState;
 
@@ -32,7 +46,11 @@ function onContestantSelected(contestant) {
 function onCampLifeDone() {
   if (gameState.campPhase === 1) {
     showScreen("challenge");
+  } else if (gameState.merged) {
+    // Post-merge: every player attends Tribal Council every round.
+    showScreen("tribal");
   } else {
+    // Pre-merge: only the losing tribe attends.
     if (getPlayerTribeLabel() === gameState.tribalTribe) {
       showScreen("tribal");
     } else {
@@ -41,6 +59,7 @@ function onCampLifeDone() {
   }
 }
 
+// Pre-merge: losingTribeLabel is "A" or "B".
 function onChallengeResolved(losingTribeLabel) {
   gameState.immunityWon = losingTribeLabel === "A" ? "B" : "A";
   gameState.tribalTribe = losingTribeLabel;
@@ -48,9 +67,20 @@ function onChallengeResolved(losingTribeLabel) {
   showScreen("campLife");
 }
 
+// Post-merge: winnerId is the contestant id of the necklace holder.
+function onIndividualChallengeResolved(winnerId) {
+  gameState.immunityHolder = winnerId;
+  gameState.tribalTribe    = "merged";
+  gameState.campPhase      = 2;
+  showScreen("campLife");
+}
+
+// Called when the player dismisses the merge screen.
+function onMergeDone() {
+  showScreen("campLife");
+}
+
 function onTribalDone(eliminatedContestant) {
-  // state.tribes is the source of truth for who is active.
-  // removeFromTribes() is what actually excludes them from future logic.
   gameState.eliminated.push(eliminatedContestant);
   removeFromTribes(eliminatedContestant);
   showScreen("elimination");
@@ -63,33 +93,47 @@ function onEliminationDone() {
 // ── Round management ──────────────────────────────────────────────────────────
 
 function advanceRound() {
-  gameState.round      += 1;
-  gameState.campPhase   = 1;
-  gameState.immunityWon = null;
-  gameState.tribalTribe = null;
+  gameState.round          += 1;
+  gameState.campPhase       = 1;
+  gameState.immunityWon     = null;
+  gameState.tribalTribe     = null;
+  gameState.immunityHolder  = null;
 
   const remaining = getAllActive().length;
 
-  // End of game — fewer than 4 players means Final 3 or lower.
+  // End of game — 3 or fewer players means Final 3 or lower.
   if (remaining <= 3) {
     showGameOver();
     return;
   }
 
-  // Phase 1 prototype stop — remove this block when Phase 2 is ready.
-  if (isPhase1Complete()) {
-    showPhase1End();
-    return;
-  }
-
-  // Merge hook — disabled in Phase 1 (mergeTriggerCount is null).
-  // Set SEASON_CONFIG.mergeTriggerCount to a player count to activate in Phase 3.
+  // Merge — fires once when remaining cast hits the trigger count.
+  // checkForMerge() guards against re-firing after merge is already active.
   if (checkForMerge()) {
-    showMergePlaceholder();
+    doMerge();
+    showScreen("merge");
     return;
   }
 
   showScreen("campLife");
+}
+
+// ── Merge ─────────────────────────────────────────────────────────────────────
+
+// Collapses the two tribe arrays into a single merged tribe.
+// Stamps originalTribe on each contestant so the elimination screen can still
+// reference their pre-merge affiliation for flavour.
+// Sets state.merged = true, which gates all post-merge logic throughout the app.
+function doMerge() {
+  const all = [...gameState.tribes.A, ...gameState.tribes.B];
+  for (const c of all) {
+    c.originalTribe = c.tribe;   // preserve "A" | "B" for display
+    c.tribe         = "merged";
+  }
+  gameState.tribes.merged = all;
+  gameState.tribes.A      = [];
+  gameState.tribes.B      = [];
+  gameState.merged        = true;
 }
 
 // ── Screen routing ────────────────────────────────────────────────────────────
@@ -101,6 +145,7 @@ function showScreen(name) {
 
   switch (name) {
     case "select":      renderSelectScreen(app, gameState);      break;
+    case "merge":       renderMergeScreen(app, gameState);       break;
     case "campLife":    renderCampLifeScreen(app, gameState);    break;
     case "challenge":   renderChallengeScreen(app, gameState);   break;
     case "tribal":      renderTribalScreen(app, gameState);      break;
@@ -108,7 +153,7 @@ function showScreen(name) {
   }
 }
 
-// ── End states ────────────────────────────────────────────────────────────────
+// ── End state ─────────────────────────────────────────────────────────────────
 
 // Called when ≤ 3 players remain.
 //
@@ -119,16 +164,14 @@ function showGameOver() {
   const player         = gameState.player;
   const isInFinal3     = getAllActive().find(c => c.id === player.id);
   const episodesPlayed = gameState.round - 1;
-  const lastDay        = getDay(gameState) - 1;  // tribal night of the last episode
+  const lastDay        = getDay(gameState) - 1;
   const outlasted      = gameState.eliminated.length;
 
-  const headline = isInFinal3
-    ? "You Made the Final 3!"
-    : "Game Over";
+  const headline = isInFinal3 ? "You Made the Final 3!" : "Game Over";
 
   // The !isInFinal3 branch is currently unreachable: an eliminated player sees
   // the elimination screen with no Continue button and never calls advanceRound().
-  // It is kept here as a placeholder for Phase 4 (jury / post-merge endgame).
+  // It is kept here as a placeholder for Phase 4 (jury / Final Tribal).
   const summary = isInFinal3
     ? `You survived all ${episodesPlayed} episodes and reached Day ${lastDay}. You outlasted ${outlasted} other players.`
     : `You were voted out on Day ${lastDay}. You lasted ${episodesPlayed} episode${episodesPlayed !== 1 ? "s" : ""} and outlasted ${outlasted - 1} player${outlasted - 1 !== 1 ? "s" : ""}.`;
@@ -152,87 +195,12 @@ function showGameOver() {
   `;
 }
 
-// Stub shown when merge is triggered (Phase 3+).
-// Activated by setting SEASON_CONFIG.mergeTriggerCount to a player count.
-function showMergePlaceholder() {
-  document.getElementById("app").innerHTML = `
-    <div class="screen">
-      <h2>The Merge</h2>
-      <p>
-        The two tribes have merged into one.
-        Full merge gameplay is coming in a later phase.
-      </p>
-      <p class="muted">Refresh to play again.</p>
-    </div>
-  `;
-}
-
-// ── Phase 1 stop ─────────────────────────────────────────────────────────────
-
-// Returns true when either Phase 1 stop condition is met.
-// To disable a condition, set its config value to null.
-// Remove this function entirely when Phase 2 is ready.
-function isPhase1Complete() {
-  const { phase1MaxRounds, phase1MinTribeSize } = SEASON_CONFIG;
-  if (phase1MaxRounds !== null && gameState.round > phase1MaxRounds) return true;
-  if (phase1MinTribeSize !== null) {
-    const smallest = Math.min(gameState.tribes.A.length, gameState.tribes.B.length);
-    if (smallest <= phase1MinTribeSize) return true;
-  }
-  return false;
-}
-
-// Shown when isPhase1Complete() triggers. Remove this function when Phase 2 is ready.
-function showPhase1End() {
-  const episodesPlayed = gameState.round - 1;
-  const dayReached     = getDay(gameState) - 1;  // subtract 1: round was already incremented
-  const remaining      = getAllActive().length;
-  const countA         = gameState.tribes.A.length;
-  const countB         = gameState.tribes.B.length;
-  const nameA          = SEASON_CONFIG.tribeNames.A;
-  const nameB          = SEASON_CONFIG.tribeNames.B;
-  const colorA         = SEASON_CONFIG.tribeColors.A;
-  const colorB         = SEASON_CONFIG.tribeColors.B;
-
-  document.getElementById("app").innerHTML = `
-    <div class="screen phase1-end-screen">
-      <div class="phase1-end-badge">Phase 1 Complete</div>
-      <h1>To Be Continued…</h1>
-
-      <div class="event-log phase1-end-recap">
-        <p>
-          The game has reached the end of this prototype.
-          ${episodesPlayed} episode${episodesPlayed !== 1 ? "s" : ""} played
-          &nbsp;·&nbsp; Day ${dayReached}
-          &nbsp;·&nbsp; ${remaining} players remaining
-        </p>
-        <p>
-          <span style="color:${colorA}">${nameA}: ${countA}</span>
-          &nbsp;·&nbsp;
-          <span style="color:${colorB}">${nameB}: ${countB}</span>
-        </p>
-      </div>
-
-      <div class="phase1-end-roadmap">
-        <h3>Coming in Later Phases</h3>
-        <ul>
-          <li><span class="phase-tag">Phase 2</span> Tribe swap &amp; deeper social mechanics</li>
-          <li><span class="phase-tag">Phase 3</span> The merge &amp; individual immunity</li>
-          <li><span class="phase-tag">Phase 4</span> Jury, Final Tribal Council &amp; the winner</li>
-        </ul>
-      </div>
-
-      <div class="spacer">
-        <p class="muted">Refresh the page to play again.</p>
-      </div>
-    </div>
-  `;
-}
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-// Returns the label ("A" or "B") of the tribe the player is currently in.
+// Returns the label of the tribe the player is currently in.
+// Returns "merged" when the game has merged, "A" or "B" otherwise.
 function getPlayerTribeLabel() {
+  if (gameState.merged) return "merged";
   for (const label of ["A", "B"]) {
     if (gameState.tribes[label].find(c => c.id === gameState.player.id)) {
       return label;
@@ -243,11 +211,18 @@ function getPlayerTribeLabel() {
 
 // Returns all contestants who have not yet been eliminated.
 function getAllActive() {
+  if (gameState.merged) return [...gameState.tribes.merged];
   return [...gameState.tribes.A, ...gameState.tribes.B];
 }
 
 // Removes a contestant from whichever tribe array they belong to.
 function removeFromTribes(contestant) {
+  if (gameState.merged) {
+    gameState.tribes.merged = gameState.tribes.merged.filter(
+      c => c.id !== contestant.id
+    );
+    return;
+  }
   for (const label of ["A", "B"]) {
     gameState.tribes[label] = gameState.tribes[label].filter(
       c => c.id !== contestant.id
@@ -255,9 +230,10 @@ function removeFromTribes(contestant) {
   }
 }
 
-// Returns true when the remaining player count falls to or below the merge
-// trigger threshold. Always false in Phase 1 (mergeTriggerCount is null).
+// Returns true the one time remaining players hit or fall below the merge
+// trigger. The state.merged guard prevents it from firing again after merge.
 function checkForMerge() {
+  if (gameState.merged) return false;
   const trigger = SEASON_CONFIG.mergeTriggerCount;
   if (!trigger) return false;
   return getAllActive().length <= trigger;

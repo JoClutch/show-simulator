@@ -1,45 +1,50 @@
 # Roadmap
 
-## Phase 1 — Working Prototype (Current)
+## Phase 1 — Working Prototype ✅
 
 Goal: A playable loop from start to first elimination.
 
-- [ ] Contestant select screen with all 16 players and stats
-- [ ] Two tribes of 8, randomly assigned at start
-- [ ] Camp Life screen with simple flavor-text relationship events
-- [ ] Challenge screen with weighted random outcome
-- [ ] Tribal Council with player vote input
-- [ ] AI votes calculated from relationship values
-- [ ] One-at-a-time vote reveal
-- [ ] Elimination screen
-- [ ] Game over screen when player is voted out
-- [ ] Placeholder end screen at final 3
+- [x] Contestant select screen with all 16 players and stats
+- [x] Two tribes of 8, randomly assigned at start
+- [x] Camp Life screen with simple flavor-text relationship events
+- [x] Challenge screen with weighted random outcome
+- [x] Tribal Council with player vote input
+- [x] AI votes calculated from relationship values
+- [x] One-at-a-time vote reveal
+- [x] Elimination screen
+- [x] Game over screen when player is voted out
+- [x] Placeholder end screen at final 3
 
 Deliverable: A full round-trip game loop in the browser.
 
 ---
 
-## Phase 2 — Full Season Loop
+## Phase 2 — Full Season Loop ✅
 
 Goal: Play from start to final 3 without stopping.
 
-- [ ] Track all eliminations across episodes
-- [ ] Correctly remove eliminated players from tribe lists
-- [ ] Multiple rounds until final 3
-- [ ] Episode counter / progress tracker
-- [ ] Better AI voting logic (alliances, threat assessment)
-- [ ] Camp Life choices that affect relationships
+- [x] Track all eliminations across episodes
+- [x] Correctly remove eliminated players from tribe lists
+- [x] Multiple rounds until final 3
+- [x] Episode counter and day tracking
+- [x] v2.1: Expanded camp actions (talk, strategy, confide, lobby, lay low, etc.)
+- [x] v2.1: Trust system (per-pair, 0–10, affects intel quality)
+- [x] v2.1: Suspicion system (per-player, affects AI vote targeting)
+- [x] v2.2: Strategic AI voting (bond protection, convergence, trust factor, social/challenge threat)
 
 ---
 
-## Phase 3 — Merge
+## Phase 3 — Merge ✅
 
 Goal: Introduce the merge at a set number of players.
 
-- [ ] Merge trigger (e.g., at 10 players remaining)
-- [ ] All remaining players join one tribe
-- [ ] Individual immunity challenges post-merge
-- [ ] Jury begins (eliminated players post-merge are jurors)
+- [x] Merge trigger at 10 players remaining
+- [x] All remaining players join one tribe (Maji)
+- [x] Merge screen with player roster and original tribe origins
+- [x] Individual immunity challenges post-merge
+- [x] Camp Life works with full merged cast
+- [x] Tribal Council: full cast votes, immunity holder protected
+- [ ] Jury begins (eliminated players post-merge are jurors) — deferred to Phase 4
 
 ---
 
@@ -47,6 +52,7 @@ Goal: Introduce the merge at a set number of players.
 
 Goal: Complete season with a winner.
 
+- [ ] Jury tracking (post-merge eliminations become jurors)
 - [ ] Final Tribal Council with jury votes
 - [ ] Player can make a case to the jury
 - [ ] Winner declared, season summary screen

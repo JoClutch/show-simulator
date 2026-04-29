@@ -1,6 +1,19 @@
 // screenChallenge.js — immunity challenge results screen
+//
+// Pre-merge:  tribe vs tribe → calls onChallengeResolved(losingTribeLabel)
+// Post-merge: individual immunity → calls onIndividualChallengeResolved(winnerId)
 
 function renderChallengeScreen(container, state) {
+  if (state.merged) {
+    renderIndividualChallengeScreen(container, state);
+  } else {
+    renderTribalChallengeScreen(container, state);
+  }
+}
+
+// ── Pre-merge: tribal immunity ────────────────────────────────────────────────
+
+function renderTribalChallengeScreen(container, state) {
   const result = runChallenge(state.tribes);
 
   const winnerName  = SEASON_CONFIG.tribeNames[result.winner];
@@ -51,5 +64,51 @@ function renderChallengeScreen(container, state) {
 
   container.querySelector("#continue-btn").addEventListener("click", () => {
     onChallengeResolved(result.loser);
+  });
+}
+
+// ── Post-merge: individual immunity ──────────────────────────────────────────
+
+function renderIndividualChallengeScreen(container, state) {
+  const members  = state.tribes.merged;
+  const result   = runIndividualChallenge(members);
+  const player   = state.player;
+  const playerWon = result.winner.id === player.id;
+
+  const mergeColor = SEASON_CONFIG.mergeTribeColor;
+  const closeNote  = result.wasClose ? " It came down to the wire." : "";
+
+  const playerNote = playerWon
+    ? `You win Individual Immunity! You cannot be voted out tonight.`
+    : `<strong>${result.winner.name}</strong> wins Individual Immunity and is safe from the vote tonight.`;
+
+  container.innerHTML = `
+    <div class="screen">
+      <p class="screen-eyebrow">Episode ${state.round} · Day ${getDay(state) + DAY_OFFSETS.challenge}</p>
+      <h2>Individual Immunity</h2>
+      <p class="challenge-type-label">${result.name}</p>
+
+      <div class="event-log">
+        <p>${result.description}${closeNote}</p>
+      </div>
+
+      <div class="indiv-immunity-winner">
+        <div class="immunity-necklace-icon">⬡</div>
+        <div class="immunity-winner-name" style="color:${mergeColor}">${result.winner.name}</div>
+        <div class="immunity-winner-sub">wins Individual Immunity</div>
+      </div>
+
+      <div class="challenge-player-status ${playerWon ? "status-safe" : "status-danger"}">
+        <p>${playerNote}</p>
+      </div>
+
+      <div class="spacer">
+        <button id="continue-btn">Return to Camp</button>
+      </div>
+    </div>
+  `;
+
+  container.querySelector("#continue-btn").addEventListener("click", () => {
+    onIndividualChallengeResolved(result.winner.id);
   });
 }

@@ -14,8 +14,14 @@ const VOTE_DEBUG = false;
 //   Pass 2 — socially aware voters may swing toward the emerging plurality,
 //             simulating tribal dynamics without an explicit alliance engine.
 //
+// Parameters:
+//   tribe     — everyone who CASTS a vote (includes the immunity holder if any)
+//   candidates — who can RECEIVE votes (pass tribe.filter(...immunityHolder) for
+//                post-merge; omit or pass undefined to default to tribe)
+//
 // Returns an array of { voter, target } objects.
-function collectAiVotes(state, tribe, playerVoteTarget, player) {
+function collectAiVotes(state, tribe, playerVoteTarget, player, candidates) {
+  const votePool = candidates ?? tribe;   // who AI voters may target
   const aiVoters = tribe.filter(v => v.id !== player.id);
 
   // ── Pass 1: independent scoring ───────────────────────────────────────────
@@ -23,7 +29,7 @@ function collectAiVotes(state, tribe, playerVoteTarget, player) {
 
   const firstPassTargets = {};
   for (const voter of aiVoters) {
-    firstPassTargets[voter.id] = pickVoteTarget(state, voter, tribe);
+    firstPassTargets[voter.id] = pickVoteTarget(state, voter, votePool);
   }
 
   // ── Find plurality target from pass 1 ─────────────────────────────────────
@@ -33,7 +39,7 @@ function collectAiVotes(state, tribe, playerVoteTarget, player) {
   }
   const topEntry    = Object.entries(tally).sort((a, b) => b[1] - a[1])[0];
   const pluralityId = topEntry?.[0] ?? null;
-  const plurality   = pluralityId ? tribe.find(c => c.id === pluralityId) : null;
+  const plurality   = pluralityId ? votePool.find(c => c.id === pluralityId) : null;
 
   if (VOTE_DEBUG && plurality) {
     console.log(`[VOTE] Plurality target after pass 1: ${plurality.name} (${topEntry[1]} votes)`);

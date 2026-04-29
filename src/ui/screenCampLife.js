@@ -1,45 +1,84 @@
 // screenCampLife.js — interactive Camp Life phase
 //
 // Used for both campPhase 1 (before the challenge) and campPhase 2 (after).
-// The header label, status notice, and continue-button destination all differ
-// between phases. Routing is handled entirely by onCampLifeDone() in main.js —
-// this file only needs to call it at the right time.
+// Works pre-merge (tribe context) and post-merge (full merged cast).
 //
-// Round position:
-//   campPhase 1  →  onCampLifeDone  →  showScreen("challenge")
-//   campPhase 2, lost  →  onCampLifeDone  →  showScreen("tribal")
-//   campPhase 2, safe  →  onCampLifeDone  →  advanceRound()
+// Pre-merge:
+//   campPhase 1 → onCampLifeDone → showScreen("challenge")
+//   campPhase 2, lost → onCampLifeDone → showScreen("tribal")
+//   campPhase 2, safe → onCampLifeDone → advanceRound()
+//
+// Post-merge:
+//   campPhase 1 → onCampLifeDone → showScreen("challenge") [individual]
+//   campPhase 2 → onCampLifeDone → showScreen("tribal")    [everyone goes]
 
 function renderCampLifeScreen(container, state) {
-  const tribeLabel = getPlayerTribeLabel();
-  const tribeName  = SEASON_CONFIG.tribeNames[tribeLabel];
-  const tribeColor = SEASON_CONFIG.tribeColors[tribeLabel];
+  const tribeLabel = getPlayerTribeLabel();   // "A" | "B" | "merged"
   const player     = state.player;
-  const tribemates = state.tribes[tribeLabel].filter(c => c.id !== player.id);
   const maxActions = SEASON_CONFIG.campActionsPerRound;
   const isPhase2   = state.campPhase === 2;
 
-  // Determine outcome context for phase 2 — must come before continueLabel.
-  const goingToTribal = isPhase2 && state.tribalTribe === tribeLabel;
-  const isSafe        = isPhase2 && !goingToTribal;
+  // Tribe identity — handle pre-merge and post-merge separately.
+  const tribeName  = tribeLabel === "merged"
+    ? SEASON_CONFIG.mergeTribeName
+    : SEASON_CONFIG.tribeNames[tribeLabel];
+  const tribeColor = tribeLabel === "merged"
+    ? SEASON_CONFIG.mergeTribeColor
+    : SEASON_CONFIG.tribeColors[tribeLabel];
+
+  // Everyone in the player's current tribe (excluding the player themselves).
+  const tribemates = state.tribes[tribeLabel].filter(c => c.id !== player.id);
+
+  // ── Determine phase-2 outcome context ─────────────────────────────────────
+  //
+  // Pre-merge:
+  //   goingToTribal = player's tribe lost the challenge
+  //   isSafe        = player's tribe won
+  //
+  // Post-merge:
+  //   goingToTribal = player is NOT the immunity holder (everyone else is vulnerable)
+  //   isSafe        = player holds the necklace
+
+  let goingToTribal = false;
+  let isSafe        = false;
+
+  if (isPhase2) {
+    if (state.merged) {
+      const isImmune = state.immunityHolder === player.id;
+      goingToTribal  = !isImmune;
+      isSafe         = isImmune;
+    } else {
+      goingToTribal = state.tribalTribe === tribeLabel;
+      isSafe        = !goingToTribal;
+    }
+  }
 
   // Labels that change depending on phase and outcome.
   const phaseLabel    = isPhase2 ? "Evening at Camp" : "Camp Life";
   const stepNote      = isPhase2 ? "After the challenge" : "Before the challenge";
-  const continueLabel = isPhase2
-    ? (goingToTribal ? "Head to Tribal Council →" : "End the Day →")
-    : "Head to the Challenge →";
+
+  // After merge everyone always heads to tribal in phase 2 (even the immune
+  // holder — they still attend and cast a vote).
+  const continueLabel = !isPhase2
+    ? "Head to the Challenge →"
+    : (goingToTribal || state.merged) ? "Head to Tribal Council →"
+    : "End the Day →";
 
   // Status banners — only shown in phase 2.
-  const statusBanner = goingToTribal
-    ? `<div class="camp-status-banner camp-status-danger">
-         Tribal Council is tonight. Make your moves count.
-       </div>`
-    : isSafe
-    ? `<div class="camp-status-banner camp-status-safe">
-         Your tribe won immunity. You are safe tonight.
-       </div>`
-    : "";
+  let statusBanner = "";
+  if (isPhase2) {
+    if (goingToTribal) {
+      const msg = state.merged
+        ? "Everyone heads to Tribal Council tonight. You are vulnerable."
+        : "Tribal Council is tonight. Make your moves count.";
+      statusBanner = `<div class="camp-status-banner camp-status-danger">${msg}</div>`;
+    } else if (isSafe) {
+      const msg = state.merged
+        ? "You hold Individual Immunity. You cannot be voted out tonight."
+        : "Your tribe won immunity. You are safe tonight.";
+      statusBanner = `<div class="camp-status-banner camp-status-safe">${msg}</div>`;
+    }
+  }
 
   let actionsLeft = maxActions;
 

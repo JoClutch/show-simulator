@@ -1,8 +1,20 @@
 // screenTribal.js — Tribal Council: voting phase then dramatic reveal phase
-
-// ── Phase 1: Voting ───────────────────────────────────────────────────────────
+//
+// Pre-merge:  only the losing tribe attends; state.tribalTribe = "A" | "B"
+// Post-merge: full cast attends; state.tribalTribe = "merged";
+//             the immunity holder cannot receive votes but still casts one
 
 function renderTribalScreen(container, state) {
+  if (state.merged) {
+    renderMergedTribalScreen(container, state);
+  } else {
+    renderPreMergeTribalScreen(container, state);
+  }
+}
+
+// ── Pre-merge: one tribe votes ────────────────────────────────────────────────
+
+function renderPreMergeTribalScreen(container, state) {
   const tribeLabel = state.tribalTribe;
   const tribe      = state.tribes[tribeLabel];
   const tribeName  = SEASON_CONFIG.tribeNames[tribeLabel];
@@ -36,6 +48,89 @@ function renderTribalScreen(container, state) {
     </div>
   `;
 
+  buildVotingGrid(container, eligible, () => playerVote, v => { playerVote = v; });
+
+  container.querySelector("#cast-btn").addEventListener("click", () => {
+    if (!playerVote) return;
+    const allVotes    = collectAiVotes(state, tribe, playerVote, player);
+    const eliminated  = tallyVotes(allVotes, state);
+    const revealOrder = buildRevealOrder(allVotes, eliminated.id);
+    renderRevealPhase(container, state, revealOrder, eliminated);
+  });
+}
+
+// ── Post-merge: full cast votes ───────────────────────────────────────────────
+
+function renderMergedTribalScreen(container, state) {
+  const tribe      = state.tribes.merged;
+  const player     = state.player;
+  const mergeColor = SEASON_CONFIG.mergeTribeColor;
+  const mergeName  = SEASON_CONFIG.mergeTribeName;
+
+  // The immunity holder cannot receive votes (but still casts one).
+  // If the player IS the holder, eligible = everyone except the player.
+  const eligible = tribe.filter(c =>
+    c.id !== player.id && c.id !== state.immunityHolder
+  );
+
+  // Identify the holder for display — may be player or an AI.
+  const holder = tribe.find(c => c.id === state.immunityHolder);
+
+  let playerVote = null;
+
+  container.innerHTML = `
+    <div class="screen">
+      <div class="tribal-header">
+        <p class="screen-eyebrow">Episode ${state.round} · Day ${getDay(state) + DAY_OFFSETS.tribal}</p>
+        <h2>Tribal Council</h2>
+        <div class="tribal-meta">
+          <span style="color:${mergeColor}">${mergeName}</span>
+          &nbsp;·&nbsp; ${tribe.length} players attending
+        </div>
+      </div>
+
+      ${holder ? `
+        <div class="tribal-immunity-note">
+          <span class="immunity-icon">⬡</span>
+          <strong>${holder.id === player.id ? "You hold" : `${holder.name} holds`}
+          Individual Immunity</strong> and cannot be voted out tonight.
+        </div>
+      ` : ""}
+
+      <p class="tribal-prompt">
+        You must vote for one player to leave the game.
+        The immunity holder cannot receive votes.
+        Once your vote is cast it cannot be changed.
+      </p>
+
+      <div class="contestant-grid-2col" id="vote-grid"></div>
+
+      <div class="spacer">
+        <button id="cast-btn" disabled>Cast My Vote</button>
+      </div>
+    </div>
+  `;
+
+  buildVotingGrid(container, eligible, () => playerVote, v => { playerVote = v; });
+
+  container.querySelector("#cast-btn").addEventListener("click", () => {
+    if (!playerVote) return;
+
+    // Voters = everyone; candidates = everyone except immunity holder.
+    const votePool = tribe.filter(c => c.id !== state.immunityHolder);
+    const allVotes    = collectAiVotes(state, tribe, playerVote, player, votePool);
+    const eliminated  = tallyVotes(allVotes, state);
+    const revealOrder = buildRevealOrder(allVotes, eliminated.id);
+    renderRevealPhase(container, state, revealOrder, eliminated);
+  });
+}
+
+// ── Shared: voting card grid ──────────────────────────────────────────────────
+
+// Builds and appends contestant cards to #vote-grid.
+// getVote / setVote are closures so the two tribal branches manage their own
+// playerVote variable without sharing mutable state.
+function buildVotingGrid(container, eligible, getVote, setVote) {
   const grid    = container.querySelector("#vote-grid");
   const castBtn = container.querySelector("#cast-btn");
 
@@ -66,22 +161,11 @@ function renderTribalScreen(container, state) {
       container.querySelectorAll("#vote-grid .contestant-card")
         .forEach(el => el.classList.remove("selected"));
       card.classList.add("selected");
-      playerVote = c;
+      setVote(c);
       castBtn.disabled = false;
     });
     grid.appendChild(card);
   }
-
-  castBtn.addEventListener("click", () => {
-    if (!playerVote) return;
-
-    // Compute everything before the reveal so the ordering is deterministic.
-    const allVotes    = collectAiVotes(state, tribe, playerVote, player);
-    const eliminated  = tallyVotes(allVotes, state);
-    const revealOrder = buildRevealOrder(allVotes, eliminated.id);
-
-    renderRevealPhase(container, state, revealOrder, eliminated);
-  });
 }
 
 // ── Phase 2: Dramatic reveal ──────────────────────────────────────────────────
@@ -107,21 +191,19 @@ function renderRevealPhase(container, state, revealOrder, eliminated) {
   const tallyEl  = container.querySelector("#tally-board");
   const footerEl = container.querySelector("#reveal-footer");
 
-  const liveTally = {}; // { id: { name, count } }
+  const liveTally = {};
   let   i         = 0;
 
   function revealNext() {
     if (i >= revealOrder.length) {
-      // All votes shown — pause then surface the finish button.
       setTimeout(showFinishButton, 900);
       return;
     }
 
-    const { target }        = revealOrder[i];
-    const isAgainstPlayer   = target.id === player.id;
-    const isDecisive        = i === revealOrder.length - 1;
+    const { target }      = revealOrder[i];
+    const isAgainstPlayer = target.id === player.id;
+    const isDecisive      = i === revealOrder.length - 1;
 
-    // Build and append the vote card.
     const card = document.createElement("div");
     card.className = [
       "reveal-card",
@@ -131,17 +213,14 @@ function renderRevealPhase(container, state, revealOrder, eliminated) {
     card.innerHTML = `<span class="reveal-card-name">${target.name}</span>`;
     cardsEl.appendChild(card);
 
-    // Animate in on the next frame so the transition fires.
     requestAnimationFrame(() => card.classList.add("revealed"));
 
-    // Update the running tally.
     liveTally[target.id] ??= { name: target.name, count: 0 };
     liveTally[target.id].count++;
     renderTally(tallyEl, liveTally);
 
     i++;
 
-    // Pause longer before the decisive final vote.
     const delay = isDecisive ? 0 : (i === 1 ? 700 : 1200);
     setTimeout(revealNext, delay);
   }
@@ -154,7 +233,6 @@ function renderRevealPhase(container, state, revealOrder, eliminated) {
     footerEl.appendChild(btn);
   }
 
-  // Short pause before the first vote so the screen settles.
   setTimeout(revealNext, 500);
 }
 

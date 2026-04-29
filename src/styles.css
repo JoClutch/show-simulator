@@ -922,3 +922,133 @@ button:disabled {
   border-radius: 4px;
   margin-right: 0.5rem;
 }
+
+/* ── Merge Screen ── */
+.merge-eyebrow-row {
+  margin-bottom: 0.25rem;
+}
+
+.merge-hero {
+  text-align: center;
+  margin-bottom: 1.75rem;
+}
+
+.merge-necklace-icon {
+  font-size: 2.5rem;
+  color: var(--gold);
+  margin-bottom: 0.5rem;
+  line-height: 1;
+}
+
+.merge-headline {
+  font-size: 2.2rem;
+  color: var(--gold);
+  margin-bottom: 0.4rem;
+}
+
+.merge-tribe-name {
+  font-size: 1.1rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.merge-summary {
+  margin-bottom: 1.75rem;
+}
+
+.merge-cast-block {
+  margin-bottom: 1.5rem;
+}
+
+.merge-cast-heading {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-faint);
+  margin-bottom: 0.75rem;
+}
+
+.merge-cast-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.merge-cast-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-dim);
+  border-radius: 5px;
+  padding: 0.5rem 0.85rem;
+  min-width: 110px;
+}
+
+.merge-cast-chip-you {
+  border-color: var(--gold);
+}
+
+.merge-cast-name {
+  font-size: 0.88rem;
+  color: var(--text-primary);
+  font-weight: bold;
+}
+
+.merge-cast-origin {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ── Individual immunity (challenge screen) ── */
+.indiv-immunity-winner {
+  text-align: center;
+  margin: 1.5rem 0;
+  padding: 1.25rem;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-dim);
+  border-radius: 6px;
+}
+
+.immunity-necklace-icon {
+  font-size: 2rem;
+  color: var(--gold);
+  margin-bottom: 0.35rem;
+  line-height: 1;
+}
+
+.immunity-winner-name {
+  font-size: 1.5rem;
+  font-weight: bold;
+  margin-bottom: 0.25rem;
+}
+
+.immunity-winner-sub {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-faint);
+}
+
+/* ── Tribal Council — immunity note ── */
+.tribal-immunity-note {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-dim);
+  border-left: 3px solid var(--gold);
+  border-radius: 0 4px 4px 0;
+  padding: 0.65rem 1rem;
+  font-size: 0.88rem;
+  color: var(--text-dim);
+  margin-bottom: 1rem;
+}
+
+.immunity-icon {
+  color: var(--gold);
+  font-size: 1rem;
+  flex-shrink: 0;
+}
