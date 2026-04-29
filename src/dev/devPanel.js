@@ -172,10 +172,44 @@ window.DEV_CONFIG = {
     if (idolSusp >= 7)      idolFactor = voter.strategy >= 6 ? -4 : +6;
     else if (idolSusp >= 3) idolFactor = voter.strategy >= 6 ? -2 : +3;
 
+    // v3.7: cross-tribe loyalty + tribe-strength factors (post-swap, pre-merge).
+    let crossTribeFactor = 0, tribeStrengthFactor = 0;
+    if (g.swapped && !g.merged) {
+      const myTribe = g.tribes[voter.tribe] ?? [];
+      const sameOrigCount = myTribe.filter(m =>
+        m.originalTribe === voter.originalTribe
+      ).length;
+      const inMajority = sameOrigCount > myTribe.length / 2;
+      const sameOrigin = voter.originalTribe === candidate.originalTribe;
+
+      if (sameOrigin) {
+        let bonus = 5 + (voter.social - 5) * 0.5 - (voter.strategy - 5) * 0.5;
+        if (!inMajority) bonus *= 0.5;
+        crossTribeFactor = Math.max(0, bonus);
+      } else {
+        let penalty = 4 + (voter.strategy - 5) * 0.4 - (voter.social - 5) * 0.3;
+        if (!inMajority) penalty *= 0.3;
+        crossTribeFactor = -Math.max(0, penalty);
+      }
+
+      if (voter.strategy >= 6) {
+        const otherLabel = voter.tribe === "A" ? "B" : "A";
+        const otherTribe = g.tribes[otherLabel] ?? [];
+        if (myTribe.length > 0 && otherTribe.length > 0) {
+          const myAvg    = myTribe.reduce((s, m) => s + m.challenge, 0) / myTribe.length;
+          const otherAvg = otherTribe.reduce((s, m) => s + m.challenge, 0) / otherTribe.length;
+          if (myAvg < otherAvg - 0.5) {
+            tribeStrengthFactor = (candidate.challenge - 5) * 0.5;
+          }
+        }
+      }
+    }
+
     // No noise — fully deterministic for inspection.
     return rel + bondProtection + allianceProtection + trustFactor
          - suspicion - socialThreat - challengeThreat
-         + idolFactor;
+         + idolFactor
+         + crossTribeFactor + tribeStrengthFactor;
   }
 
   // Returns the 1-2 dominant reasons a voter targets a candidate.
@@ -189,14 +223,29 @@ window.DEV_CONFIG = {
     const chalThreat= target.challenge * (voter.strategy / 25);
     const idolSusp  = getIdolSuspicion(g, voter.id, target.id);
     const parts = [];
-    // Idol-flush is the most narratively interesting reason — surface it first.
+
+    // v3.7: post-swap cross-tribe targeting is the most narratively visible
+    // reason — flag it first when present.
+    if (g.swapped && !g.merged
+        && voter.originalTribe !== target.originalTribe) {
+      parts.push("cross-tribe");
+    }
+
+    // Idol-flush is the second most interesting reason.
     if (idolSusp >= 7 && voter.strategy >= 6) parts.push("flush idol");
     else if (idolSusp >= 3 && voter.strategy >= 6) parts.push("idol hunch");
+
     if (rel   < -5)  parts.push(`rel ${rel.toFixed(0)}`);
     if (trust < 2.5) parts.push(`trust ${trust.toFixed(0)}`);
     if (susp  >= 5)  parts.push(`susp ${susp.toFixed(0)}`);
     if (socThreat  > 4) parts.push("soc threat");
     if (chalThreat > 3) parts.push("chal threat");
+
+    // Tribe-weakness "weak link" hint — only surface when both conditions hold.
+    if (g.swapped && !g.merged && voter.strategy >= 6 && target.challenge <= 4) {
+      parts.push("weak link");
+    }
+
     return parts.slice(0, 2).join(", ") || "lowest score";
   }
 

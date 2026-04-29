@@ -137,6 +137,22 @@ function actionTalk(state, player, target) {
     adjustTrust(state, player.id, target.id, 1);
     // Deep connection reinforces any pact they've made together.
     strengthenSharedAlliances(state, player.id, target.id, 0.5);
+
+    // v3.7: post-swap cross-tribe deep talks carry a different flavor —
+    // these are people who were enemies a week ago. The mechanical effect
+    // is the same; the moment just reads differently.
+    const crossTribePostSwap =
+      state.swapped && !state.merged
+      && player.originalTribe !== target.originalTribe;
+
+    if (crossTribePostSwap) {
+      return { feedback: pickFrom([
+        `You and ${target.name} talked through the strangeness of the swap. Old enemies sharing a fire — and somehow it landed.`,
+        `${target.name} was on the other side a week ago. Today you found something real to talk about. The old lines feel softer now.`,
+        `The conversation with ${target.name} cut past the awkwardness of being on opposite tribes. You came in strangers. You left as something else.`,
+      ]), hint: null };
+    }
+
     return { feedback: pickFrom([
       `You and ${target.name} talked for a long time by the fire. It felt like a real connection.`,
       `${target.name} opened up about their life back home. You listened. It seemed to matter.`,

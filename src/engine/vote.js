@@ -127,6 +127,68 @@ function pickVoteTarget(state, voter, tribe) {
     const socialThreat    = c.social    * (voter.strategy / 15);
     const challengeThreat = c.challenge * (voter.strategy / 25);
 
+    // ── v3.7: post-swap, pre-merge cross-tribe dynamics ───────────────────
+    // Two factors only matter after a tribe swap and before the merge.
+    // Pre-swap they're tautologically zero (everyone on a tribe shares
+    // originalTribe) and post-merge they're not the right model.
+    let crossTribeFactor   = 0;
+    let tribeStrengthFactor = 0;
+
+    if (state.swapped && !state.merged) {
+      // Cross-tribe loyalty / outsider-targeting factor.
+      // Voters protect contestants from their original tribe and find members
+      // of the OTHER original tribe slightly easier targets — modulated by
+      // social/strategy stats and whether the voter is in the new-tribe
+      // majority of their original tribe.
+      const myTribe = state.tribes[voter.tribe] ?? [];
+      const sameOrigCount = myTribe.filter(m =>
+        m.originalTribe === voter.originalTribe
+      ).length;
+      const inMajority = sameOrigCount > myTribe.length / 2;
+      const sameOrigin = voter.originalTribe === c.originalTribe;
+
+      if (sameOrigin) {
+        // Loyalty bonus — protective.
+        //   base 5
+        //   +0.5 per social point above 5  (loyal social rocks)
+        //   −0.5 per strategy point above 5 (strategic flippers care less)
+        //   ×0.5 if outnumbered on the new tribe (less leverage to defend)
+        let bonus = 5
+                  + (voter.social   - 5) * 0.5
+                  - (voter.strategy - 5) * 0.5;
+        if (!inMajority) bonus *= 0.5;
+        crossTribeFactor = Math.max(0, bonus);
+      } else {
+        // Outsider penalty — easier target.
+        //   base 4
+        //   +0.4 per strategy point above 5 (strategic targeting)
+        //   −0.3 per social point above 5   (social = less harsh)
+        //   ×0.3 if outnumbered (can't push the agenda when you don't have numbers)
+        let penalty = 4
+                    + (voter.strategy - 5) * 0.4
+                    - (voter.social   - 5) * 0.3;
+        if (!inMajority) penalty *= 0.3;
+        crossTribeFactor = -Math.max(0, penalty);
+      }
+
+      // Tribe-strength preservation. Strategic voters (≥6) on a weaker tribe
+      // protect strong members and target weak ones, regardless of original
+      // tribe lines. Avg challenge stat compared to the OTHER tribe.
+      if (voter.strategy >= 6) {
+        const otherLabel = voter.tribe === "A" ? "B" : "A";
+        const otherTribe = state.tribes[otherLabel] ?? [];
+        if (myTribe.length > 0 && otherTribe.length > 0) {
+          const myAvg    = myTribe.reduce((s, m) => s + m.challenge, 0) / myTribe.length;
+          const otherAvg = otherTribe.reduce((s, m) => s + m.challenge, 0) / otherTribe.length;
+          if (myAvg < otherAvg - 0.5) {
+            // We're noticeably weaker. Map c.challenge (1–10, mean 5) to a
+            // ±2.5 swing — high-challenge candidates protected, low targeted.
+            tribeStrengthFactor = (c.challenge - 5) * 0.5;
+          }
+        }
+      }
+    }
+
     // Idol suspicion: how strongly THIS voter believes c is holding an idol.
     // Strategic voters (strategy ≥ 6) lean into a flush — a suspected idol
     // holder is MORE attractive to vote (lower score). Less strategic voters
@@ -153,6 +215,7 @@ function pickVoteTarget(state, voter, tribe) {
     const score = rel + bondProtection + allianceProtection + trustFactor
                 - suspicion - socialThreat - challengeThreat
                 + idolFactor
+                + crossTribeFactor + tribeStrengthFactor
                 + noise;
 
     if (VOTE_DEBUG) {
@@ -161,7 +224,8 @@ function pickVoteTarget(state, voter, tribe) {
         `rel=${rel.toFixed(1)} bond=+${bondProtection} ally=+${allianceProtection.toFixed(1)} ` +
         `trust=${trustFactor.toFixed(1)} susp=${(-suspicion).toFixed(1)} ` +
         `soc=${(-socialThreat).toFixed(1)} chal=${(-challengeThreat).toFixed(1)} ` +
-        `idol=${idolFactor.toFixed(1)} noise=${noise.toFixed(1)} = ${score.toFixed(1)}`
+        `idol=${idolFactor.toFixed(1)} cross=${crossTribeFactor.toFixed(1)} ` +
+        `tribe=${tribeStrengthFactor.toFixed(1)} noise=${noise.toFixed(1)} = ${score.toFixed(1)}`
       );
     }
 

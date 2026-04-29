@@ -51,6 +51,18 @@ function getEpisodeOpener(state) {
     ]);
   }
 
+  // Post-swap, pre-merge — the world has shifted. Old loyalties haven't
+  // disappeared, but the people enforcing them are scattered.
+  if (state.swapped) {
+    return pickFlavor([
+      "Post-swap. Old tribe lines bend, but they don't break easily.",
+      "Your new tribemates are still strangers. Some of them were enemies a week ago.",
+      "Everyone's reading the room. Old loyalties haven't disappeared — just gone underground.",
+      "The swap rearranged the board. Now you have to figure out who actually stuck with you.",
+      "Some of the people sleeping next to you were on the other beach a few days ago.",
+    ]);
+  }
+
   if (state.round <= 2) {
     return pickFlavor([
       "The game is just beginning. First impressions are becoming first reads.",
@@ -145,6 +157,17 @@ function getTribalOpener(state) {
       "The jury is growing. The person you vote out tonight will have a say in who wins.",
       "Everyone left is dangerous. The question is which kind of dangerous you can live with.",
       "You've made it this far by reading people right. You'll need to read them right again tonight.",
+    ]);
+  }
+
+  // Post-swap, pre-merge — the first tribal at a redrawn camp is its own beat.
+  // Old tribal lines are tested; people may flip, hold, or end up trapped.
+  if (state.swapped) {
+    return pickFlavor([
+      "Tonight is the first real test of the swap. Old loyalties or new tribemates — pick one.",
+      "Some of the people in this room played against you a week ago. Tonight you'll find out who's actually with you.",
+      "The swap forced everyone into uneasy company. The vote tonight will reveal who held to old lines and who walked away from them.",
+      "Old tribe versus new tribe. Numbers versus relationships. Tonight a side picks itself.",
     ]);
   }
 

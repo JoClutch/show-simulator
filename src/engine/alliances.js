@@ -447,9 +447,17 @@ function aiFormAlliances(state, pool) {
 
       const rel   = getRelationship(state, a.id, b.id);
       const trust = getTrust(state, a.id, b.id);
-      if (rel < 12 || trust < 6) continue;
 
-      if (Math.random() >= 0.20) continue;   // 20% per qualifying pair
+      // v3.7: cross-original-tribe pairs face a higher bar post-swap.
+      // Pre-swap, everyone in a tribe shares originalTribe, so this gate is
+      // a no-op. Post-swap, cross-tribe pairs need stronger rel/trust AND
+      // form at half the rate — old enemies don't lock arms quickly.
+      const sameOrigin = a.originalTribe === b.originalTribe;
+      const minRel     = sameOrigin ? 12 : 14;
+      const minTrust   = sameOrigin ? 6  : 7;
+      const formChance = sameOrigin ? 0.20 : 0.10;
+      if (rel < minRel || trust < minTrust) continue;
+      if (Math.random() >= formChance) continue;
 
       const aAlliances = getAlliancesForMember(state, a.id);
       const bAlliances = getAlliancesForMember(state, b.id);
