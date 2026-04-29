@@ -29,9 +29,14 @@
 //       ↓  onTribalDone → Elimination → advanceRound
 //
 // advanceRound checks:
-//   ≤ 3 players left    → showGameOver()
-//   merge threshold hit → doMerge() then showScreen("merge")
-//   otherwise           → next episode, Camp Life phase 1
+//   ≤ finalCount players left → startFinalTribal()
+//   merge threshold hit        → doMerge() then showScreen("merge")
+//   otherwise                  → next episode, Camp Life phase 1
+//
+// Final Tribal Council flow:
+//   startFinalTribal() → showScreen("finalTribal")
+//       ↓  onFinalTribalDone(winner, finalVotes)
+//   showScreen("results")
 
 let gameState;
 
@@ -115,9 +120,9 @@ function advanceRound() {
 
   const remaining = getAllActive().length;
 
-  // End of game — 3 or fewer players means Final 3 or lower.
-  if (remaining <= 3) {
-    showGameOver();
+  // End of game — final count reached: begin Final Tribal Council.
+  if (remaining <= SEASON_CONFIG.finalCount) {
+    startFinalTribal();
     return;
   }
 
@@ -158,79 +163,38 @@ function showScreen(name) {
   app.innerHTML   = "";
 
   switch (name) {
-    case "select":      renderSelectScreen(app, gameState);      break;
-    case "merge":       renderMergeScreen(app, gameState);       break;
-    case "campLife":    renderCampLifeScreen(app, gameState);    break;
-    case "challenge":   renderChallengeScreen(app, gameState);   break;
-    case "tribal":      renderTribalScreen(app, gameState);      break;
-    case "elimination": renderEliminationScreen(app, gameState); break;
+    case "select":       renderSelectScreen(app, gameState);       break;
+    case "merge":        renderMergeScreen(app, gameState);        break;
+    case "campLife":     renderCampLifeScreen(app, gameState);     break;
+    case "challenge":    renderChallengeScreen(app, gameState);    break;
+    case "tribal":       renderTribalScreen(app, gameState);       break;
+    case "elimination":  renderEliminationScreen(app, gameState);  break;
+    case "finalTribal":  renderFinalTribalScreen(app, gameState);  break;
+    case "results":      renderResultsScreen(app, gameState);      break;
   }
 }
 
-// ── End state ─────────────────────────────────────────────────────────────────
+// ── Final Tribal Council ──────────────────────────────────────────────────────
 
-// Called when ≤ 3 players remain.
+// Called when remaining players hit SEASON_CONFIG.finalCount.
+// Snapshots the finalists and the last real in-game day, then hands off to the
+// FTC screen.
 //
 // Note: advanceRound() increments gameState.round before calling this, so
 // getDay(gameState) returns the first day of the never-played next episode.
-// Subtract 1 to get the last real in-game day (the Tribal Council night).
-function showGameOver() {
-  const player         = gameState.player;
-  const isInFinal3     = getAllActive().find(c => c.id === player.id);
-  const episodesPlayed = gameState.round - 1;
-  const lastDay        = getDay(gameState) - 1;
-  const outlasted      = gameState.eliminated.length;
-  const jury           = gameState.jury;
+// Subtract 1 to get the actual last in-game day (Tribal Council night).
+function startFinalTribal() {
+  gameState.finalists = getAllActive();
+  gameState.ftcDay    = getDay(gameState) - 1;
+  showScreen("finalTribal");
+}
 
-  const headline = isInFinal3 ? "You Made the Final 3!" : "Game Over";
-
-  // The !isInFinal3 branch is currently unreachable: an eliminated player sees
-  // the elimination screen with no Continue button and never calls advanceRound().
-  // It is kept here as a placeholder for Phase 4 (jury / Final Tribal).
-  const summary = isInFinal3
-    ? `You survived all ${episodesPlayed} episodes and reached Day ${lastDay}. You outlasted ${outlasted} other players.`
-    : `You were voted out on Day ${lastDay}. You lasted ${episodesPlayed} episode${episodesPlayed !== 1 ? "s" : ""} and outlasted ${outlasted - 1} player${outlasted - 1 !== 1 ? "s" : ""}.`;
-
-  const remainingNames = getAllActive().map(c => c.name).join(", ");
-
-  // Jury stub — lists jurors and their snapshotted sentiment toward the player.
-  // Full Final Tribal Council voting comes in Phase 4.
-  const jurySection = jury.length > 0 ? `
-    <div class="gameover-jury">
-      <h3>The Jury (${jury.length})</h3>
-      <div class="gameover-jury-list">
-        ${jury.map(j => {
-          const score = isInFinal3 && j.sentiment ? j.sentiment[player.id] : undefined;
-          const tier  = score !== undefined ? sentimentTier(score) : "mixed";
-          const label = score !== undefined ? sentimentLabel(tier)  : "—";
-          return `
-            <div class="gameover-juror">
-              <span class="gameover-juror-name">${j.name}</span>
-              <span class="gameover-juror-sentiment" data-tier="${tier}">${label}</span>
-            </div>
-          `;
-        }).join("")}
-      </div>
-      <p class="muted gameover-jury-note">Final Tribal Council jury voting coming in Phase 4.</p>
-    </div>
-  ` : "";
-
-  const finalNote = isInFinal3
-    ? jurySection
-    : `<p class="muted">Final 3: ${remainingNames}</p>`;
-
-  document.getElementById("app").innerHTML = `
-    <div class="screen">
-      <h1>${headline}</h1>
-      <div class="event-log">
-        <p>${summary}</p>
-      </div>
-      ${finalNote}
-      <div class="spacer">
-        <p class="muted">Refresh the page to play again.</p>
-      </div>
-    </div>
-  `;
+// Called by the FTC screen once the winner is declared.
+// Saves the results to state and transitions to the season recap.
+function onFinalTribalDone(winner, finalVotes) {
+  gameState.winner     = winner;
+  gameState.finalVotes = finalVotes;
+  showScreen("results");
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

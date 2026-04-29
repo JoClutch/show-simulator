@@ -52,14 +52,14 @@ Goal: Introduce the merge at a set number of players.
 
 ---
 
-## Phase 4 — Endgame
+## Phase 4 — Endgame ✅
 
 Goal: Complete season with a winner.
 
-- [ ] Jury tracking (post-merge eliminations become jurors)
-- [ ] Final Tribal Council with jury votes
-- [ ] Player can make a case to the jury
-- [ ] Winner declared, season summary screen
+- [x] Jury tracking (post-merge eliminations become jurors)
+- [x] Final Tribal Council with jury votes
+- [x] Player can make a case to the jury (opening statement with 3 themes)
+- [x] Winner declared, season summary screen
 - [ ] Stats: challenges won, votes received, relationships
 
 ---

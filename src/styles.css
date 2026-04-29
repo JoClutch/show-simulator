@@ -1203,3 +1203,349 @@ button:disabled {
   margin-bottom: 0;
   margin-top: 0.5rem;
 }
+
+/* ── Final Tribal Council ── */
+
+/* Ceremony — finalist card row */
+.ftc-intro {
+  margin-bottom: 1.5rem;
+}
+
+.ftc-finalists {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1.75rem;
+  flex-wrap: wrap;
+}
+
+.ftc-finalist-card {
+  flex: 1;
+  min-width: 140px;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-dim);
+  border-radius: 6px;
+  padding: 1rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+/* Highlight border for the human player */
+.ftc-finalist-player {
+  border-color: var(--gold);
+}
+
+.ftc-finalist-name {
+  font-size: 1rem;
+  font-weight: bold;
+  color: var(--text-primary);
+}
+
+.ftc-you-tag {
+  font-size: 0.75rem;
+  color: var(--gold);
+  font-weight: normal;
+}
+
+.ftc-finalist-origin {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.ftc-finalist-stats {
+  display: flex;
+  gap: 0.75rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+}
+
+/* Ceremony — jury section */
+.ftc-jury-section {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-dim);
+  border-left: 3px solid var(--gold);
+  border-radius: 0 5px 5px 0;
+  padding: 0.85rem 1.1rem;
+  margin-bottom: 1rem;
+}
+
+.ftc-jury-heading {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--gold);
+  font-weight: bold;
+  margin-bottom: 0.6rem;
+}
+
+.ftc-jury-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.ftc-jury-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  background-color: var(--bg-raised);
+  border: 1px solid var(--border-dim);
+  border-radius: 4px;
+  padding: 0.3rem 0.65rem;
+}
+
+.ftc-jury-chip-name {
+  font-size: 0.82rem;
+  color: var(--text-primary);
+}
+
+.ftc-jury-chip-seat {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Speech phase */
+.ftc-speech-prompt {
+  font-size: 0.95rem;
+  color: #bbb;
+  margin-bottom: 1.25rem;
+}
+
+.ftc-speech-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+.ftc-speech-card {
+  background-color: var(--bg-card);
+  border: 2px solid var(--border-dim);
+  border-radius: 6px;
+  padding: 0.9rem 1.1rem;
+  cursor: pointer;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+.ftc-speech-card:hover {
+  border-color: #8899cc;
+  background-color: var(--bg-raised);
+}
+
+.ftc-speech-card.selected {
+  border-color: var(--gold);
+  background-color: var(--bg-raised);
+}
+
+.ftc-speech-label {
+  font-size: 0.95rem;
+  font-weight: bold;
+  color: var(--text-primary);
+  margin-bottom: 0.3rem;
+}
+
+.ftc-speech-flavor {
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+/* Vote reveal — note line */
+.ftc-reading-note {
+  margin-bottom: 1.25rem;
+}
+
+/* Green reveal card: vote cast FOR the player during FTC */
+.reveal-card.reveal-card-good {
+  border-color: var(--green-border);
+  color: var(--green-text);
+}
+
+/* Finish button (re-used by FTC reveal phase) */
+.ftc-finish-btn {
+  background-color: var(--gold);
+  color: #1a1a2e;
+  border: none;
+  border-radius: 4px;
+  padding: 0.7rem 1.4rem;
+  font-size: 1rem;
+  font-family: Georgia, serif;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.ftc-finish-btn:hover {
+  background-color: var(--gold-dim);
+}
+
+/* Winner declaration */
+.ftc-winner-headline {
+  font-size: 2rem;
+  color: var(--gold);
+  text-align: center;
+  margin-bottom: 0.5rem;
+}
+
+.ftc-winner-subhead {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.92rem;
+  margin-bottom: 1.75rem;
+}
+
+.ftc-winner-card {
+  text-align: center;
+  background-color: var(--bg-card);
+  border: 2px solid var(--gold);
+  border-radius: 8px;
+  padding: 1.5rem 2rem;
+  margin-bottom: 1.75rem;
+}
+
+.ftc-winner-name {
+  font-size: 2rem;
+  font-weight: bold;
+  color: var(--gold);
+  margin-bottom: 0.3rem;
+}
+
+.ftc-winner-origin {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.5rem;
+}
+
+.ftc-winner-label {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+}
+
+/* Vote breakdown */
+.ftc-vote-breakdown {
+  margin-bottom: 1rem;
+}
+
+.ftc-vote-breakdown h3 {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-bottom: 0.6rem;
+}
+
+.ftc-result-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.ftc-result-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.9rem;
+  padding: 0.5rem 0.85rem;
+  border-radius: 4px;
+}
+
+.ftc-result-winner {
+  background-color: var(--bg-card);
+  border: 1px solid var(--gold);
+  color: var(--gold);
+}
+
+.ftc-result-loser {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-dim);
+  color: var(--text-dim);
+}
+
+.ftc-result-name {
+  font-weight: bold;
+}
+
+.ftc-result-votes {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+/* ── Season Results Screen ── */
+.results-section {
+  margin-top: 1.25rem;
+}
+
+.results-boot-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.results-boot-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.85rem;
+  font-size: 0.88rem;
+  border-bottom: 1px solid var(--border-dim);
+}
+
+.results-boot-row:last-child {
+  border-bottom: none;
+}
+
+/* Winner row */
+.results-winner-row {
+  background-color: var(--bg-card);
+  border-left: 3px solid var(--gold);
+  color: var(--gold);
+}
+
+/* Human player's row (non-winner) */
+.results-player-row:not(.results-winner-row) {
+  background-color: var(--bg-raised);
+  border-left: 3px solid #8899cc;
+}
+
+.results-place {
+  width: 3.5rem;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.82rem;
+  color: var(--text-faint);
+}
+
+.results-winner-row .results-place {
+  color: var(--gold);
+}
+
+.results-name {
+  flex: 1;
+  font-weight: bold;
+  color: var(--text-primary);
+}
+
+.results-winner-row .results-name {
+  color: var(--gold);
+}
+
+.results-tribe {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+  width: 5rem;
+  text-align: right;
+}
+
+.results-jury-votes {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  width: 6rem;
+  text-align: right;
+}

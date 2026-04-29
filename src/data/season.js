@@ -21,6 +21,11 @@ const SEASON_CONFIG = {
   mergeTriggerCount: 10,
   mergeTribeName:    "Maji",
   mergeTribeColor:   "#9b59b6",
+
+  // ── Endgame ────────────────────────────────────────────────────────────────
+  // When remaining players fall to or below finalCount, the season ends with
+  // Final Tribal Council instead of another regular vote.
+  finalCount: 3,
 };
 
 // Returns a brand-new season state object. All fields start at their
@@ -49,6 +54,12 @@ function createSeasonState() {
 
     // ── Merge ──────────────────────────────────────────────
     merged: false,   // true after merge fires; gates all post-merge logic
+
+    // ── Endgame ────────────────────────────────────────────
+    finalists:  null,  // array of the 3 remaining contestants at FTC; set in startFinalTribal()
+    ftcDay:     null,  // in-game day of Final Tribal Council; set in startFinalTribal()
+    finalVotes: null,  // array of { voter, target } jury votes; set in onFinalTribalDone()
+    winner:     null,  // the winning contestant object; set in onFinalTribalDone()
 
     // ── Relationships ──────────────────────────────────────
     // Populated by initRelationships() in engine/relationships.js after tribes are assigned.
