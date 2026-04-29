@@ -56,8 +56,16 @@ const SCHEMA_VERSION = 1;
  * @property {MergeConfig}        merge
  * @property {JuryConfig}         jury
  * @property {FinalTribalConfig}  finalTribal
+ * @property {IdolsConfig}        idols
  * @property {PacingConfig}       pacing
  * @property {ContestantSchema[]} cast
+ */
+
+/**
+ * @typedef {Object} IdolsConfig
+ * @property {boolean} enabled  When false, the idol system is disabled
+ *                              entirely (no idols spawn, no search action,
+ *                              no idol play phase at tribal).
  */
 
 /**
@@ -270,6 +278,14 @@ function validateSeasonTemplate(t) {
       errors.push("pacing.campActionsPerRound must be a positive integer");
   }
 
+  // ── Idols ──
+  if (!t.idols || typeof t.idols !== "object") {
+    errors.push("idols is required (set enabled:false to disable)");
+  } else {
+    if (typeof t.idols.enabled !== "boolean")
+      errors.push("idols.enabled must be a boolean");
+  }
+
   // ── Cast ──
   if (!Array.isArray(t.cast)) {
     errors.push("cast must be an array");
@@ -337,6 +353,21 @@ function validateSeasonTemplate(t) {
       && typeof t.merge?.triggerCount === "number"
       && t.finalTribal.finalists >= t.merge.triggerCount) {
     errors.push("finalTribal.finalists must be less than merge.triggerCount");
+  }
+
+  // Custom jury start must leave room for a real jury before FTC fires —
+  // and can't start before there's anyone to eliminate.
+  if (t.jury?.startTrigger === "custom"
+      && typeof t.jury.customStartCount === "number") {
+    if (typeof t.finalTribal?.finalists === "number"
+        && t.jury.customStartCount <= t.finalTribal.finalists) {
+      errors.push("jury.customStartCount must be greater than finalTribal.finalists");
+    }
+    if (Array.isArray(t.cast) && t.jury.customStartCount > t.cast.length) {
+      errors.push(
+        `jury.customStartCount (${t.jury.customStartCount}) cannot exceed cast size (${t.cast.length})`
+      );
+    }
   }
 
   return errors;

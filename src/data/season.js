@@ -35,6 +35,18 @@ const SEASON_CONFIG = {
   // When remaining players fall to or below finalCount, the season ends with
   // Final Tribal Council instead of another regular vote.
   finalCount: 3,
+
+  // ── Jury start (v4.2) ──────────────────────────────────────────────────────
+  // "atMerge"  — eliminations become jurors when state.merged is true (default)
+  // "custom"   — eliminations become jurors when remaining ≤ juryStartCount
+  // applyTemplate() in seasonPresets.js writes these from the active template.
+  juryStartTrigger: "atMerge",
+  juryStartCount:   null,
+
+  // ── Idol system toggle (v4.2) ──────────────────────────────────────────────
+  // false disables the entire idol mechanic: no idols spawn, no search action,
+  // no idol-play phase at tribal. Vote/elim flow is otherwise unchanged.
+  idolsEnabled: true,
 };
 
 // Returns a brand-new season state object. All fields start at their

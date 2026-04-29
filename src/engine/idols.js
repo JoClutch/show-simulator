@@ -77,7 +77,15 @@ function createIdol(id, scope) {
 // Populates state.idols with one idol object per IDOL_SLOTS entry.
 // Called once at game start (after assignTribes), before the first screen.
 // state.idols is initialized as [] in createSeasonState(); this fills it.
+//
+// v4.2: when SEASON_CONFIG.idolsEnabled is false, the idol system is
+// disabled entirely. state.idols stays empty; all downstream lookups
+// (getIdolPlayCandidates, getActiveIdols, etc.) naturally short-circuit.
 function initIdols(state) {
+  if (SEASON_CONFIG.idolsEnabled === false) {
+    state.idols = [];
+    return;
+  }
   state.idols = Object.entries(IDOL_SLOTS).map(([id, def]) =>
     createIdol(id, def.scope)
   );

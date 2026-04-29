@@ -496,6 +496,281 @@ button:disabled {
   text-align: right;
 }
 
+/* ── Setup links row (cast + rules editors, v4.1/v4.2) ── */
+.select-setup-links {
+  display: flex;
+  gap: 0.75rem;
+  margin: 0.5rem 0 0.75rem;
+}
+
+/* ── Rules Editor (v4.2) ────────────────────────────────────────── */
+
+.rules-editor-screen {
+  max-width: 720px;
+}
+
+.rules-editor-blurb {
+  margin-bottom: 1rem;
+  line-height: 1.55;
+}
+
+.rules-editor-errors:empty {
+  display: none;
+}
+
+.rules-editor-errors {
+  margin-bottom: 1rem;
+}
+
+.rules-editor-errors-header {
+  font-weight: bold;
+  color: var(--red-text);
+  margin-bottom: 0.4rem;
+  font-size: 0.9rem;
+}
+
+.rules-editor-errors-list {
+  list-style: none;
+  padding: 0.6rem 0.85rem;
+  margin: 0;
+  background: var(--red-bg);
+  border: 1px solid var(--red-border);
+  border-radius: 4px;
+}
+
+.rules-editor-errors-list li {
+  font-size: 0.82rem;
+  color: var(--red-text);
+  padding: 0.15rem 0;
+  line-height: 1.4;
+}
+
+.rules-section {
+  background: var(--bg-card);
+  border: 1px solid var(--border-mid);
+  border-radius: 6px;
+  padding: 0.85rem 1rem 1rem;
+  margin-bottom: 0.85rem;
+}
+
+.rules-section-title {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--gold-dim);
+  margin-bottom: 0.6rem;
+  font-weight: bold;
+}
+
+.rules-section-info {
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  margin-bottom: 0;
+}
+
+.rules-future-note {
+  font-style: italic;
+  font-size: 0.78rem;
+}
+
+/* Standard input row */
+.rules-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-bottom: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.rules-row:last-child { margin-bottom: 0; }
+
+.rules-row label {
+  font-size: 0.82rem;
+  color: var(--text-dim);
+  min-width: 9rem;
+}
+
+.rules-row input[type="text"],
+.rules-row input[type="number"],
+.rules-row select {
+  background: var(--bg-base);
+  border: 1px solid var(--border-mid);
+  color: var(--text-primary);
+  padding: 0.4rem 0.6rem;
+  border-radius: 3px;
+  font-family: inherit;
+  font-size: 0.88rem;
+}
+
+.rules-row input[type="number"] {
+  width: 4.5rem;
+  text-align: center;
+}
+
+.rules-row input[type="text"] {
+  min-width: 10rem;
+}
+
+.rules-row select {
+  min-width: 12rem;
+}
+
+.rules-row input[type="color"] {
+  width: 2.5rem;
+  height: 2rem;
+  background: transparent;
+  border: 1px solid var(--border-mid);
+  border-radius: 3px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.rules-row input:focus,
+.rules-row select:focus {
+  outline: none;
+  border-color: var(--gold-dim);
+}
+
+/* Hidden conditional rows (e.g. swap-trigger when swap disabled) */
+.rules-row.hidden {
+  display: none;
+}
+
+/* Checkbox-style row */
+.rules-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-size: 0.88rem;
+  color: var(--text-primary);
+  cursor: pointer;
+  margin-bottom: 0.5rem;
+}
+
+.rules-checkbox-row input[type="checkbox"] {
+  width: 1.05rem;
+  height: 1.05rem;
+  cursor: pointer;
+}
+
+.rules-checkbox-hint {
+  font-size: 0.78rem;
+}
+
+/* Tribe rows (name + color + size) */
+.rules-tribe-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.7rem;
+}
+
+.rules-tribe-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.rules-tribe-letter {
+  font-weight: bold;
+  font-size: 1rem;
+  width: 1.4rem;
+  text-align: center;
+}
+
+.rules-tribe-name {
+  background: var(--bg-base);
+  border: 1px solid var(--border-mid);
+  color: var(--text-primary);
+  padding: 0.4rem 0.6rem;
+  border-radius: 3px;
+  font-family: inherit;
+  font-size: 0.88rem;
+  flex: 1;
+  min-width: 8rem;
+}
+
+.rules-tribe-color {
+  width: 2.5rem;
+  height: 2rem;
+  background: transparent;
+  border: 1px solid var(--border-mid);
+  border-radius: 3px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.rules-tribe-size-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+
+.rules-tribe-size {
+  background: var(--bg-base);
+  border: 1px solid var(--border-mid);
+  color: var(--text-primary);
+  padding: 0.35rem 0.45rem;
+  border-radius: 3px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  width: 3.5rem;
+  text-align: center;
+}
+
+.rules-tribe-name:focus,
+.rules-tribe-size:focus {
+  outline: none;
+  border-color: var(--gold-dim);
+}
+
+/* Footer buttons */
+.rules-editor-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.55rem;
+  border-top: 1px solid var(--border-dim);
+  padding-top: 1rem;
+  margin-top: 1rem;
+}
+
+.rules-cancel-btn,
+.rules-reset-btn {
+  background: transparent;
+  border: 1px solid var(--border-mid);
+  color: var(--text-dim);
+  padding: 0.55rem 1.1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.9rem;
+}
+
+.rules-cancel-btn:hover,
+.rules-reset-btn:hover {
+  border-color: var(--text-primary);
+  color: var(--text-primary);
+}
+
+.rules-save-btn {
+  background: linear-gradient(135deg, var(--gold), var(--gold-dim));
+  color: #1a1a0a;
+  border: none;
+  padding: 0.55rem 1.3rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: bold;
+  font-size: 0.9rem;
+}
+
+.rules-save-btn:hover {
+  filter: brightness(1.1);
+}
+
 /* ── Cast Editor (v4.1) ────────────────────────────────────────── */
 
 /* Edit Cast link in the select screen subtitle — looks like inline text. */

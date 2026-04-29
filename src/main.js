@@ -65,6 +65,36 @@ function onCastEditorDone(applied) {
   showScreen("select");
 }
 
+// Called when the rules editor is dismissed.
+// Same shape as onCastEditorDone — rebuild state on apply, route back either way.
+function onRulesEditorDone(applied) {
+  if (applied) {
+    gameState = createSeasonState();
+    assignTribes(CONTESTANTS, gameState);
+    initIdols(gameState);
+  }
+  showScreen("select");
+}
+
+// v4.2: returns true if the eliminated contestant should be added to the jury.
+// Replaces the previous hardcoded `if (gameState.merged)` check so custom jury
+// start configurations are honored. Called from onTribalDone after the
+// eliminated has been removed from tribes — getAllActive() therefore returns
+// the post-elimination remaining count.
+function isJuryEligibleElim(state) {
+  const trigger = SEASON_CONFIG.juryStartTrigger ?? "atMerge";
+
+  if (trigger === "atMerge") return state.merged;
+
+  if (trigger === "custom") {
+    const startCount = SEASON_CONFIG.juryStartCount;
+    if (typeof startCount !== "number") return state.merged;   // safety fallback
+    return getAllActive().length <= startCount;
+  }
+
+  return state.merged;
+}
+
 function onCampLifeDone() {
   if (gameState.campPhase === 1) {
     showScreen("challenge");
@@ -143,10 +173,11 @@ function onTribalDone(eliminatedContestant) {
   // Alliances dropping below 2 members are dissolved automatically.
   removeMemberFromAlliances(gameState, eliminatedContestant.id);
 
-  // Post-merge eliminations are sent to the jury.
+  // Post-merge (or custom-trigger) eliminations are sent to the jury.
   // removeFromTribes() has already run, so getAllActive() returns only survivors —
   // that is the correct population for the sentiment snapshot.
-  if (gameState.merged) {
+  // v4.2: jury start condition is configurable; see isJuryEligibleElim.
+  if (isJuryEligibleElim(gameState)) {
     eliminatedContestant.juryNumber = gameState.jury.length + 1;
     eliminatedContestant.sentiment  = buildJurySentiment(
       gameState,
@@ -310,6 +341,7 @@ function showScreen(name) {
   switch (name) {
     case "select":       renderSelectScreen(app, gameState);       break;
     case "castEditor":   renderCastEditorScreen(app, gameState);   break;
+    case "rulesEditor":  renderRulesEditorScreen(app, gameState);  break;
     case "swap":         renderSwapScreen(app, gameState);         break;
     case "merge":        renderMergeScreen(app, gameState);        break;
     case "campLife":     renderCampLifeScreen(app, gameState);     break;

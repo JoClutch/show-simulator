@@ -13,7 +13,10 @@ function renderSelectScreen(container, state) {
           ${SEASON_CONFIG.name}
           &nbsp;·&nbsp; ${CONTESTANTS.length} contestants
           &nbsp;·&nbsp; ${SEASON_CONFIG.tribesCount} tribes
-          &nbsp;·&nbsp; <button class="select-edit-cast-link" id="edit-cast-link">Edit Cast →</button>
+        </p>
+        <p class="select-setup-links">
+          <button class="select-edit-cast-link" id="edit-cast-link">Edit Cast →</button>
+          <button class="select-edit-cast-link" id="edit-rules-link">Edit Rules →</button>
         </p>
         <p class="select-instructions">
           Choose one contestant to play as. You will see the game through their
@@ -96,6 +99,13 @@ function renderSelectScreen(container, state) {
   // saved (with the cast applied) or cancelled (with no changes).
   container.querySelector("#edit-cast-link").addEventListener("click", () => {
     showScreen("castEditor");
+  });
+
+  // ── Edit Rules entry point ────────────────────────────────────────────────
+  // Routes to the rules/configuration screen. Like the cast editor, returns
+  // to select on save (rules applied) or cancel (no changes).
+  container.querySelector("#edit-rules-link").addEventListener("click", () => {
+    showScreen("rulesEditor");
   });
 }
 

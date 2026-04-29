@@ -90,6 +90,10 @@ const DEFAULT_SEASON_TEMPLATE = {
     finalists: 3,
   },
 
+  idols: {
+    enabled: true,
+  },
+
   pacing: {
     campActionsPerRound: 3,
   },
@@ -151,6 +155,12 @@ function applyTemplate(template) {
   SEASON_CONFIG.mergeTribeName      = template.merge.tribeName;
   SEASON_CONFIG.mergeTribeColor     = template.merge.tribeColor;
   SEASON_CONFIG.finalCount          = template.finalTribal.finalists;
+
+  // v4.2 additions — jury start configuration and idol system toggle.
+  // Fields the runtime reads via SEASON_CONFIG.* to honor template settings.
+  SEASON_CONFIG.juryStartTrigger    = template.jury.startTrigger;
+  SEASON_CONFIG.juryStartCount      = template.jury.customStartCount ?? null;
+  SEASON_CONFIG.idolsEnabled        = template.idols.enabled;
 
   // ── Cast ──
   // Always rewrite CONTESTANTS contents in place — deep-copies template

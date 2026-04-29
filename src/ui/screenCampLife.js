@@ -313,6 +313,10 @@ function renderCampLifeScreen(container, state) {
     grid.className = "action-btn-grid";
 
     for (const action of CAMP_ACTIONS) {
+      // v4.2: skip the idol search action entirely when idols are disabled.
+      // No engine call, no UI button — the player never sees this option.
+      if (action.id === "searchidol" && SEASON_CONFIG.idolsEnabled === false) continue;
+
       const btn = document.createElement("button");
       btn.className = "action-btn";
 
