@@ -156,6 +156,10 @@ function doMerge() {
   gameState.tribes.A      = [];
   gameState.tribes.B      = [];
   gameState.merged        = true;
+
+  // Any tribal idol still hidden in an abandoned camp is now permanently lost.
+  // Idols that were already found (status "held") carry over to the merge.
+  expirePreMergeIdols(gameState);
 }
 
 // ── Screen routing ────────────────────────────────────────────────────────────
@@ -189,6 +193,11 @@ function showScreen(name) {
 function startFinalTribal() {
   gameState.finalists = getAllActive();
   gameState.ftcDay    = getDay(gameState) - 1;
+
+  // Idols cannot be played at Final Tribal Council.
+  // Expire any still-held idols before FTC begins.
+  expireHeldIdols(gameState);
+
   showScreen("finalTribal");
 }
 
@@ -249,5 +258,6 @@ function checkForMerge() {
 window.addEventListener("DOMContentLoaded", () => {
   gameState = createSeasonState();
   assignTribes(CONTESTANTS, gameState);
+  initIdols(gameState);      // places one idol per tribal camp + one for merge
   showScreen("select");
 });

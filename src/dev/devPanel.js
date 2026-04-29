@@ -194,6 +194,55 @@ window.DEV_CONFIG = {
 
   // ── Tab: State ──────────────────────────────────────────────────────────────
 
+  // Builds the idol summary block for the State tab.
+  // Reads window.gameState.idols and calls isIdolAvailable() from idols.js.
+  function renderIdols(g) {
+    if (!g?.idols?.length) return "";
+
+    const rows = g.idols.map(idol => {
+      const scopeName = idol.scope === "merged"
+        ? SEASON_CONFIG.mergeTribeName
+        : (SEASON_CONFIG.tribeNames[idol.scope] ?? idol.scope);
+
+      const holderName = idol.holder
+        ? (allKnownPlayers().find(c => c.id === idol.holder)?.name ?? idol.holder)
+        : "—";
+
+      const available  = isIdolAvailable(idol, g);
+      const playable   = isIdolPlayable(idol, g);
+
+      // Status label with availability note for hidden idols
+      let statusLabel = idol.status;
+      if (idol.status === "hidden") {
+        statusLabel += available ? " ✦" : " (locked)";
+      }
+      if (idol.status === "held" && playable) {
+        statusLabel += " ✦";
+      }
+
+      const statusCls =
+        idol.status === "held"    ? "dev-hi"  :
+        idol.status === "hidden" && available ? "dev-mid" :
+        "dev-dim";
+
+      return `<tr>
+        <td class="dev-dim">${idol.id}</td>
+        <td>${scopeName}</td>
+        <td class="${statusCls}">${statusLabel}</td>
+        <td>${holderName}</td>
+      </tr>`;
+    }).join("");
+
+    return `
+      <div class="dev-section">
+        <div class="dev-section-hd">Idols &nbsp;<span class="dev-dim" style="font-weight:normal">✦ = active</span></div>
+        <table class="dev-table">
+          <thead><tr><th>ID</th><th>Scope</th><th>Status</th><th>Holder</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  }
+
   function renderState() {
     const el = pane("state");
     const g  = gs();
@@ -260,6 +309,8 @@ window.DEV_CONFIG = {
           <tbody>${playerRows}</tbody>
         </table>
       </div>
+
+      ${renderIdols(g)}
 
       ${juryHTML}
     `;

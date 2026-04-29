@@ -61,6 +61,13 @@ function createSeasonState() {
     finalVotes: null,  // array of { voter, target } jury votes; set in onFinalTribalDone()
     winner:     null,  // the winning contestant object; set in onFinalTribalDone()
 
+    // ── Idols ──────────────────────────────────────────────
+    // Populated by initIdols() in engine/idols.js after tribes are assigned.
+    // Each object: { id, scope, status, holder, foundRound, playedRound }
+    //   status: "hidden" | "held" | "played" | "expired"
+    // See engine/idols.js for full documentation and lifecycle rules.
+    idols: [],
+
     // ── Relationships ──────────────────────────────────────
     // Populated by initRelationships() in engine/relationships.js after tribes are assigned.
     // Structure: { [contestantId]: { [otherContestantId]: number } }
