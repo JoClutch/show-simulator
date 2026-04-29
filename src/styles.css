@@ -496,6 +496,169 @@ button:disabled {
   text-align: right;
 }
 
+/* ── Saved Setups screen (v4.4) ────────────────────────────── */
+
+.saved-setups-screen {
+  max-width: 720px;
+}
+
+.saved-setups-blurb {
+  margin-bottom: 1rem;
+  line-height: 1.55;
+}
+
+/* Storage-unavailable warning (private browsing, etc.) */
+.saved-setups-warning {
+  background: var(--red-bg);
+  border: 1px solid var(--red-border);
+  border-radius: 4px;
+  color: var(--red-text);
+  padding: 0.7rem 0.95rem;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  margin-bottom: 1rem;
+}
+
+.saved-setups-toolbar {
+  margin-bottom: 1rem;
+}
+
+.saved-setups-save-btn {
+  background: linear-gradient(135deg, var(--gold), var(--gold-dim));
+  color: #1a1a0a;
+  border: none;
+  padding: 0.55rem 1.2rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: bold;
+  font-size: 0.9rem;
+}
+
+.saved-setups-save-btn:hover {
+  filter: brightness(1.1);
+}
+
+.saved-setups-save-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  filter: grayscale(0.5);
+}
+
+/* List + cards */
+.saved-setups-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-bottom: 1.25rem;
+}
+
+.saved-setups-empty {
+  font-style: italic;
+  text-align: center;
+  padding: 1.5rem 0;
+}
+
+.saved-setup-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-mid);
+  border-radius: 6px;
+  padding: 0.85rem 1rem;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto auto;
+  gap: 0.25rem 0.85rem;
+  align-items: baseline;
+}
+
+.saved-setup-name {
+  font-size: 1.05rem;
+  font-weight: bold;
+  color: var(--text-primary);
+  letter-spacing: 0.01em;
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.saved-setup-meta {
+  grid-column: 1;
+  grid-row: 2;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+}
+
+.saved-setup-summary {
+  grid-column: 1;
+  grid-row: 3;
+  font-size: 0.82rem;
+  color: var(--text-dim);
+  margin-top: 0.2rem;
+}
+
+.saved-setup-actions {
+  grid-column: 2;
+  grid-row: 1 / 4;
+  display: flex;
+  gap: 0.4rem;
+  align-self: center;
+}
+
+.saved-setup-load-btn,
+.saved-setup-delete-btn {
+  padding: 0.45rem 0.95rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.82rem;
+}
+
+.saved-setup-load-btn {
+  background: linear-gradient(135deg, var(--gold), var(--gold-dim));
+  color: #1a1a0a;
+  border: none;
+  font-weight: bold;
+}
+
+.saved-setup-load-btn:hover {
+  filter: brightness(1.1);
+}
+
+.saved-setup-delete-btn {
+  background: transparent;
+  border: 1px solid var(--red-border);
+  color: var(--red-text);
+}
+
+.saved-setup-delete-btn:hover {
+  background: rgba(192, 112, 128, 0.08);
+  border-color: var(--red-text);
+}
+
+/* Footer */
+.saved-setups-footer {
+  display: flex;
+  justify-content: flex-start;
+  border-top: 1px solid var(--border-dim);
+  padding-top: 1rem;
+}
+
+.saved-setups-back-btn {
+  background: transparent;
+  border: 1px solid var(--border-mid);
+  color: var(--text-dim);
+  padding: 0.5rem 1.05rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.88rem;
+}
+
+.saved-setups-back-btn:hover {
+  border-color: var(--text-primary);
+  color: var(--text-primary);
+}
+
 /* ── Setup links row (cast + rules editors, v4.1/v4.2) ── */
 .select-setup-links {
   display: flex;

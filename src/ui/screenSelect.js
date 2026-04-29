@@ -17,6 +17,7 @@ function renderSelectScreen(container, state) {
         <p class="select-setup-links">
           <button class="select-edit-cast-link" id="edit-cast-link">Edit Cast →</button>
           <button class="select-edit-cast-link" id="edit-rules-link">Edit Rules →</button>
+          <button class="select-edit-cast-link" id="saved-setups-link">Saved Setups →</button>
         </p>
         <p class="select-instructions">
           Choose one contestant to play as. You will see the game through their
@@ -106,6 +107,13 @@ function renderSelectScreen(container, state) {
   // to select on save (rules applied) or cancel (no changes).
   container.querySelector("#edit-rules-link").addEventListener("click", () => {
     showScreen("rulesEditor");
+  });
+
+  // ── Saved Setups entry point (v4.4) ───────────────────────────────────────
+  // Routes to the save/load manager. Returns to select after either Back
+  // (no changes) or Load (template applied + gameState rebuilt).
+  container.querySelector("#saved-setups-link").addEventListener("click", () => {
+    showScreen("savedSetups");
   });
 }
 

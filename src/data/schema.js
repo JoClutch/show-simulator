@@ -136,7 +136,10 @@ const SCHEMA_VERSION = 1;
 /**
  * @typedef {Object} SavedSetup
  * @property {number}         schemaVersion
- * @property {string}         savedAt   ISO 8601 timestamp.
+ * @property {string}         id          Unique identifier for storage management.
+ * @property {string}         setupName   User-facing label for this saved entry.
+ *                                        Defaults to template.meta.name on save.
+ * @property {string}         savedAt     ISO 8601 timestamp.
  * @property {"json"}         format
  * @property {SeasonTemplate} template
  */
@@ -376,7 +379,8 @@ function validateSeasonTemplate(t) {
   return errors;
 }
 
-// Validates a SavedSetup wrapper (the JSON round-trip format).
+// Validates a SavedSetup wrapper (the JSON round-trip format and the
+// localStorage entry format used by savedSetups.js).
 // Delegates to validateSeasonTemplate for the embedded template.
 function validateSavedSetup(s) {
   const errors = [];
@@ -385,6 +389,10 @@ function validateSavedSetup(s) {
     return errors;
   }
   if (typeof s.schemaVersion !== "number") errors.push("schemaVersion required");
+  if (typeof s.id !== "string" || s.id.trim() === "")
+    errors.push("id required (non-empty string)");
+  if (typeof s.setupName !== "string" || s.setupName.trim() === "")
+    errors.push("setupName required (non-empty string)");
   if (typeof s.savedAt !== "string")       errors.push("savedAt required (ISO timestamp string)");
   if (s.format !== "json")                 errors.push("format must be \"json\"");
   validateSeasonTemplate(s.template).forEach(e => errors.push(`template.${e}`));
