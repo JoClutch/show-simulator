@@ -10,7 +10,7 @@ function renderSelectScreen(container, state) {
       <div class="select-header">
         <h1>Survivor Simulator</h1>
         <p class="select-subtitle">
-          ${SEASON_CONFIG.name}
+          ${escapeHtml(SEASON_CONFIG.name)}
           &nbsp;·&nbsp; ${CONTESTANTS.length} contestants
           &nbsp;·&nbsp; ${SEASON_CONFIG.tribesCount} tribes
         </p>
@@ -119,7 +119,7 @@ function buildTribeSection(sectionEl, tribeLabel, members, onCardClick) {
   header.className = "tribe-header";
   header.style.borderColor = tribeColor;
   header.innerHTML = `
-    <span class="tribe-header-name" style="color: ${tribeColor}">${tribeName}</span>
+    <span class="tribe-header-name" style="color: ${tribeColor}">${escapeHtml(tribeName)}</span>
     <span class="tribe-header-count">${members.length} members</span>
   `;
   sectionEl.appendChild(header);
@@ -143,7 +143,7 @@ function buildCard(contestant, tribeColor) {
   card.innerHTML = `
     <div class="card-selected-indicator">▶ Your pick</div>
     <div class="card-tribe-pip" style="background-color: ${tribeColor}"></div>
-    <div class="card-name">${contestant.name}</div>
+    <div class="card-name">${escapeHtml(contestant.name)}</div>
     <div class="card-stats">
       <div class="stat-row">
         <span class="stat-label">Challenge</span>

@@ -31,8 +31,8 @@ function renderSwapScreen(container, state) {
     const isYou     = c.id === player.id;
     return `
       <div class="swap-cast-chip ${isYou ? "swap-cast-chip-you" : ""}">
-        <span class="swap-cast-name">${c.name}${isYou ? " (You)" : ""}</span>
-        <span class="swap-cast-origin" style="color:${origColor}">from ${origName}</span>
+        <span class="swap-cast-name">${escapeHtml(c.name)}${isYou ? " (You)" : ""}</span>
+        <span class="swap-cast-origin" style="color:${origColor}">from ${escapeHtml(origName)}</span>
       </div>
     `;
   }
@@ -48,9 +48,9 @@ function renderSwapScreen(container, state) {
     const colorB = SEASON_CONFIG.tribeColors.B;
     return `
       <span class="swap-origin-stat">
-        <span style="color:${colorA}">${fromA} ${nameA}</span>
+        <span style="color:${colorA}">${fromA} ${escapeHtml(nameA)}</span>
         &nbsp;·&nbsp;
-        <span style="color:${colorB}">${fromB} ${nameB}</span>
+        <span style="color:${colorB}">${fromB} ${escapeHtml(nameB)}</span>
       </span>
     `;
   }
@@ -80,7 +80,7 @@ function renderSwapScreen(container, state) {
       <div class="swap-tribes">
         <div class="swap-tribe-col">
           <div class="swap-tribe-header">
-            <span class="swap-tribe-name" style="color:${tribeAColor}">${tribeAName}</span>
+            <span class="swap-tribe-name" style="color:${tribeAColor}">${escapeHtml(tribeAName)}</span>
             <span class="swap-tribe-count">${newA.length} member${newA.length !== 1 ? "s" : ""}</span>
           </div>
           <div class="swap-tribe-origin-row">${originSummary(newA)}</div>
@@ -91,7 +91,7 @@ function renderSwapScreen(container, state) {
 
         <div class="swap-tribe-col">
           <div class="swap-tribe-header">
-            <span class="swap-tribe-name" style="color:${tribeBColor}">${tribeBName}</span>
+            <span class="swap-tribe-name" style="color:${tribeBColor}">${escapeHtml(tribeBName)}</span>
             <span class="swap-tribe-count">${newB.length} member${newB.length !== 1 ? "s" : ""}</span>
           </div>
           <div class="swap-tribe-origin-row">${originSummary(newB)}</div>

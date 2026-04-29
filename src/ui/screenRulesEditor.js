@@ -58,6 +58,15 @@ function drawShell(container) {
 
       <div class="rules-editor-errors" id="rules-editor-errors"></div>
 
+      <!-- Season title -->
+      <div class="rules-section">
+        <h3 class="rules-section-title">Season</h3>
+        <div class="rules-row">
+          <label for="season-name">Season title</label>
+          <input type="text" id="season-name" maxlength="40" />
+        </div>
+      </div>
+
       <!-- Cast (info only) -->
       <div class="rules-section">
         <h3 class="rules-section-title">Cast</h3>
@@ -171,6 +180,9 @@ function populateInputs(container) {
   const t = _workingTemplate;
   const $ = sel => container.querySelector(sel);
 
+  // Season title
+  $("#season-name").value = t.meta.name;
+
   // Cast info — count + helpful note
   $("#rules-cast-info").innerHTML = `
     <strong>${t.cast.length}</strong> contestants
@@ -229,11 +241,19 @@ function populateInputs(container) {
 function wireInputs(container) {
   const $ = sel => container.querySelector(sel);
 
-  // Tribe rows — name, color, size for each
+  // Season title — same trim-store pattern as tribe names below.
+  $("#season-name").addEventListener("input", e => {
+    _workingTemplate.meta.name = e.target.value.trim();
+  });
+
+  // Tribe rows — name, color, size for each.
+  // Names are trim-stored so trailing whitespace doesn't leak into UI text.
+  // Empty values are stored as-is — validation surfaces a clear "cannot be
+  // blank" error on Save instead of silently keeping the prior value.
   container.querySelectorAll(".rules-tribe-name").forEach(el => {
     el.addEventListener("input", e => {
       const i = +e.target.dataset.tribeIndex;
-      _workingTemplate.tribes.initial[i].name = e.target.value.trim() || _workingTemplate.tribes.initial[i].name;
+      _workingTemplate.tribes.initial[i].name = e.target.value.trim();
     });
   });
   container.querySelectorAll(".rules-tribe-color").forEach(el => {
@@ -266,7 +286,9 @@ function wireInputs(container) {
     _workingTemplate.merge.triggerCount = clampInt(e.target.value, 2, 50);
   });
   $("#merge-name").addEventListener("input", e => {
-    _workingTemplate.merge.tribeName = e.target.value.trim() || _workingTemplate.merge.tribeName;
+    // Same trim-store-don't-fallback pattern as tribe names — let validation
+    // catch blanks rather than silently reverting.
+    _workingTemplate.merge.tribeName = e.target.value.trim();
   });
   $("#merge-color").addEventListener("input", e => {
     _workingTemplate.merge.tribeColor = e.target.value;
@@ -372,18 +394,9 @@ function clampInt(value, min, max) {
   return Math.max(min, Math.min(max, n));
 }
 
-// Escape utilities — kept local to this file to avoid coupling with the
-// cast editor (which has its own copies). Future could share via a util.
-function escapeHtml(s) {
-  if (s == null) return "";
-  return String(s)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
+// escapeHtml lives in src/util.js (loaded earlier). escapeHtmlAttr is a thin
+// alias kept locally because attribute escaping has the same needs as text
+// escaping for our purposes (we don't construct unquoted attributes).
 function escapeHtmlAttr(s) {
   return escapeHtml(s);
 }

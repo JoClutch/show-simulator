@@ -53,12 +53,12 @@ function renderTribalChallengeScreen(container, state) {
       <div class="challenge-outcome-grid">
         <div class="challenge-outcome-cell outcome-win">
           <div class="outcome-label">Immunity</div>
-          <div class="outcome-tribe" style="color:${winnerColor}">${winnerName}</div>
+          <div class="outcome-tribe" style="color:${winnerColor}">${escapeHtml(winnerName)}</div>
           <div class="outcome-sub">Safe from the vote tonight</div>
         </div>
         <div class="challenge-outcome-cell outcome-loss">
           <div class="outcome-label">Tribal Council</div>
-          <div class="outcome-tribe" style="color:${loserColor}">${loserName}</div>
+          <div class="outcome-tribe" style="color:${loserColor}">${escapeHtml(loserName)}</div>
           <div class="outcome-sub">Someone goes home tonight</div>
         </div>
       </div>

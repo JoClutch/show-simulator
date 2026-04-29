@@ -109,7 +109,7 @@ function renderCampLifeScreen(container, state) {
       const scopeLabel = i.scope === "merged"
         ? SEASON_CONFIG.mergeTribeName
         : SEASON_CONFIG.tribeNames[i.scope];
-      return `<span class="camp-idol-label">You hold a Hidden Immunity Idol <span class="camp-idol-scope">(${scopeLabel})</span></span>`;
+      return `<span class="camp-idol-label">You hold a Hidden Immunity Idol <span class="camp-idol-scope">(${escapeHtml(scopeLabel)})</span></span>`;
     }).join("");
     return `<div class="camp-idol-badge"><span class="camp-idol-icon">◆</span>${labels}</div>`;
   }
@@ -160,7 +160,7 @@ function renderCampLifeScreen(container, state) {
         <div class="camp-alliance-card camp-alliance-${tier}${isStale ? " camp-alliance-stale" : ""}">
           <div class="camp-alliance-header">
             <span class="camp-alliance-icon">⚐</span>
-            <span class="camp-alliance-name">${a.name}</span>
+            <span class="camp-alliance-name">${escapeHtml(a.name)}</span>
             ${staleBadge}
             <span class="camp-alliance-strength-num">${strengthInt}/10</span>
           </div>
@@ -189,7 +189,7 @@ function renderCampLifeScreen(container, state) {
         <div class="camp-heading-block">
           <p class="screen-eyebrow">Episode ${state.round} · Day ${getDay(state) + (isPhase2 ? DAY_OFFSETS.campPhase2 : DAY_OFFSETS.campPhase1)}</p>
           <h2>${phaseLabel}</h2>
-          <span class="camp-tribe-tag" style="color:${tribeColor}">${tribeName} tribe</span>
+          <span class="camp-tribe-tag" style="color:${tribeColor}">${escapeHtml(tribeName)} tribe</span>
           <span class="camp-step-note">${stepNote}</span>
         </div>
         <div class="camp-header-right">
@@ -220,8 +220,8 @@ function renderCampLifeScreen(container, state) {
 
       <div class="camp-tribemates">
         <span class="camp-tribemates-label">Your tribe:</span>
-        <span class="tribe-chip tribe-chip-you">You (${player.name})</span>
-        ${tribemates.map(c => `<span class="tribe-chip">${c.name}</span>`).join("")}
+        <span class="tribe-chip tribe-chip-you">You (${escapeHtml(player.name)})</span>
+        ${tribemates.map(c => `<span class="tribe-chip">${escapeHtml(c.name)}</span>`).join("")}
       </div>
 
       <div id="action-area" class="action-area"></div>
@@ -265,7 +265,7 @@ function renderCampLifeScreen(container, state) {
             <span class="season-log-entry-day">Day ${e.day}</span>
             <span class="season-log-entry-tag">${tag}</span>
           </div>
-          <div class="season-log-entry-text">${e.text}</div>
+          <div class="season-log-entry-text">${escapeHtml(e.text)}</div>
         </div>
       `;
     }).join("");
@@ -404,12 +404,12 @@ function renderCampLifeScreen(container, state) {
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   function appendFeedback(action, target, text) {
-    const tag   = target ? `${action.label} · ${target.name}` : action.label;
+    const tag   = target ? `${action.label} · ${escapeHtml(target.name)}` : action.label;
     const entry = document.createElement("div");
     entry.className = "feedback-entry";
     entry.innerHTML = `
       <span class="feedback-action-tag">${tag}</span>
-      <span class="feedback-text">${text}</span>
+      <span class="feedback-text">${escapeHtml(text)}</span>
     `;
     feedbackLog.insertBefore(entry, feedbackLog.firstChild);
   }

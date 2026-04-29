@@ -50,8 +50,8 @@ function renderResultsScreen(container, state) {
                   ${isWin ? "results-winner-row" : ""}
                   ${isMe  ? "results-player-row" : ""}">
         <span class="results-place">${ordinal(place)}${isWin ? " 🏆" : ""}</span>
-        <span class="results-name">${contestant.name}${isMe ? " (you)" : ""}</span>
-        <span class="results-tribe" style="color:${origColor}">${origName}</span>
+        <span class="results-name">${escapeHtml(contestant.name)}${isMe ? " (you)" : ""}</span>
+        <span class="results-tribe" style="color:${origColor}">${escapeHtml(origName)}</span>
         ${votesCell}
       </div>
     `;
@@ -104,7 +104,7 @@ function renderResultsScreen(container, state) {
 
   container.innerHTML = `
     <div class="screen">
-      <p class="screen-eyebrow">${SEASON_CONFIG.name}</p>
+      <p class="screen-eyebrow">${escapeHtml(SEASON_CONFIG.name)}</p>
       <h2>Season Results</h2>
 
       <div class="event-log">

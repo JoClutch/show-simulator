@@ -37,9 +37,9 @@ function renderFTCCeremony(container, state) {
     return `
       <div class="ftc-finalist-card ${isPlayer ? "ftc-finalist-player" : ""}">
         <div class="ftc-finalist-name">
-          ${f.name}${isPlayer ? " <span class=\"ftc-you-tag\">(you)</span>" : ""}
+          ${escapeHtml(f.name)}${isPlayer ? " <span class=\"ftc-you-tag\">(you)</span>" : ""}
         </div>
-        <div class="ftc-finalist-origin" style="color:${origColor}">${origName}</div>
+        <div class="ftc-finalist-origin" style="color:${origColor}">${escapeHtml(origName)}</div>
         <div class="ftc-finalist-stats">
           <span>Chal&nbsp;${f.challenge}</span>
           <span>Soc&nbsp;${f.social}</span>
@@ -59,7 +59,7 @@ function renderFTCCeremony(container, state) {
 
     return `
       <div class="ftc-jury-chip">
-        <span class="ftc-jury-chip-name">${j.name}</span>
+        <span class="ftc-jury-chip-name">${escapeHtml(j.name)}</span>
         <span class="ftc-jury-chip-seat" style="color:${origColor}">Juror ${j.juryNumber}</span>
       </div>
     `;
@@ -74,7 +74,7 @@ function renderFTCCeremony(container, state) {
 
   container.innerHTML = `
     <div class="screen">
-      <p class="screen-eyebrow">Day ${state.ftcDay} · ${SEASON_CONFIG.name}</p>
+      <p class="screen-eyebrow">Day ${state.ftcDay} · ${escapeHtml(SEASON_CONFIG.name)}</p>
       <h2>Final Tribal Council</h2>
       <p class="ftc-intro muted">${ceremonyIntro}</p>
       ${playerNote}
@@ -222,7 +222,7 @@ function renderFTCReveal(container, state, speechBonus) {
       isForPlayer && !isForWinner ? "reveal-card-good"    : "",
       isDecisive                  ? "reveal-card-decisive": "",
     ].filter(Boolean).join(" ");
-    card.innerHTML = `<span class="reveal-card-name">${target.name}</span>`;
+    card.innerHTML = `<span class="reveal-card-name">${escapeHtml(target.name)}</span>`;
     cardsEl.appendChild(card);
     requestAnimationFrame(() => card.classList.add("revealed"));
 
@@ -271,7 +271,7 @@ function renderFTCWinner(container, state, winner, allVotes) {
       return `
         <div class="ftc-result-row ${isWinner ? "ftc-result-winner" : "ftc-result-loser"}">
           <span class="ftc-result-name">
-            ${f.name}${isMe ? " (you)" : ""}${isWinner ? " 🏆" : ""}
+            ${escapeHtml(f.name)}${isMe ? " (you)" : ""}${isWinner ? " 🏆" : ""}
           </span>
           <span class="ftc-result-votes">${count} vote${count !== 1 ? "s" : ""}</span>
         </div>
@@ -287,20 +287,20 @@ function renderFTCWinner(container, state, winner, allVotes) {
 
   const headline = isPlayer
     ? "You Are the Sole Survivor!"
-    : `${winner.name} Wins!`;
+    : `${escapeHtml(winner.name)} Wins!`;
   const subhead  = isPlayer
     ? pickFlavor(FTC_WINNER_PLAYER_SUBLINES)
     : getFTCWinnerOtherLine(winner.name);
 
   container.innerHTML = `
     <div class="screen">
-      <p class="screen-eyebrow">Day ${state.ftcDay} · ${SEASON_CONFIG.name}</p>
+      <p class="screen-eyebrow">Day ${state.ftcDay} · ${escapeHtml(SEASON_CONFIG.name)}</p>
       <h1 class="ftc-winner-headline">${headline}</h1>
-      <p class="ftc-winner-subhead">${subhead}</p>
+      <p class="ftc-winner-subhead">${escapeHtml(subhead)}</p>
 
       <div class="ftc-winner-card">
-        <div class="ftc-winner-name">${winner.name}</div>
-        <div class="ftc-winner-origin" style="color:${origColor}">${origName}</div>
+        <div class="ftc-winner-name">${escapeHtml(winner.name)}</div>
+        <div class="ftc-winner-origin" style="color:${origColor}">${escapeHtml(origName)}</div>
         <div class="ftc-winner-label">Sole Survivor</div>
       </div>
 

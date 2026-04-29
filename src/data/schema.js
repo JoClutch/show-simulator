@@ -204,7 +204,7 @@ function validateSeasonTemplate(t) {
     if (typeof t.meta.id !== "string" || t.meta.id.trim() === "")
       errors.push("meta.id is required");
     if (typeof t.meta.name !== "string" || t.meta.name.trim() === "")
-      errors.push("meta.name is required");
+      errors.push("meta.name (season title) cannot be blank");
   }
 
   // ── Tribes ──
@@ -220,7 +220,10 @@ function validateSeasonTemplate(t) {
       if (typeof tr.label !== "string" || tr.label === "") errors.push(`${path}.label is required`);
       else if (labels.has(tr.label)) errors.push(`${path}.label "${tr.label}" duplicated`);
       else labels.add(tr.label);
-      if (typeof tr.name !== "string" || tr.name === "") errors.push(`${path}.name is required`);
+      // Trim-aware: blank or whitespace-only names are rejected so a stray
+      // delete in an editor input fires a clear error rather than producing
+      // an invisible tribe label in the UI.
+      if (typeof tr.name !== "string" || tr.name.trim() === "") errors.push(`${path}.name cannot be blank`);
       if (typeof tr.color !== "string" || tr.color === "") errors.push(`${path}.color is required`);
       if (typeof tr.size !== "number" || tr.size < 1 || !Number.isInteger(tr.size))
         errors.push(`${path}.size must be a positive integer`);
@@ -244,8 +247,8 @@ function validateSeasonTemplate(t) {
   } else {
     if (typeof t.merge.triggerCount !== "number" || t.merge.triggerCount < 2)
       errors.push("merge.triggerCount must be a number ≥2");
-    if (typeof t.merge.tribeName !== "string" || t.merge.tribeName === "")
-      errors.push("merge.tribeName is required");
+    if (typeof t.merge.tribeName !== "string" || t.merge.tribeName.trim() === "")
+      errors.push("merge.tribeName cannot be blank");
     if (typeof t.merge.tribeColor !== "string" || t.merge.tribeColor === "")
       errors.push("merge.tribeColor is required");
   }

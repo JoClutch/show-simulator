@@ -117,7 +117,7 @@ function drawCastBody(container) {
     const expectedSize = SEASON_CONFIG.tribeSize;
     html += renderTribeColumn({
       label,
-      title: `${tribeName} (Tribe ${label})`,
+      title: `${escapeHtml(tribeName)} (Tribe ${label})`,
       color: tribeColor,
       members: tribeMembers,
       expectedSize,
@@ -320,8 +320,8 @@ function openModal(container, contestant) {
         <label for="form-tribe">Starting tribe</label>
         <select id="form-tribe">
           <option value=""  ${draft.tribe == null ? "selected" : ""}>Unassigned (random)</option>
-          <option value="A" ${draft.tribe === "A" ? "selected" : ""}>${SEASON_CONFIG.tribeNames.A} (A)</option>
-          <option value="B" ${draft.tribe === "B" ? "selected" : ""}>${SEASON_CONFIG.tribeNames.B} (B)</option>
+          <option value="A" ${draft.tribe === "A" ? "selected" : ""}>${escapeHtml(SEASON_CONFIG.tribeNames.A)} (A)</option>
+          <option value="B" ${draft.tribe === "B" ? "selected" : ""}>${escapeHtml(SEASON_CONFIG.tribeNames.B)} (B)</option>
         </select>
       </div>
 
@@ -425,17 +425,8 @@ function clampInt(value) {
   return Math.max(STAT_MIN, Math.min(STAT_MAX, n));
 }
 
-// Minimal HTML escape — used for any user-typed text rendered into the DOM.
-function escapeHtml(s) {
-  if (s == null) return "";
-  return String(s)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
+// escapeHtml lives in src/util.js (loaded earlier). escapeHtmlAttr is kept
+// as a local alias for readability at attribute-context call sites.
 function escapeHtmlAttr(s) {
   return escapeHtml(s);
 }

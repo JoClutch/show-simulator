@@ -27,16 +27,16 @@ function renderEliminationScreen(container, state) {
       <div class="elim-status-row">
         <span class="elim-status-label">Merged tribe</span>
         <span class="elim-status-value" style="color:${SEASON_CONFIG.mergeTribeColor}">
-          ${SEASON_CONFIG.mergeTribeName} · ${state.tribes.merged.length} left
+          ${escapeHtml(SEASON_CONFIG.mergeTribeName)} · ${state.tribes.merged.length} left
         </span>
       </div>`
     : `
       <div class="elim-status-row tribe-breakdown">
         <span class="elim-status-label">Tribe sizes</span>
         <span class="elim-status-value">
-          <span style="color:${SEASON_CONFIG.tribeColors.A}">${SEASON_CONFIG.tribeNames.A} ${state.tribes.A.length}</span>
+          <span style="color:${SEASON_CONFIG.tribeColors.A}">${escapeHtml(SEASON_CONFIG.tribeNames.A)} ${state.tribes.A.length}</span>
           &nbsp;·&nbsp;
-          <span style="color:${SEASON_CONFIG.tribeColors.B}">${SEASON_CONFIG.tribeNames.B} ${state.tribes.B.length}</span>
+          <span style="color:${SEASON_CONFIG.tribeColors.B}">${escapeHtml(SEASON_CONFIG.tribeNames.B)} ${state.tribes.B.length}</span>
         </span>
       </div>`;
 
@@ -53,7 +53,7 @@ function renderEliminationScreen(container, state) {
     : "";
 
   const originalLabel = isMerged && eliminated.originalTribe
-    ? ` · Originally ${SEASON_CONFIG.tribeNames[eliminated.originalTribe]}`
+    ? ` · Originally ${escapeHtml(SEASON_CONFIG.tribeNames[eliminated.originalTribe])}`
     : "";
 
   const nextBtn = isPlayer
@@ -66,14 +66,14 @@ function renderEliminationScreen(container, state) {
       <h2>${headline}</h2>
 
       <div class="elim-card">
-        <div class="elim-name">${eliminated.name}</div>
+        <div class="elim-name">${escapeHtml(eliminated.name)}</div>
         <div class="elim-tribe" style="color:${tribeColor}">
-          ${tribeName}${originalLabel} &nbsp;·&nbsp; ${ordinal(placement)} out
+          ${escapeHtml(tribeName)}${originalLabel} &nbsp;·&nbsp; ${ordinal(placement)} out
         </div>
       </div>
 
       <div class="elim-body">
-        <p>${voteOutMsg}</p>
+        <p>${escapeHtml(voteOutMsg)}</p>
         ${flavorHTML}
       </div>
 
@@ -151,8 +151,8 @@ function buildJuryPanelHTML(state, eliminated, isPlayer) {
     return `
       <div class="jury-chip">
         ${dotHTML}
-        <span class="jury-chip-name">${j.name}</span>
-        <span class="jury-chip-origin" style="color:${origColor}">${origName}</span>
+        <span class="jury-chip-name">${escapeHtml(j.name)}</span>
+        <span class="jury-chip-origin" style="color:${origColor}">${escapeHtml(origName)}</span>
       </div>
     `;
   }).join("");

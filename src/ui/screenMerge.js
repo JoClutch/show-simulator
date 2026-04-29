@@ -31,7 +31,7 @@ function renderMergeScreen(container, state) {
       <div class="merge-hero">
         <div class="merge-necklace-icon">⬡</div>
         <h1 class="merge-headline">The Merge</h1>
-        <div class="merge-tribe-name" style="color:${mergeColor}">${mergeName}</div>
+        <div class="merge-tribe-name" style="color:${mergeColor}">${escapeHtml(mergeName)}</div>
       </div>
 
       <div class="event-log merge-summary">
@@ -46,11 +46,11 @@ function renderMergeScreen(container, state) {
 
       <div class="merge-tribe-tally">
         <span class="merge-tally-item" style="color:${colorA}">
-          ${nameA} — ${countA} survivor${countA !== 1 ? "s" : ""}
+          ${escapeHtml(nameA)} — ${countA} survivor${countA !== 1 ? "s" : ""}
         </span>
         <span class="merge-tally-sep">·</span>
         <span class="merge-tally-item" style="color:${colorB}">
-          ${nameB} — ${countB} survivor${countB !== 1 ? "s" : ""}
+          ${escapeHtml(nameB)} — ${countB} survivor${countB !== 1 ? "s" : ""}
         </span>
       </div>
 
@@ -63,8 +63,8 @@ function renderMergeScreen(container, state) {
             const isYou     = c.id === player.id;
             return `
               <div class="merge-cast-chip ${isYou ? "merge-cast-chip-you" : ""}">
-                <span class="merge-cast-name">${c.name}${isYou ? " (You)" : ""}</span>
-                <span class="merge-cast-origin" style="color:${origColor}">${origName}</span>
+                <span class="merge-cast-name">${escapeHtml(c.name)}${isYou ? " (You)" : ""}</span>
+                <span class="merge-cast-origin" style="color:${origColor}">${escapeHtml(origName)}</span>
               </div>
             `;
           }).join("")}

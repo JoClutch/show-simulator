@@ -40,7 +40,7 @@ function renderPreMergeTribalScreen(container, state) {
         <p class="screen-eyebrow">Episode ${state.round} · Day ${getDay(state) + DAY_OFFSETS.tribal}</p>
         <h2>Tribal Council</h2>
         <div class="tribal-meta">
-          <span style="color:${tribeColor}">${tribeName}</span>
+          <span style="color:${tribeColor}">${escapeHtml(tribeName)}</span>
           &nbsp;·&nbsp; ${tribe.length} members attending
         </div>
       </div>
@@ -103,7 +103,7 @@ function renderMergedTribalScreen(container, state) {
         <p class="screen-eyebrow">Episode ${state.round} · Day ${getDay(state) + DAY_OFFSETS.tribal}</p>
         <h2>Tribal Council</h2>
         <div class="tribal-meta">
-          <span style="color:${mergeColor}">${mergeName}</span>
+          <span style="color:${mergeColor}">${escapeHtml(mergeName)}</span>
           &nbsp;·&nbsp; ${tribe.length} players attending
           ${state.jury.length > 0
             ? `&nbsp;·&nbsp; Jury of ${state.jury.length}`
@@ -116,7 +116,7 @@ function renderMergedTribalScreen(container, state) {
       ${holder ? `
         <div class="tribal-immunity-note">
           <span class="immunity-icon">⬡</span>
-          <strong>${holder.id === player.id ? "You hold" : `${holder.name} holds`}
+          <strong>${holder.id === player.id ? "You hold" : `${escapeHtml(holder.name)} holds`}
           Individual Immunity</strong> and cannot be voted out tonight.
         </div>
       ` : ""}
@@ -166,7 +166,7 @@ function buildVotingGrid(container, eligible, getVote, setVote) {
     const card = document.createElement("div");
     card.className = "contestant-card";
     card.innerHTML = `
-      <div class="card-name">${c.name}</div>
+      <div class="card-name">${escapeHtml(c.name)}</div>
       <div class="card-stats">
         <div class="stat-row">
           <span class="stat-label">Challenge</span>
@@ -352,9 +352,9 @@ function showAIIdolReveal(container, state, contestant, onContinue) {
 
       <div class="idol-reveal-card idol-reveal-ai">
         <div class="idol-reveal-icon">◆</div>
-        <div class="idol-reveal-headline">${contestant.name} plays an idol!</div>
-        <p class="idol-reveal-line">${announcement}</p>
-        <p class="idol-reveal-effect">${effect}</p>
+        <div class="idol-reveal-headline">${escapeHtml(contestant.name)} plays an idol!</div>
+        <p class="idol-reveal-line">${escapeHtml(announcement)}</p>
+        <p class="idol-reveal-effect">${escapeHtml(effect)}</p>
       </div>
     </div>
   `;
@@ -426,9 +426,9 @@ function renderRevealPhase(container, state, revealOrder, eliminated, protectedI
       isDecisive                   ? "reveal-card-decisive" : "",
     ].filter(Boolean).join(" ");
     card.innerHTML = isVoided
-      ? `<span class="reveal-card-name">${target.name}</span>
+      ? `<span class="reveal-card-name">${escapeHtml(target.name)}</span>
          <span class="reveal-card-void-badge">VOID</span>`
-      : `<span class="reveal-card-name">${target.name}</span>`;
+      : `<span class="reveal-card-name">${escapeHtml(target.name)}</span>`;
     cardsEl.appendChild(card);
 
     requestAnimationFrame(() => card.classList.add("revealed"));
@@ -468,7 +468,7 @@ function renderTally(container, liveTally) {
 
   container.innerHTML = sorted.map(entry => `
     <div class="tally-row">
-      <span class="tally-name">${entry.name}</span>
+      <span class="tally-name">${escapeHtml(entry.name)}</span>
       <span class="tally-pips">${"●".repeat(entry.count)}</span>
       <span class="tally-count">${entry.count}</span>
     </div>
