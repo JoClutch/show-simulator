@@ -1549,3 +1549,340 @@ button:disabled {
   width: 6rem;
   text-align: right;
 }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   DEV PANEL  —  Remove the <script> tag in index.html to hide from players.
+   Everything below this line is dev-only. The panel never modifies game state
+   (except the balance sliders which write to DEV_CONFIG / SEASON_CONFIG).
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* Toggle pill — always visible, bottom-left */
+.dev-pill {
+  position: fixed;
+  bottom: 1rem;
+  left: 1rem;
+  z-index: 9998;
+  background: #2a2a4a;
+  color: #aaa;
+  border: 1px solid #444;
+  border-radius: 999px;
+  padding: 0.3rem 0.8rem;
+  font-size: 0.72rem;
+  font-family: monospace;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.2s, border-color 0.2s;
+}
+
+.dev-pill:hover {
+  opacity: 1;
+  border-color: #888;
+  background: #2a2a4a;
+  color: #ccc;
+}
+
+/* Panel drawer — fixed right side */
+.dev-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 380px;
+  height: 100vh;
+  background: #111120;
+  border-left: 1px solid #2a2a50;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  font-family: monospace;
+  font-size: 0.8rem;
+  color: #c0c0d8;
+  transition: transform 0.2s ease;
+  overflow: hidden;
+}
+
+.dev-panel.dev-hidden {
+  transform: translateX(100%);
+}
+
+/* Header */
+.dev-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.65rem 1rem;
+  background: #1a1a35;
+  border-bottom: 1px solid #2a2a50;
+  flex-shrink: 0;
+}
+
+.dev-title {
+  font-size: 0.78rem;
+  font-weight: bold;
+  color: var(--gold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dev-close {
+  background: transparent;
+  border: none;
+  color: #666;
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 0.1rem 0.3rem;
+  font-family: monospace;
+}
+
+.dev-close:hover {
+  color: #ccc;
+  background: transparent;
+}
+
+/* Tabs */
+.dev-tabs {
+  display: flex;
+  border-bottom: 1px solid #2a2a50;
+  flex-shrink: 0;
+}
+
+.dev-tab {
+  flex: 1;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #666;
+  font-family: monospace;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0.5rem 0;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.dev-tab:hover {
+  color: #aaa;
+  background: transparent;
+}
+
+.dev-tab.active {
+  color: var(--gold);
+  border-bottom-color: var(--gold);
+  background: transparent;
+}
+
+/* Body — scrollable content area */
+.dev-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: #333 transparent;
+}
+
+.dev-pane {
+  display: none;
+  padding: 0.75rem;
+}
+
+.dev-pane.active {
+  display: block;
+}
+
+/* Footer */
+.dev-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  border-top: 1px solid #2a2a50;
+  flex-shrink: 0;
+}
+
+.dev-refresh {
+  background: transparent;
+  border: 1px solid #333;
+  color: #777;
+  font-family: monospace;
+  font-size: 0.72rem;
+  padding: 0.25rem 0.6rem;
+  cursor: pointer;
+  border-radius: 3px;
+}
+
+.dev-refresh:hover {
+  border-color: #666;
+  color: #aaa;
+  background: transparent;
+}
+
+.dev-hint {
+  font-size: 0.65rem;
+  color: #444;
+}
+
+/* ── Shared section components ── */
+
+.dev-section {
+  margin-bottom: 1rem;
+  padding-bottom: 0.85rem;
+  border-bottom: 1px solid #1e1e38;
+}
+
+.dev-section:last-child {
+  border-bottom: none;
+}
+
+.dev-section-hd {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #556;
+  margin-bottom: 0.5rem;
+}
+
+/* Key-value rows */
+.dev-kv {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.3rem;
+  gap: 0.5rem;
+}
+
+.dev-k {
+  color: #778;
+  flex-shrink: 0;
+  font-size: 0.75rem;
+}
+
+.dev-v {
+  text-align: right;
+  flex: 1;
+  font-size: 0.78rem;
+}
+
+.dev-tag {
+  display: inline-block;
+  font-size: 0.68rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 3px;
+  background: #1e1e38;
+  border: 1px solid #2e2e55;
+  color: #aab;
+  letter-spacing: 0.04em;
+  font-family: monospace;
+}
+
+.dev-tag-merge {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.dev-note {
+  font-size: 0.7rem;
+  margin: 0.3rem 0 0;
+  line-height: 1.5;
+}
+
+/* ── Tables ── */
+.dev-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+}
+
+.dev-table th {
+  text-align: left;
+  color: #556;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.2rem 0.3rem;
+  border-bottom: 1px solid #1e1e38;
+}
+
+.dev-table td {
+  padding: 0.22rem 0.3rem;
+  color: #b0b0c8;
+  border-bottom: 1px solid #16162e;
+}
+
+.dev-table tr:last-child td {
+  border-bottom: none;
+}
+
+/* Row highlights */
+.dev-row-you td:first-child { color: var(--gold); }
+
+.dev-row-danger { background: rgba(180, 60, 60, 0.12); }
+.dev-row-danger td { color: #d08080; }
+
+.dev-row-elim td { opacity: 0.5; }
+
+/* ── Value colour classes ── */
+.dev-hi  { color: #7dba8f; }   /* green — good/high */
+.dev-mid { color: #b0a060; }   /* amber — middle    */
+.dev-lo  { color: #c07080; }   /* red   — bad/low   */
+.dev-dim { color: #556; }      /* grey  — secondary */
+
+/* ── Perspective select ── */
+.dev-select {
+  background: #1a1a35;
+  border: 1px solid #2e2e55;
+  border-radius: 3px;
+  color: #c0c0d8;
+  font-family: monospace;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.4rem;
+  flex: 1;
+  max-width: 200px;
+}
+
+/* ── Balance sliders ── */
+.dev-slider-row {
+  margin-bottom: 0.85rem;
+}
+
+.dev-slider-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.25rem;
+}
+
+.dev-slider-val {
+  font-size: 0.8rem;
+  color: var(--gold);
+  font-weight: bold;
+  font-family: monospace;
+  min-width: 2rem;
+  text-align: right;
+}
+
+.dev-slider {
+  width: 100%;
+  accent-color: var(--gold);
+  cursor: pointer;
+  height: 3px;
+  margin-bottom: 0.2rem;
+}
+
+.dev-reset-btn {
+  background: transparent;
+  border: 1px solid #3a3a6a;
+  color: #778;
+  font-family: monospace;
+  font-size: 0.75rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: 3px;
+  cursor: pointer;
+  width: 100%;
+}
+
+.dev-reset-btn:hover {
+  border-color: #666;
+  color: #aaa;
+  background: transparent;
+}

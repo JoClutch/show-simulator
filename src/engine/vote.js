@@ -105,9 +105,11 @@ function pickVoteTarget(state, voter, tribe) {
     const socialThreat    = c.social    * (voter.strategy / 15);
     const challengeThreat = c.challenge * (voter.strategy / 25);
 
-    // Noise: scaled inversely by strategy.
-    // Strategy 10 → ±1.5; strategy 1 → ±7.5.
-    const noiseRange = Math.max(3, (11 - voter.strategy) * 1.5);
+    // Noise: scaled inversely by strategy, then multiplied by DEV_CONFIG override.
+    // Strategy 10 → ±1.5; strategy 1 → ±7.5. Set voteNoiseMultiplier=0 for
+    // fully deterministic votes (useful for tuning AI behaviour).
+    const noiseRange = Math.max(3, (11 - voter.strategy) * 1.5)
+                     * (window.DEV_CONFIG?.voteNoiseMultiplier ?? 1);
     const noise      = (Math.random() - 0.5) * noiseRange;
 
     const score = rel + bondProtection + trustFactor

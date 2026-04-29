@@ -64,7 +64,8 @@ function scoreFinalist(juror, finalist, speechBonus) {
   const suspicion = (finalist.suspicion ?? 0) * 2;
   const social    = finalist.social    * 0.8;
   const strategy  = finalist.strategy  * 0.5;
-  const noise     = (Math.random() - 0.5) * 10;   // ±5
+  const noise     = (Math.random() - 0.5) * 10     // ±5 base
+                  * (window.DEV_CONFIG?.voteNoiseMultiplier ?? 1);
 
   const score = sentiment + speechBonus - suspicion + social + strategy + noise;
 

@@ -102,9 +102,13 @@ function runChallenge(tribes) {
 // Sums the challenge stats of all tribe members, then adds bounded random noise.
 // Noise scales with tribe size so upset probability stays consistent.
 // Strong tribes still win most of the time; weaker tribes can pull off upsets.
+// challengeRandomness=0 makes the stronger tribe win every time.
 function calcTribeScore(members) {
   const base  = members.reduce((total, c) => total + c.challenge, 0);
-  const noise = Math.floor(Math.random() * members.length * 2.5);
+  const noise = Math.floor(
+    Math.random() * members.length * 2.5
+    * (window.DEV_CONFIG?.challengeRandomness ?? 1)
+  );
   return base + noise;
 }
 
@@ -126,7 +130,7 @@ function runIndividualChallenge(members) {
 
   const scored = members.map(c => ({
     contestant: c,
-    score: c.challenge + Math.random() * 4,
+    score: c.challenge + Math.random() * 4 * (window.DEV_CONFIG?.challengeRandomness ?? 1),
   }));
   scored.sort((a, b) => b.score - a.score);
 

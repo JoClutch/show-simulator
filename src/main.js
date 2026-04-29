@@ -38,7 +38,10 @@
 //       ↓  onFinalTribalDone(winner, finalVotes)
 //   showScreen("results")
 
-let gameState;
+// var (not let) so window.gameState is accessible to devPanel.js.
+// The object is always mutated in place — never reassigned — so a single
+// window reference stays valid for the entire session.
+var gameState;
 
 // ── Lifecycle callbacks ───────────────────────────────────────────────────────
 
