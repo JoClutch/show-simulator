@@ -520,6 +520,9 @@ button:disabled {
 }
 
 .saved-setups-toolbar {
+  display: flex;
+  gap: 0.55rem;
+  flex-wrap: wrap;
   margin-bottom: 1rem;
 }
 
@@ -539,10 +542,28 @@ button:disabled {
   filter: brightness(1.1);
 }
 
-.saved-setups-save-btn:disabled {
+.saved-setups-save-btn:disabled,
+.saved-setups-import-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
   filter: grayscale(0.5);
+}
+
+/* Import button — secondary action, neutral styling next to the gold Save */
+.saved-setups-import-btn {
+  background: transparent;
+  border: 1px solid var(--border-mid);
+  color: var(--text-dim);
+  padding: 0.55rem 1.1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.9rem;
+}
+
+.saved-setups-import-btn:hover {
+  border-color: var(--text-primary);
+  color: var(--text-primary);
 }
 
 /* List + cards */
@@ -605,6 +626,7 @@ button:disabled {
 }
 
 .saved-setup-load-btn,
+.saved-setup-download-btn,
 .saved-setup-delete-btn {
   padding: 0.45rem 0.95rem;
   border-radius: 4px;
@@ -622,6 +644,18 @@ button:disabled {
 
 .saved-setup-load-btn:hover {
   filter: brightness(1.1);
+}
+
+/* Download — neutral secondary, sits between Load (gold) and Delete (red) */
+.saved-setup-download-btn {
+  background: transparent;
+  border: 1px solid var(--border-mid);
+  color: var(--text-dim);
+}
+
+.saved-setup-download-btn:hover {
+  border-color: var(--text-primary);
+  color: var(--text-primary);
 }
 
 .saved-setup-delete-btn {

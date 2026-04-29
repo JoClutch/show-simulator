@@ -51,6 +51,10 @@ function drawShell(container) {
                 ${!storageOk ? "disabled" : ""}>
           + Save Current Setup
         </button>
+        <button class="saved-setups-import-btn" id="saved-setups-import-btn"
+                ${!storageOk ? "disabled" : ""}>
+          Import from File →
+        </button>
       </div>
 
       <div id="saved-setups-list" class="saved-setups-list"></div>
@@ -86,8 +90,9 @@ function drawList(container) {
         </div>
         <div class="saved-setup-summary">${escapeHtml(buildSummary(s.template))}</div>
         <div class="saved-setup-actions">
-          <button class="saved-setup-load-btn"   data-id="${escapeHtml(s.id)}">Load</button>
-          <button class="saved-setup-delete-btn" data-id="${escapeHtml(s.id)}">Delete</button>
+          <button class="saved-setup-load-btn"     data-id="${escapeHtml(s.id)}">Load</button>
+          <button class="saved-setup-download-btn" data-id="${escapeHtml(s.id)}">Download</button>
+          <button class="saved-setup-delete-btn"   data-id="${escapeHtml(s.id)}">Delete</button>
         </div>
       </div>
     `;
@@ -97,6 +102,9 @@ function drawList(container) {
   // every redraw so the listeners need to be re-attached.
   listEl.querySelectorAll(".saved-setup-load-btn").forEach(btn => {
     btn.addEventListener("click", () => handleLoad(btn.dataset.id));
+  });
+  listEl.querySelectorAll(".saved-setup-download-btn").forEach(btn => {
+    btn.addEventListener("click", () => handleDownload(btn.dataset.id));
   });
   listEl.querySelectorAll(".saved-setup-delete-btn").forEach(btn => {
     btn.addEventListener("click", () => handleDelete(container, btn.dataset.id));
@@ -134,9 +142,15 @@ function formatSavedDate(iso) {
 // ── Event handlers ────────────────────────────────────────────────────────────
 
 function wireToolbar(container) {
-  const saveBtn = container.querySelector("#saved-setups-save-btn");
-  if (!saveBtn || saveBtn.disabled) return;
-  saveBtn.addEventListener("click", () => handleSaveCurrent(container));
+  const saveBtn   = container.querySelector("#saved-setups-save-btn");
+  const importBtn = container.querySelector("#saved-setups-import-btn");
+
+  if (saveBtn && !saveBtn.disabled) {
+    saveBtn.addEventListener("click", () => handleSaveCurrent(container));
+  }
+  if (importBtn && !importBtn.disabled) {
+    importBtn.addEventListener("click", () => handleImport(container));
+  }
 }
 
 function wireFooter(container) {
@@ -203,4 +217,40 @@ function handleDelete(container, id) {
     return;
   }
   drawList(container);
+}
+
+// v4.5: download a saved setup as a JSON file.
+// The file is shareable / portable — anyone with the file can re-import it
+// in another browser via the Import button.
+function handleDownload(id) {
+  const setup = loadSetup(id);
+  if (!setup) {
+    alert("That saved setup is no longer available.");
+    return;
+  }
+  downloadSavedSetup(setup);
+}
+
+// v4.5: import a JSON file as a new saved setup.
+// Validates first via parseSavedSetupJson; on success appends to localStorage
+// (with a freshly-generated id to avoid collisions). Imported setups land in
+// the saves list — the user clicks Load on the resulting card to actually
+// apply the template. This keeps import a pure backup-restore action;
+// runtime state is never touched on import.
+function handleImport(container) {
+  pickAndImportSetup(result => {
+    if (!result.ok) {
+      alert(`Import failed:\n• ${result.errors.join("\n• ")}`);
+      return;
+    }
+    const stored = appendImportedSetup(result.setup);
+    if (!stored.ok) {
+      alert(`Could not save imported setup:\n• ${stored.errors.join("\n• ")}`);
+      return;
+    }
+    drawList(container);
+    // Friendly confirmation — the new card is at the top of the list, but a
+    // small toast-like alert helps confirm the import landed.
+    alert(`Imported "${stored.setup.setupName}" — find it in the list to load.`);
+  });
 }

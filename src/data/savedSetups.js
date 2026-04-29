@@ -78,6 +78,41 @@ function saveSetup(template, setupName) {
   return { ok: true, setup };
 }
 
+// Appends an externally-parsed SavedSetup (from a JSON file import) to the
+// saved-setups list. Regenerates the id so re-imports of the same file —
+// and shared files between users — never collide with existing entries.
+// Preserves setupName and savedAt from the source for traceability.
+//
+// Returns:
+//   { ok: true,  setup: SavedSetup }   — appended; new id assigned
+//   { ok: false, errors: string[] }    — validation or storage failure
+function appendImportedSetup(parsed) {
+  if (!isStorageAvailable()) {
+    return { ok: false, errors: ["browser storage is unavailable in this environment"] };
+  }
+
+  // Defensive re-validation. parseSavedSetupJson already validated on the IO
+  // path, but storage callers may invoke this from other entry points.
+  const errors = validateSavedSetup(parsed);
+  if (errors.length > 0) {
+    return { ok: false, errors };
+  }
+
+  const setup = {
+    ...parsed,
+    id: _generateSetupId(),   // fresh id avoids collisions
+  };
+
+  const existing = _readRawList();
+  existing.push(setup);
+
+  if (!_writeRawList(existing)) {
+    return { ok: false, errors: ["failed to write to storage (quota exceeded?)"] };
+  }
+
+  return { ok: true, setup };
+}
+
 // Removes a saved setup by id. Returns true on success, false if the id
 // wasn't found or storage write failed.
 function deleteSetup(id) {
