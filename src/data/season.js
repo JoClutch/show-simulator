@@ -15,6 +15,15 @@ const SEASON_CONFIG = {
   tribeSize:   8,
   campActionsPerRound: 3,
 
+  // ── Tribe swap ─────────────────────────────────────────────────────────────
+  // Fires once when remaining players fall to or below this count, before merge.
+  // Set to null to disable swaps entirely.
+  // The swap redistributes survivors into two new tribes (still labeled A/B,
+  // same names and colors). All relationships, trust, suspicion, alliances,
+  // and idols persist through the swap untouched. Set this LARGER than
+  // mergeTriggerCount so the swap precedes the merge.
+  swapTriggerCount: 12,
+
   // ── Merge ──────────────────────────────────────────────────────────────────
   // Merge fires when remaining players fall to or below this count.
   // After merge: individual immunity replaces tribal, everyone votes each round.
@@ -51,6 +60,10 @@ function createSeasonState() {
     immunityWon:    null,  // "A" | "B" — pre-merge: tribe that won immunity; reset each round
     tribalTribe:    null,  // "A" | "B" | "merged" — who attends Tribal Council this round
     immunityHolder: null,  // post-merge: contestant id who holds the necklace; reset each round
+
+    // ── Tribe swap ─────────────────────────────────────────
+    swapped:    false,   // true after swap fires (one-shot pre-merge event)
+    swapRound:  null,    // round in which the swap occurred (for narrative/dev)
 
     // ── Merge ──────────────────────────────────────────────
     merged: false,   // true after merge fires; gates all post-merge logic
@@ -150,8 +163,12 @@ function assignTribes(contestants, state) {
   const groupA = shuffled.slice(0, SEASON_CONFIG.tribeSize);
   const groupB = shuffled.slice(SEASON_CONFIG.tribeSize);
 
-  groupA.forEach(c => { c.tribe = "A"; });
-  groupB.forEach(c => { c.tribe = "B"; });
+  // Set BOTH tribe (current) and originalTribe (immutable identity).
+  // originalTribe is set once here and never overwritten — not by swap, not by
+  // merge. It's the answer to "where did this player start?", which the UI
+  // needs even after tribe swaps and the merge. See doSwap and doMerge in main.js.
+  groupA.forEach(c => { c.tribe = "A"; c.originalTribe = "A"; });
+  groupB.forEach(c => { c.tribe = "B"; c.originalTribe = "B"; });
 
   state.tribes.A = groupA;
   state.tribes.B = groupB;

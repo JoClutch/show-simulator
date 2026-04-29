@@ -34,6 +34,7 @@ window.DEV_CONFIG = {
   // ── Constants ───────────────────────────────────────────────────────────────
 
   const DEFAULTS = {
+    swapTriggerCount:    12,
     mergeTriggerCount:   10,
     finalCount:           3,
     voteNoiseMultiplier:  1,
@@ -391,6 +392,10 @@ window.DEV_CONFIG = {
           <span class="dev-v">${g.merged
             ? `<span class="dev-tag dev-tag-merge">Merged · ${active.length} left</span>`
             : `<span class="dev-tag">Pre-merge · ${active.length} left</span>`}</span></div>
+        <div class="dev-kv"><span class="dev-k">Swap</span>
+          <span class="dev-v">${g.swapped
+            ? `<span class="dev-tag dev-tag-merge">Swapped · R${g.swapRound}</span>`
+            : `<span class="dev-tag">none yet</span>`}</span></div>
         <div class="dev-kv"><span class="dev-k">Tribal tribe</span>
           <span class="dev-v">${g.tribalTribe ?? "—"}</span></div>
         <div class="dev-kv"><span class="dev-k">Jury</span>
@@ -561,6 +566,14 @@ window.DEV_CONFIG = {
         </p>
 
         ${slider({
+          id:    "dev-swap",
+          label: "Swap trigger",
+          min: 0, max: 16, step: 1,
+          value: SEASON_CONFIG.swapTriggerCount ?? 0,
+          hint:  "players remaining when swap fires (0 = disabled)",
+        })}
+
+        ${slider({
           id:    "dev-merge",
           label: "Merge / jury trigger",
           min: 4, max: 14, step: 1,
@@ -606,12 +619,14 @@ window.DEV_CONFIG = {
     `;
 
     // Wire sliders
+    wireSlider("dev-swap",  v => { SEASON_CONFIG.swapTriggerCount  = v > 0 ? v : null; });
     wireSlider("dev-merge", v => { SEASON_CONFIG.mergeTriggerCount = v; });
     wireSlider("dev-final", v => { SEASON_CONFIG.finalCount        = v; });
     wireSlider("dev-vnoise",v => { DEV_CONFIG.voteNoiseMultiplier  = v; });
     wireSlider("dev-crand", v => { DEV_CONFIG.challengeRandomness  = v; });
 
     el.querySelector("#dev-reset").addEventListener("click", () => {
+      SEASON_CONFIG.swapTriggerCount   = DEFAULTS.swapTriggerCount;
       SEASON_CONFIG.mergeTriggerCount  = DEFAULTS.mergeTriggerCount;
       SEASON_CONFIG.finalCount         = DEFAULTS.finalCount;
       DEV_CONFIG.voteNoiseMultiplier   = DEFAULTS.voteNoiseMultiplier;

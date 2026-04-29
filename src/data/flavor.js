@@ -403,6 +403,18 @@ function getAllianceRejectedLine(target) {
   ]);
 }
 
+// ── Tribe swap ───────────────────────────────────────────────────────────────
+
+// One-line atmospheric subhead for the swap screen. Picked once at swap time.
+const SWAP_FLAVOR_LINES = [
+  "Drop your buffs.",
+  "The tribes are reshaping.",
+  "Old loyalties meet new tribemates.",
+  "Your camp just got smaller — and stranger.",
+  "The game just changed shape.",
+  "New buffs. Same game. Higher stakes.",
+];
+
 // Quiet line shown when player tries to propose to an existing ally.
 function getAllianceAlreadyLine(target) {
   return pickFlavor([

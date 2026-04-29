@@ -102,6 +102,11 @@ function onMergeDone() {
   showScreen("campLife");
 }
 
+// Called when the player dismisses the swap screen.
+function onSwapDone() {
+  showScreen("campLife");
+}
+
 function onTribalDone(eliminatedContestant) {
   gameState.eliminated.push(eliminatedContestant);
   removeFromTribes(eliminatedContestant);
@@ -158,10 +163,19 @@ function advanceRound() {
   }
 
   // Merge — fires once when remaining cast hits the trigger count.
-  // checkForMerge() guards against re-firing after merge is already active.
+  // Takes precedence over swap: if both conditions match (misconfiguration
+  // where swapTrigger ≤ mergeTrigger), merge wins.
   if (checkForMerge()) {
     doMerge();
     showScreen("merge");
+    return;
+  }
+
+  // Swap — fires once when remaining cast first hits the swap trigger.
+  // Only meaningful pre-merge; checkForSwap guards against re-firing.
+  if (checkForSwap()) {
+    doSwap();
+    showScreen("swap");
     return;
   }
 
@@ -171,14 +185,14 @@ function advanceRound() {
 // ── Merge ─────────────────────────────────────────────────────────────────────
 
 // Collapses the two tribe arrays into a single merged tribe.
-// Stamps originalTribe on each contestant so the elimination screen can still
-// reference their pre-merge affiliation for flavour.
+// originalTribe is intentionally NOT set here — it was set once in
+// assignTribes and must persist through any tribe swap. Setting it from
+// c.tribe at merge time would overwrite it with the post-swap label.
 // Sets state.merged = true, which gates all post-merge logic throughout the app.
 function doMerge() {
   const all = [...gameState.tribes.A, ...gameState.tribes.B];
   for (const c of all) {
-    c.originalTribe = c.tribe;   // preserve "A" | "B" for display
-    c.tribe         = "merged";
+    c.tribe = "merged";   // originalTribe preserved from assignTribes
   }
   gameState.tribes.merged = all;
   gameState.tribes.A      = [];
@@ -190,6 +204,51 @@ function doMerge() {
   expirePreMergeIdols(gameState);
 }
 
+// ── Tribe swap ────────────────────────────────────────────────────────────────
+
+// Returns true the one time remaining cast hits the swap trigger pre-merge.
+// Guarded by gameState.swapped (one-shot) and gameState.merged (irrelevant
+// post-merge) and SEASON_CONFIG.swapTriggerCount being set (null disables).
+function checkForSwap() {
+  if (gameState.swapped) return false;
+  if (gameState.merged)  return false;
+  const trigger = SEASON_CONFIG.swapTriggerCount;
+  if (!trigger) return false;
+  return getAllActive().length <= trigger;
+}
+
+// Redistributes the active cast into two new tribes of (near-)equal size.
+//
+// Preserved across swap (no mutation): relationships, trust, suspicion,
+// idolSuspicion, alliances, idols, idolSearches, jury, eliminated.
+// Mutated: each contestant's `tribe` field, state.tribes.A/B arrays.
+//
+// originalTribe is NEVER touched — it carries the contestant's identity from
+// game start through swap and merge.
+function doSwap() {
+  const all = [...gameState.tribes.A, ...gameState.tribes.B];
+
+  // Fisher-Yates via shuffleArray (defined in vote.js — uniform permutation).
+  const shuffled = shuffleArray(all);
+
+  const half = Math.floor(shuffled.length / 2);
+  const newA = shuffled.slice(0, half);
+  const newB = shuffled.slice(half);
+
+  for (const c of newA) c.tribe = "A";
+  for (const c of newB) c.tribe = "B";
+
+  gameState.tribes.A   = newA;
+  gameState.tribes.B   = newB;
+  gameState.swapped    = true;
+  gameState.swapRound  = gameState.round;
+
+  // Note: alliances spanning the new tribes are NOT actively dissolved.
+  // They quietly become harder to maintain because cross-tribe members can no
+  // longer interact at camp — the existing v3.5 staleness penalty handles the
+  // organic decay. If those members reunite at merge, the alliance can recover.
+}
+
 // ── Screen routing ────────────────────────────────────────────────────────────
 
 function showScreen(name) {
@@ -199,6 +258,7 @@ function showScreen(name) {
 
   switch (name) {
     case "select":       renderSelectScreen(app, gameState);       break;
+    case "swap":         renderSwapScreen(app, gameState);         break;
     case "merge":        renderMergeScreen(app, gameState);        break;
     case "campLife":     renderCampLifeScreen(app, gameState);     break;
     case "challenge":    renderChallengeScreen(app, gameState);    break;

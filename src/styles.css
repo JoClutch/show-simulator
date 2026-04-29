@@ -1297,6 +1297,123 @@ button:disabled {
   color: var(--text-faint);
 }
 
+/* ── Tribe Swap Screen ── */
+.swap-eyebrow-row {
+  margin-bottom: 0.25rem;
+}
+
+.swap-hero {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.swap-icon {
+  font-size: 2.6rem;
+  color: var(--gold);
+  letter-spacing: 0.1em;
+  line-height: 1;
+  margin-bottom: 0.4rem;
+}
+
+.swap-headline {
+  font-size: 1.9rem;
+  margin: 0.2rem 0;
+  letter-spacing: 0.02em;
+}
+
+.swap-subhead {
+  font-size: 0.95rem;
+  color: var(--text-dim);
+  font-style: italic;
+  margin-top: 0.35rem;
+}
+
+.swap-summary {
+  margin-bottom: 1.5rem;
+}
+
+.swap-tribes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.swap-tribe-col {
+  background: var(--bg-card);
+  border: 1px solid var(--border-mid);
+  border-radius: 6px;
+  padding: 0.85rem 0.95rem 1rem;
+}
+
+.swap-tribe-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border-dim);
+  padding-bottom: 0.4rem;
+  margin-bottom: 0.45rem;
+}
+
+.swap-tribe-name {
+  font-size: 1.05rem;
+  font-weight: bold;
+  letter-spacing: 0.02em;
+}
+
+.swap-tribe-count {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.swap-tribe-origin-row {
+  font-size: 0.72rem;
+  margin-bottom: 0.6rem;
+  color: var(--text-muted);
+}
+
+.swap-origin-stat {
+  font-weight: bold;
+}
+
+.swap-tribe-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.swap-cast-chip {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  background: var(--bg-raised);
+  border: 1px solid var(--border-dim);
+  border-radius: 4px;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.85rem;
+}
+
+.swap-cast-chip-you {
+  border-color: #4a6a98;
+  background: #1f2c4a;
+}
+
+.swap-cast-name {
+  color: var(--text-primary);
+}
+
+.swap-cast-chip-you .swap-cast-name {
+  color: #b8c9e8;
+  font-weight: bold;
+}
+
+.swap-cast-origin {
+  font-size: 0.72rem;
+  font-style: italic;
+}
+
 /* ── Merge Screen ── */
 .merge-eyebrow-row {
   margin-bottom: 0.25rem;
