@@ -113,6 +113,97 @@ function getActiveTemplate() {
   return _activeTemplate;
 }
 
+// ── Built-in templates (v4.6) ────────────────────────────────────────────────
+//
+// Each template is a complete SeasonTemplate (per schema.js). They all share
+// the bundled default cast — variation lives in the RULES and THEME (tribe
+// names/colors), not the contestant roster. Users pick a template as a
+// starting point, then customize cast or rules to taste.
+//
+// Templates are intentionally fully self-contained (no spread-from-DEFAULT)
+// so editing one never accidentally affects another via shared references.
+
+// 2 — "No Twists": pure social/strategic play.
+const TEMPLATE_NO_TWISTS = {
+  schemaVersion: SCHEMA_VERSION,
+  meta: {
+    id:          "season-no-twists",
+    name:        "No Twists",
+    description: "Pure social game. No tribe swap, no hidden idols — just relationships, reads, and votes.",
+    isDefault:   false,
+  },
+  tribes: {
+    initial: [
+      { label: "A", name: "North", color: "#5fa86f", size: 8 },
+      { label: "B", name: "South", color: "#3a8090", size: 8 },
+    ],
+  },
+  swap:        { enabled: false, triggerCount: null },
+  merge:       { triggerCount: 10, tribeName: "Together", tribeColor: "#c89540" },
+  jury:        { startTrigger: "atMerge", customStartCount: null },
+  finalTribal: { finalists: 3 },
+  idols:       { enabled: false },
+  pacing:      { campActionsPerRound: 3 },
+  cast:        BUNDLED_DEFAULT_CAST,
+};
+
+// 3 — "Old School": pre-2008 Survivor feel. Final 2, late jury, no twists.
+const TEMPLATE_OLD_SCHOOL = {
+  schemaVersion: SCHEMA_VERSION,
+  meta: {
+    id:          "season-old-school",
+    name:        "Old School",
+    description: "Early Survivor feel. No idols, no swap. Jury starts at Final 9. Final 2 endgame.",
+    isDefault:   false,
+  },
+  tribes: {
+    initial: [
+      { label: "A", name: "Sole", color: "#c84030", size: 8 },
+      { label: "B", name: "Mar",  color: "#d8a040", size: 8 },
+    ],
+  },
+  swap:        { enabled: false, triggerCount: null },
+  merge:       { triggerCount: 10, tribeName: "Allies", tribeColor: "#a06030" },
+  jury:        { startTrigger: "custom", customStartCount: 9 },
+  finalTribal: { finalists: 2 },
+  idols:       { enabled: false },
+  pacing:      { campActionsPerRound: 3 },
+  cast:        BUNDLED_DEFAULT_CAST,
+};
+
+// 4 — "Late Merge": longer pre-merge tribal phase, more swing votes.
+const TEMPLATE_LATE_MERGE = {
+  schemaVersion: SCHEMA_VERSION,
+  meta: {
+    id:          "season-late-merge",
+    name:        "Late Merge",
+    description: "Longer tribal phase before merge. Swap and idols active. Eight pre-merge eliminations test alliances.",
+    isDefault:   false,
+  },
+  tribes: {
+    initial: [
+      { label: "A", name: "Tide",  color: "#3a90b8", size: 8 },
+      { label: "B", name: "Stone", color: "#807060", size: 8 },
+    ],
+  },
+  swap:        { enabled: true, triggerCount: 12 },
+  merge:       { triggerCount: 8, tribeName: "Crucible", tribeColor: "#b04580" },
+  jury:        { startTrigger: "atMerge", customStartCount: null },
+  finalTribal: { finalists: 3 },
+  idols:       { enabled: true },
+  pacing:      { campActionsPerRound: 3 },
+  cast:        BUNDLED_DEFAULT_CAST,
+};
+
+// Registry — order here is the order the picker screen displays.
+// DEFAULT_SEASON_TEMPLATE is first; the original "Classic 16" is preserved.
+const BUILT_IN_TEMPLATES = [
+  DEFAULT_SEASON_TEMPLATE,
+  TEMPLATE_NO_TWISTS,
+  TEMPLATE_OLD_SCHOOL,
+  TEMPLATE_LATE_MERGE,
+];
+
 // ── apply ─────────────────────────────────────────────────────────────────────
 
 // Populates SEASON_CONFIG (and CONTESTANTS if needed) from a template.

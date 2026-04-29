@@ -90,6 +90,18 @@ function onSavedSetupsDone(applied) {
   showScreen("select");
 }
 
+// Called when the template picker screen is dismissed.
+//   applied=true  → a built-in template was applied; rebuild gameState.
+//   applied=false → user clicked Back without picking; no rebuild needed.
+function onTemplatesDone(applied) {
+  if (applied) {
+    gameState = createSeasonState();
+    assignTribes(CONTESTANTS, gameState);
+    initIdols(gameState);
+  }
+  showScreen("select");
+}
+
 // v4.2: returns true if the eliminated contestant should be added to the jury.
 // Replaces the previous hardcoded `if (gameState.merged)` check so custom jury
 // start configurations are honored. Called from onTribalDone after the
@@ -357,6 +369,7 @@ function showScreen(name) {
     case "castEditor":   renderCastEditorScreen(app, gameState);   break;
     case "rulesEditor":  renderRulesEditorScreen(app, gameState);  break;
     case "savedSetups":  renderSavedSetupsScreen(app, gameState);  break;
+    case "templates":    renderTemplatesScreen(app, gameState);    break;
     case "swap":         renderSwapScreen(app, gameState);         break;
     case "merge":        renderMergeScreen(app, gameState);        break;
     case "campLife":     renderCampLifeScreen(app, gameState);     break;

@@ -15,6 +15,7 @@ function renderSelectScreen(container, state) {
           &nbsp;·&nbsp; ${SEASON_CONFIG.tribesCount} tribes
         </p>
         <p class="select-setup-links">
+          <button class="select-edit-cast-link" id="choose-template-link">Choose Template →</button>
           <button class="select-edit-cast-link" id="edit-cast-link">Edit Cast →</button>
           <button class="select-edit-cast-link" id="edit-rules-link">Edit Rules →</button>
           <button class="select-edit-cast-link" id="saved-setups-link">Saved Setups →</button>
@@ -114,6 +115,13 @@ function renderSelectScreen(container, state) {
   // (no changes) or Load (template applied + gameState rebuilt).
   container.querySelector("#saved-setups-link").addEventListener("click", () => {
     showScreen("savedSetups");
+  });
+
+  // ── Choose Template entry point (v4.6) ────────────────────────────────────
+  // Routes to the built-in template picker. Returns to select after either
+  // Back (no change) or Use (template applied + gameState rebuilt).
+  container.querySelector("#choose-template-link").addEventListener("click", () => {
+    showScreen("templates");
   });
 }
 
