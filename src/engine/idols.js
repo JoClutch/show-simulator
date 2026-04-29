@@ -248,23 +248,130 @@ function idolSearch(player, state) {
   return { found: true, idol };
 }
 
-// ── Extension point: idol play (not yet active) ───────────────────────────────
+// ── Play ──────────────────────────────────────────────────────────────────────
 //
-// Called when a contestant plays an idol at Tribal Council, before votes are read.
-// Should return true on success so the caller can proceed with the protected result.
+// Idol play happens once per Tribal Council, before the votes are revealed.
+// In v3.3 idols can only be played on the holder themselves (self-play).
+// Transferring idols to other players is intentionally deferred to v3.4+.
 //
-// Implementation notes for v3.2+:
-//   — Call isIdolPlayable(idol, state, contestant.id) first; return false if invalid
-//   — The idol can be played on the holder themselves OR on another contestant:
-//       const protectedId = targetContestantId ?? contestant.id;
-//   — Update the idol object:
-//       idol.status      = "played";
-//       idol.playedRound = state.round;
-//   — Instruct the vote tallier to strip all votes against protectedId:
-//       Pass a "protectedIds" Set into collectAiVotes / tallyVotes alongside
-//       the immunity necklace holder so both immunities are handled uniformly.
-//   — The UI (screenTribal.js) needs a reveal sequence for the played idol
+// On success the idol is consumed (status → "played") and the protected
+// contestant id is returned. The caller (screenTribal.js) collects all
+// protected ids from this round's plays and passes them to tallyVotes(),
+// which discards votes against any protected contestant.
+
+// Marks the idol as played and returns the protected contestant id.
+// Returns null if the idol is not currently valid to play — silently ignore
+// the call rather than throw, so UI race-conditions can't corrupt state.
+function idolPlay(idol, state) {
+  if (!idol)                  return null;
+  if (!isIdolPlayable(idol, state)) return null;
+
+  idol.status      = "played";
+  idol.playedRound = state.round;
+
+  // v3.3 simplification: always self-play. The holder is the protected target.
+  return idol.holder;
+}
+
+// Returns the first playable idol held by a given contestant, or null.
+// Multi-idol holders are supported by the data model but only one idol can
+// be played per Tribal Council per holder in v3.3. The "first" idol is
+// arbitrary but stable (matches state.idols ordering — tribeA, tribeB, merged).
+function getPlayableIdolForHolder(state, contestantId) {
+  return state.idols.find(i =>
+    isIdolPlayable(i, state, contestantId)
+  ) ?? null;
+}
+
+// Returns all (contestant, idol) pairs eligible to play tonight, restricted to
+// the contestants who are actually attending tribal (the attendees pool).
+// This is what screenTribal.js iterates over when running the idol-play phase.
+function getIdolPlayCandidates(state, attendees) {
+  const candidates = [];
+  for (const c of attendees) {
+    const idol = getPlayableIdolForHolder(state, c.id);
+    if (idol) candidates.push({ contestant: c, idol });
+  }
+  return candidates;
+}
+
+// ── AI idol-play decision ─────────────────────────────────────────────────────
 //
-// function idolPlay(idol, targetContestantId, state) {
-//   return false;
-// }
+// AI holders decide whether to play their idol from a heuristic read of the
+// social state — they CANNOT see the actual votes. Three signals shape the
+// estimate, mimicking what a contestant would feel "in the moment":
+//
+//   • Negative relationships and low trust toward strategic voters
+//     suggest someone is hunting for them tonight.
+//   • Other players' idol suspicion of the holder, combined with strategic
+//     voters who tend to flush, raises the perceived flush threat.
+//   • The holder's own general suspicion stat is a public-facing target marker.
+//
+// Strong allies (relationship ≥ 10) reduce the danger estimate — you have
+// people who'll vote with you, so you probably aren't tonight's target.
+
+// Returns 0–10. Higher = the holder reads more danger from this Tribal.
+// "attendees" is everyone in the room (including the holder themselves);
+// the holder is filtered out internally.
+function estimateDangerToSelf(state, holder, attendees) {
+  const others = attendees.filter(a => a.id !== holder.id);
+  if (others.length === 0) return 0;
+
+  let enemyCount      = 0;   // people likely to vote me on basic social grounds
+  let flushThreatCount = 0;  // strategic voters who suspect my idol → flush risk
+  let strongAllyCount = 0;   // people very unlikely to vote me
+
+  for (const voter of others) {
+    const rel      = getRelationship(state, voter.id, holder.id);
+    const trust    = getTrust(state, voter.id, holder.id);
+    const idolSusp = getIdolSuspicion(state, voter.id, holder.id);
+
+    if (rel < -3) enemyCount++;
+    else if (trust < 2 && voter.strategy >= 5) enemyCount++;
+
+    if (idolSusp >= 7 && voter.strategy >= 6) flushThreatCount++;
+
+    if (rel >= 10) strongAllyCount++;
+  }
+
+  const ownSuspicion = holder.suspicion ?? 0;
+
+  // Weighted aggregate. Flush-threat voters carry slightly more weight than
+  // generic enemies because they specifically WANT to make you play tonight.
+  const danger =
+      enemyCount       * 1.4
+    + flushThreatCount * 1.6
+    + ownSuspicion     * 0.4
+    - strongAllyCount  * 0.8;
+
+  return Math.max(0, Math.min(10, danger));
+}
+
+// Returns true if the AI holder decides to play their idol tonight.
+//
+// Thresholds:
+//   strategy 10 → ~3 (sensitive — plays on subtle threats)
+//   strategy  5 → ~5
+//   strategy  1 → ~6.6 (only plays on blatant evidence — or panics)
+//
+// A small noise term (±1) keeps even high-strategy AI from being clinically
+// optimal. Low-strategy holders can panic-play when their general suspicion
+// is high — they over-read the temperature of the tribe and burn an idol.
+function shouldAIPlayIdol(state, holder, attendees) {
+  // Wearing the immunity necklace? Idol play is strictly wasteful.
+  if (state.immunityHolder === holder.id) return false;
+
+  const danger        = estimateDangerToSelf(state, holder, attendees);
+  const baseThreshold = 7 - holder.strategy * 0.4;
+  const noise         = (Math.random() - 0.5) * 2;
+
+  // Panic play: low-strategy + high own suspicion can produce a wasted idol.
+  // 35% chance per qualifying tribal — they feel the heat and crack.
+  if (holder.strategy <= 3
+      && (holder.suspicion ?? 0) >= 5
+      && Math.random() < 0.35) {
+    return true;
+  }
+
+  return danger > (baseThreshold + noise);
+}

@@ -1,10 +1,18 @@
-// screenTribal.js — Tribal Council: voting phase then dramatic reveal phase
+// screenTribal.js — Tribal Council: vote → idol play → reveal
 //
 // Pre-merge:  only the losing tribe attends; state.tribalTribe = "A" | "B"
 // Post-merge: full cast attends; state.tribalTribe = "merged";
 //             the immunity holder cannot receive votes but still casts one
 //
-// Flavor text (openers, reveal intros) sourced from src/data/flavor.js.
+// Sub-phases (in order):
+//   1.  Voting grid           — player picks one target; AI votes computed
+//   1.5 Idol play (v3.3)      — player prompt + AI decisions; protects holders
+//                                from votes against them. See runIdolPlayPhase.
+//   2.  Dramatic reveal       — votes read; voided votes shown with "VOID"
+//                                badge but never count toward the tally.
+//
+// Flavor text (openers, reveal intros, idol play lines) is sourced from
+// src/data/flavor.js.
 
 function renderTribalScreen(container, state) {
   if (state.merged) {
@@ -56,10 +64,12 @@ function renderPreMergeTribalScreen(container, state) {
 
   container.querySelector("#cast-btn").addEventListener("click", () => {
     if (!playerVote) return;
-    const allVotes    = collectAiVotes(state, tribe, playerVote, player);
-    const eliminated  = tallyVotes(allVotes, state);
-    const revealOrder = buildRevealOrder(allVotes, eliminated.id);
-    renderRevealPhase(container, state, revealOrder, eliminated);
+    const allVotes = collectAiVotes(state, tribe, playerVote, player);
+    runIdolPlayPhase(container, state, tribe, protectedIds => {
+      const eliminated  = tallyVotes(allVotes, state, protectedIds);
+      const revealOrder = buildRevealOrder(allVotes, eliminated.id);
+      renderRevealPhase(container, state, revealOrder, eliminated, protectedIds);
+    });
   });
 }
 
@@ -126,11 +136,13 @@ function renderMergedTribalScreen(container, state) {
     if (!playerVote) return;
 
     // Voters = everyone; candidates = everyone except immunity holder.
-    const votePool    = tribe.filter(c => c.id !== state.immunityHolder);
-    const allVotes    = collectAiVotes(state, tribe, playerVote, player, votePool);
-    const eliminated  = tallyVotes(allVotes, state);
-    const revealOrder = buildRevealOrder(allVotes, eliminated.id);
-    renderRevealPhase(container, state, revealOrder, eliminated);
+    const votePool = tribe.filter(c => c.id !== state.immunityHolder);
+    const allVotes = collectAiVotes(state, tribe, playerVote, player, votePool);
+    runIdolPlayPhase(container, state, tribe, protectedIds => {
+      const eliminated  = tallyVotes(allVotes, state, protectedIds);
+      const revealOrder = buildRevealOrder(allVotes, eliminated.id);
+      renderRevealPhase(container, state, revealOrder, eliminated, protectedIds);
+    });
   });
 }
 
@@ -177,9 +189,191 @@ function buildVotingGrid(container, eligible, getVote, setVote) {
   }
 }
 
+// ── Phase 1.5: Idol play ──────────────────────────────────────────────────────
+//
+// Sits between vote casting and vote reveal. Mirrors the real Survivor moment
+// where Jeff asks "does anyone want to play a hidden immunity idol?"
+//
+// Flow:
+//   1. Find every attendee holding a playable idol (getIdolPlayCandidates).
+//   2. If none, skip the phase entirely — straight to reveal.
+//   3. If the player is among them, prompt the player first (they decide).
+//   4. Then resolve each AI candidate one-by-one: shouldAIPlayIdol() decides;
+//      if they play, animate a dramatic reveal card.
+//   5. Call onComplete(protectedIds) — a Set of contestant ids whose votes
+//      should be voided when tallyVotes runs.
+//
+// Order of resolution doesn't matter to the result (all plays are independent
+// self-plays), but resolving the player first feels right narratively — they
+// get to act on their own read before seeing AI reactions.
+
+function runIdolPlayPhase(container, state, attendees, onComplete) {
+  const candidates = getIdolPlayCandidates(state, attendees);
+
+  if (candidates.length === 0) {
+    onComplete(new Set());
+    return;
+  }
+
+  const protectedIds      = new Set();
+  const player            = state.player;
+  const playerCandidate   = candidates.find(c => c.contestant.id === player.id);
+  const aiCandidates      = candidates.filter(c => c.contestant.id !== player.id);
+
+  // The player is on the immunity necklace? They have no danger to mitigate;
+  // skip the prompt to spare them a confusing wasted-play decision.
+  const playerIsImmune    = state.immunityHolder === player.id;
+  const showPlayerPrompt  = playerCandidate && !playerIsImmune;
+
+  // Step 1: player decision (if applicable).
+  if (showPlayerPrompt) {
+    showPlayerIdolPrompt(container, state, playerCandidate, played => {
+      if (played) {
+        const protectedId = idolPlay(playerCandidate.idol, state);
+        if (protectedId) protectedIds.add(protectedId);
+      }
+      runAIIdolDecisions(container, state, aiCandidates, attendees, protectedIds, onComplete);
+    });
+  } else {
+    runAIIdolDecisions(container, state, aiCandidates, attendees, protectedIds, onComplete);
+  }
+}
+
+// Renders the player's idol-play decision screen.
+// Two buttons: play (gold) or keep (subtle). The decision is irreversible.
+function showPlayerIdolPrompt(container, state, candidate, onDecision) {
+  const promptLine = pickFlavor(IDOL_PLAY_PROMPT_LINES);
+  const bodyLine   = pickFlavor(IDOL_PLAY_PLAYER_BODY_LINES);
+
+  container.innerHTML = `
+    <div class="screen">
+      <p class="screen-eyebrow">Episode ${state.round} · Day ${getDay(state) + DAY_OFFSETS.tribal}</p>
+      <h2>Hidden Immunity Idol</h2>
+      <p class="tribal-reading-note muted">${promptLine}</p>
+
+      <div class="idol-prompt-card">
+        <div class="idol-prompt-icon">◆</div>
+        <div class="idol-prompt-title">You hold a Hidden Immunity Idol.</div>
+        <p class="idol-prompt-body">${bodyLine}</p>
+
+        <div class="idol-prompt-buttons">
+          <button id="idol-play-btn" class="idol-play-btn">Play the Idol</button>
+          <button id="idol-keep-btn" class="idol-keep-btn">Keep It Hidden</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  container.querySelector("#idol-play-btn").addEventListener("click", () => {
+    showPlayerIdolReveal(container, state, () => onDecision(true));
+  });
+  container.querySelector("#idol-keep-btn").addEventListener("click", () => {
+    onDecision(false);
+  });
+}
+
+// Brief gold-text dramatic moment for the player's own idol play.
+// Auto-advances after a beat — no input needed.
+function showPlayerIdolReveal(container, state, onContinue) {
+  const line = pickFlavor(IDOL_PLAY_PLAYER_REVEAL_LINES);
+
+  container.innerHTML = `
+    <div class="screen">
+      <p class="screen-eyebrow">Episode ${state.round} · Day ${getDay(state) + DAY_OFFSETS.tribal}</p>
+      <h2>Hidden Immunity Idol</h2>
+
+      <div class="idol-reveal-card idol-reveal-player">
+        <div class="idol-reveal-icon">◆</div>
+        <div class="idol-reveal-headline">You play your idol.</div>
+        <p class="idol-reveal-line">${line}</p>
+        <p class="idol-reveal-effect">Every vote against you tonight will be voided.</p>
+      </div>
+    </div>
+  `;
+
+  setTimeout(onContinue, 2400);
+}
+
+// Resolves AI idol-play decisions sequentially.
+// For each AI candidate: roll shouldAIPlayIdol(); if true, animate the reveal,
+// add to protectedIds, advance after a beat. If false, advance silently.
+function runAIIdolDecisions(container, state, aiCandidates, attendees, protectedIds, onComplete) {
+  let i = 0;
+  // Track whether ANY play happened (player or AI) so we can show the
+  // "no one moves" beat only when at least one decision was actually made.
+  // protectedIds.size > 0 covers plays already; the prompt-was-shown case is
+  // already implied by getIdolPlayCandidates returning at least one candidate.
+  const someoneHadDecision = aiCandidates.length > 0 || protectedIds.size > 0;
+
+  function next() {
+    if (i >= aiCandidates.length) {
+      // If the entire phase concluded with no actual idol plays, give a brief
+      // "no one moves" beat so the moment doesn't feel hollow. Otherwise go
+      // straight to vote reveal.
+      if (someoneHadDecision && protectedIds.size === 0) {
+        showNoIdolPlayedBeat(container, state, () => onComplete(protectedIds));
+      } else {
+        onComplete(protectedIds);
+      }
+      return;
+    }
+
+    const { contestant, idol } = aiCandidates[i];
+    i++;
+
+    if (shouldAIPlayIdol(state, contestant, attendees)) {
+      const protectedId = idolPlay(idol, state);
+      if (protectedId) protectedIds.add(protectedId);
+      showAIIdolReveal(container, state, contestant, () => next());
+    } else {
+      next();
+    }
+  }
+
+  next();
+}
+
+// Shows the dramatic AI idol-play card and auto-advances after a beat.
+function showAIIdolReveal(container, state, contestant, onContinue) {
+  const announcement = getAIIdolPlayLine(contestant.name);
+  const effect       = getIdolPlayedEffectLine(contestant.name);
+
+  container.innerHTML = `
+    <div class="screen">
+      <p class="screen-eyebrow">Episode ${state.round} · Day ${getDay(state) + DAY_OFFSETS.tribal}</p>
+      <h2>Hidden Immunity Idol</h2>
+
+      <div class="idol-reveal-card idol-reveal-ai">
+        <div class="idol-reveal-icon">◆</div>
+        <div class="idol-reveal-headline">${contestant.name} plays an idol!</div>
+        <p class="idol-reveal-line">${announcement}</p>
+        <p class="idol-reveal-effect">${effect}</p>
+      </div>
+    </div>
+  `;
+
+  setTimeout(onContinue, 2400);
+}
+
+// Quiet "no one moves" interlude when the prompt happened but nothing was
+// played. Keeps the rhythm of the moment from feeling like dead air.
+function showNoIdolPlayedBeat(container, state, onContinue) {
+  const line = pickFlavor(IDOL_NOT_PLAYED_LINES);
+
+  container.innerHTML = `
+    <div class="screen">
+      <p class="screen-eyebrow">Episode ${state.round} · Day ${getDay(state) + DAY_OFFSETS.tribal}</p>
+      <h2>Hidden Immunity Idol</h2>
+      <p class="tribal-reading-note muted">${line}</p>
+    </div>
+  `;
+
+  setTimeout(onContinue, 1400);
+}
+
 // ── Phase 2: Dramatic reveal ──────────────────────────────────────────────────
 
-function renderRevealPhase(container, state, revealOrder, eliminated) {
+function renderRevealPhase(container, state, revealOrder, eliminated, protectedIds = new Set()) {
   const player     = state.player;
   const revealIntro = pickFlavor(REVEAL_INTROS);
 
@@ -213,21 +407,32 @@ function renderRevealPhase(container, state, revealOrder, eliminated) {
     const { target }      = revealOrder[i];
     const isAgainstPlayer = target.id === player.id;
     const isDecisive      = i === revealOrder.length - 1;
+    // Votes targeting an idol-protected contestant are still revealed (for
+    // drama) but flagged so they read as voided and don't increment the tally.
+    const isVoided        = protectedIds.has(target.id);
 
     const card = document.createElement("div");
     card.className = [
       "reveal-card",
-      isAgainstPlayer ? "reveal-card-danger" : "",
-      isDecisive      ? "reveal-card-decisive" : "",
+      isAgainstPlayer && !isVoided ? "reveal-card-danger"   : "",
+      isVoided                     ? "reveal-card-voided"   : "",
+      isDecisive                   ? "reveal-card-decisive" : "",
     ].filter(Boolean).join(" ");
-    card.innerHTML = `<span class="reveal-card-name">${target.name}</span>`;
+    card.innerHTML = isVoided
+      ? `<span class="reveal-card-name">${target.name}</span>
+         <span class="reveal-card-void-badge">VOID</span>`
+      : `<span class="reveal-card-name">${target.name}</span>`;
     cardsEl.appendChild(card);
 
     requestAnimationFrame(() => card.classList.add("revealed"));
 
-    liveTally[target.id] ??= { name: target.name, count: 0 };
-    liveTally[target.id].count++;
-    renderTally(tallyEl, liveTally);
+    // Voided votes don't update the live tally — they don't count toward
+    // the elimination at all. They still get the dramatic reveal moment.
+    if (!isVoided) {
+      liveTally[target.id] ??= { name: target.name, count: 0 };
+      liveTally[target.id].count++;
+      renderTally(tallyEl, liveTally);
+    }
 
     i++;
 

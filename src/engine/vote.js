@@ -157,12 +157,33 @@ function pickVoteTarget(state, voter, tribe) {
 
 // ── Tallying ──────────────────────────────────────────────────────────────────
 
-// Returns the contestant object who received the most votes.
+// Returns the contestant object who received the most VALID votes.
 // Calls resolveTie() when multiple candidates are tied at the top.
-function tallyVotes(votes, state) {
-  const counts = {};
+//
+// protectedIds — optional Set of contestant ids whose received votes must be
+//                discarded (idol plays). Defaults to an empty set, preserving
+//                pre-v3.3 behavior for any caller that doesn't pass it.
+//
+// Edge case: if every vote was voided (everyone tried to vote out the same
+// idol-protected contestant) we fall back to a random non-protected attendee.
+// This is rare and approximates the chaos that a real re-vote would create
+// without bolting on a full re-vote system.
+function tallyVotes(votes, state, protectedIds = new Set()) {
+  const validVotes = votes.filter(v => !protectedIds.has(v.target.id));
 
-  for (const { target } of votes) {
+  if (validVotes.length === 0) {
+    // All votes were voided. Pick a random attendee who isn't currently
+    // protected (immunity necklace or idol). Use the voter pool from the
+    // original ballots so the fallback only considers people in the room.
+    const fallbackPool = votes
+      .map(v => v.voter)
+      .filter(v => !protectedIds.has(v.id) && v.id !== state.immunityHolder);
+    if (fallbackPool.length === 0) return null;
+    return fallbackPool[Math.floor(Math.random() * fallbackPool.length)];
+  }
+
+  const counts = {};
+  for (const { target } of validVotes) {
     counts[target.id] = (counts[target.id] ?? 0) + 1;
   }
 
@@ -171,9 +192,9 @@ function tallyVotes(votes, state) {
     .filter(([, n]) => n === max)
     .map(([id]) => id);
 
-  const eliminatedId = resolveTie(tiedIds, votes, state);
+  const eliminatedId = resolveTie(tiedIds, validVotes, state);
 
-  return votes.map(v => v.target).find(c => c.id === eliminatedId);
+  return validVotes.map(v => v.target).find(c => c.id === eliminatedId);
 }
 
 // Phase 1 stub — ties are broken by random draw.

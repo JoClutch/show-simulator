@@ -304,3 +304,57 @@ function getFTCWinnerOtherLine(winnerName) {
     `${winnerName} earned every vote. There's no arguing with the result.`,
   ]);
 }
+
+// ── Idol play (Tribal Council) ───────────────────────────────────────────────
+
+// The "Jeff asks if anyone wants to play an idol" prompt — a single line
+// shown above the player's idol decision, or the AI play sequence.
+const IDOL_PLAY_PROMPT_LINES = [
+  "If anybody has a hidden immunity idol and you'd like to play it, now would be the time to do so.",
+  "Before I read the votes — does anyone want to play a hidden immunity idol?",
+  "Last chance. If you have an idol, this is the moment.",
+];
+
+// Body text for the player's own idol prompt — explains the consequence
+// without revealing how the votes actually fell.
+const IDOL_PLAY_PLAYER_BODY_LINES = [
+  "If you play it now, every vote against you tonight will be voided. The idol will be consumed either way.",
+  "Played idols are gone for good. If you sense danger, this is your one move. If you don't, keep it for another night.",
+  "Trust your read. If they're coming for you, the idol saves you. If they aren't, you've burned it for nothing.",
+];
+
+// Dramatic announcement when an AI plays an idol.
+function getAIIdolPlayLine(name) {
+  return pickFlavor([
+    `${name} stands and reaches into their bag. They hold up a Hidden Immunity Idol.`,
+    `${name} steps forward without a word. In their hand — a Hidden Immunity Idol.`,
+    `${name} pulls something from a pocket and stands. It's a Hidden Immunity Idol.`,
+    `${name} rises slowly and produces a Hidden Immunity Idol from their belongings.`,
+  ]);
+}
+
+// Subline shown after the AI play announcement — explains the effect.
+function getIdolPlayedEffectLine(name) {
+  return pickFlavor([
+    `Any votes cast against ${name} will not count.`,
+    `${name} cannot be voted out tonight.`,
+    `Every vote against ${name} will be voided.`,
+  ]);
+}
+
+// The player's own play moment — gold-text dramatic line shown after they
+// confirm. Reads as their own thought / declaration.
+const IDOL_PLAY_PLAYER_REVEAL_LINES = [
+  "You stand, reach into your bag, and hold up the idol. The tribe goes still.",
+  "You pull the idol out without ceremony and place it on the bench in front of Jeff. Eyes everywhere.",
+  "You stand. The idol is in your hand. Several tribemates audibly inhale.",
+];
+
+// Quiet follow-up when no one plays an idol — keeps the moment from feeling
+// like dead air. Used only when at least one person held a playable idol but
+// chose not to play it (i.e. the decision phase happened).
+const IDOL_NOT_PLAYED_LINES = [
+  "No one moves. Jeff nods once and reaches for the urn.",
+  "The pause stretches. Nobody stands. The votes are read.",
+  "A long beat passes. Nothing. Jeff turns to the urn.",
+];
