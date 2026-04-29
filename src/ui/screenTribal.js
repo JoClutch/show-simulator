@@ -3,6 +3,8 @@
 // Pre-merge:  only the losing tribe attends; state.tribalTribe = "A" | "B"
 // Post-merge: full cast attends; state.tribalTribe = "merged";
 //             the immunity holder cannot receive votes but still casts one
+//
+// Flavor text (openers, reveal intros) sourced from src/data/flavor.js.
 
 function renderTribalScreen(container, state) {
   if (state.merged) {
@@ -35,8 +37,10 @@ function renderPreMergeTribalScreen(container, state) {
         </div>
       </div>
 
+      <p class="tribal-opener muted">${getTribalOpener(state)}</p>
+
       <p class="tribal-prompt">
-        You must vote for one tribemate to leave the game.
+        Vote for one tribemate to leave the game.
         Once your vote is cast it cannot be changed.
       </p>
 
@@ -92,6 +96,8 @@ function renderMergedTribalScreen(container, state) {
         </div>
       </div>
 
+      <p class="tribal-opener muted">${getTribalOpener(state)}</p>
+
       ${holder ? `
         <div class="tribal-immunity-note">
           <span class="immunity-icon">⬡</span>
@@ -101,7 +107,7 @@ function renderMergedTribalScreen(container, state) {
       ` : ""}
 
       <p class="tribal-prompt">
-        You must vote for one player to leave the game.
+        Vote for one player to leave the game.
         The immunity holder cannot receive votes.
         Once your vote is cast it cannot be changed.
       </p>
@@ -120,7 +126,7 @@ function renderMergedTribalScreen(container, state) {
     if (!playerVote) return;
 
     // Voters = everyone; candidates = everyone except immunity holder.
-    const votePool = tribe.filter(c => c.id !== state.immunityHolder);
+    const votePool    = tribe.filter(c => c.id !== state.immunityHolder);
     const allVotes    = collectAiVotes(state, tribe, playerVote, player, votePool);
     const eliminated  = tallyVotes(allVotes, state);
     const revealOrder = buildRevealOrder(allVotes, eliminated.id);
@@ -174,13 +180,14 @@ function buildVotingGrid(container, eligible, getVote, setVote) {
 // ── Phase 2: Dramatic reveal ──────────────────────────────────────────────────
 
 function renderRevealPhase(container, state, revealOrder, eliminated) {
-  const player = state.player;
+  const player     = state.player;
+  const revealIntro = pickFlavor(REVEAL_INTROS);
 
   container.innerHTML = `
     <div class="screen">
       <p class="screen-eyebrow">Episode ${state.round} · Day ${getDay(state) + DAY_OFFSETS.tribal}</p>
       <h2>Reading the Votes</h2>
-      <p class="tribal-reading-note muted">Jeff reaches into the urn…</p>
+      <p class="tribal-reading-note muted">${revealIntro}</p>
 
       <div id="reveal-cards" class="reveal-cards"></div>
 
@@ -229,9 +236,12 @@ function renderRevealPhase(container, state, revealOrder, eliminated) {
   }
 
   function showFinishButton() {
+    const isElimPlayer = eliminated.id === player.id;
     const btn = document.createElement("button");
     btn.className   = "tribal-finish-btn";
-    btn.textContent = "The tribe has spoken →";
+    btn.textContent = isElimPlayer
+      ? "The tribe has spoken."
+      : "The tribe has spoken →";
     btn.addEventListener("click", () => onTribalDone(eliminated));
     footerEl.appendChild(btn);
   }

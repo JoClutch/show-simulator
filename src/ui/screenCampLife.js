@@ -57,6 +57,12 @@ function renderCampLifeScreen(container, state) {
   const phaseLabel    = isPhase2 ? "Evening at Camp" : "Camp Life";
   const stepNote      = isPhase2 ? "After the challenge" : "Before the challenge";
 
+  // Episode opener — a brief atmospheric line shown only on the first camp
+  // phase of each episode (phase 1). Sourced from flavor.js.
+  const episodeOpener = !isPhase2
+    ? `<p class="camp-episode-opener muted">${getEpisodeOpener(state)}</p>`
+    : "";
+
   // After merge everyone always heads to tribal in phase 2 (even the immune
   // holder — they still attend and cast a vote).
   const continueLabel = !isPhase2
@@ -98,6 +104,8 @@ function renderCampLifeScreen(container, state) {
           ${actionsLeft} of ${maxActions} actions left
         </div>
       </div>
+
+      ${episodeOpener}
 
       ${statusBanner}
 

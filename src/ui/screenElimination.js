@@ -1,4 +1,6 @@
 // screenElimination.js — shown after every Tribal Council vote
+//
+// Flavor text (elimFlavor, jury join lines) sourced from src/data/flavor.js.
 
 function renderEliminationScreen(container, state) {
   const eliminated   = state.eliminated[state.eliminated.length - 1];
@@ -44,6 +46,12 @@ function renderEliminationScreen(container, state) {
     ? `You were voted out ${ordinal(placement)} overall. Your game ends here.`
     : `${eliminated.name} was voted out ${ordinal(placement)} overall.`;
 
+  // One contextual sentence below the main message. Null = omit entirely.
+  const flavor    = getElimFlavor(eliminated, isPlayer, state);
+  const flavorHTML = flavor
+    ? `<p class="elim-flavor muted">${flavor}</p>`
+    : "";
+
   const originalLabel = isMerged && eliminated.originalTribe
     ? ` · Originally ${SEASON_CONFIG.tribeNames[eliminated.originalTribe]}`
     : "";
@@ -66,6 +74,7 @@ function renderEliminationScreen(container, state) {
 
       <div class="elim-body">
         <p>${voteOutMsg}</p>
+        ${flavorHTML}
       </div>
 
       <div class="elim-status">
@@ -119,7 +128,6 @@ function buildJuryPanelHTML(state, eliminated, isPlayer) {
   const priorJurors = state.jury.filter(j => j.id !== eliminated.id);
 
   // Show sentiment dots only when the player is still alive.
-  // We show dots for priorJurors (not the new one — their seat just opened).
   const showSentiment = !isPlayer;
 
   // Build the prior-juror chip list.
@@ -164,11 +172,14 @@ function buildJuryPanelHTML(state, eliminated, isPlayer) {
       `
     : `<p class="muted jury-empty-note">They will vote for the winner at Final Tribal Council.</p>`;
 
-  // Join message for the newly added juror.
-  const joinLine = newJuror
-    ? `<div class="jury-join-note">
-         ${eliminated.name} joins the jury as Juror ${newJuror.juryNumber}.
-       </div>`
+  // Varied join messages for the newly added juror.
+  const joinVariants = newJuror ? [
+    `${eliminated.name} joins the jury as Juror ${newJuror.juryNumber}.`,
+    `${eliminated.name} takes their seat on the jury — Juror ${newJuror.juryNumber}.`,
+    `${eliminated.name} is the ${ordinal(newJuror.juryNumber)} member of the jury.`,
+  ] : null;
+  const joinLine = joinVariants
+    ? `<div class="jury-join-note">${pickFlavor(joinVariants)}</div>`
     : "";
 
   return `

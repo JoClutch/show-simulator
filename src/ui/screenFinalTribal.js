@@ -65,15 +65,19 @@ function renderFTCCeremony(container, state) {
     `;
   }).join("");
 
+  // Pick flavor text — a universal ceremony intro + player-specific note.
+  const ceremonyIntro  = pickFlavor(FTC_CEREMONY_INTROS);
+  const playerFinalist = finalists.some(f => f.id === player.id);
+  const playerNote     = playerFinalist
+    ? `<p class="ftc-intro-player muted">${pickFlavor(FTC_YOU_ARE_FINALIST_LINES)}</p>`
+    : "";
+
   container.innerHTML = `
     <div class="screen">
       <p class="screen-eyebrow">Day ${state.ftcDay} · ${SEASON_CONFIG.name}</p>
       <h2>Final Tribal Council</h2>
-      <p class="ftc-intro muted">
-        The jury has returned. Three players remain.
-        Tonight, the jury will cast the votes that decide who wins
-        the title of Sole Survivor.
-      </p>
+      <p class="ftc-intro muted">${ceremonyIntro}</p>
+      ${playerNote}
 
       <div class="ftc-finalists">${finalistCards}</div>
 
@@ -186,9 +190,7 @@ function renderFTCReveal(container, state, speechBonus) {
     <div class="screen">
       <p class="screen-eyebrow">Day ${state.ftcDay} · Final Tribal Council</p>
       <h2>Reading the Votes</h2>
-      <p class="ftc-reading-note muted">
-        Jeff reaches into the urn one final time…
-      </p>
+      <p class="ftc-reading-note muted">${pickFlavor(FTC_READING_INTROS)}</p>
 
       <div id="ftc-reveal-cards" class="reveal-cards"></div>
       <div id="ftc-tally"        class="tally-board"></div>
@@ -287,8 +289,8 @@ function renderFTCWinner(container, state, winner, allVotes) {
     ? "You Are the Sole Survivor!"
     : `${winner.name} Wins!`;
   const subhead  = isPlayer
-    ? "The jury has spoken. You outplayed, outwitted, and outlasted everyone."
-    : `The jury has spoken. ${winner.name} is the Sole Survivor of ${SEASON_CONFIG.name}.`;
+    ? pickFlavor(FTC_WINNER_PLAYER_SUBLINES)
+    : getFTCWinnerOtherLine(winner.name);
 
   container.innerHTML = `
     <div class="screen">

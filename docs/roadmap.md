@@ -60,6 +60,17 @@ Goal: Complete season with a winner.
 - [x] Final Tribal Council with jury votes
 - [x] Player can make a case to the jury (opening statement with 3 themes)
 - [x] Winner declared, season summary screen
+- [x] v2.6: Full FTC flow — ceremony, opening speech, dramatic vote reveal, winner declaration
+- [x] v2.6: Jury vote model: sentiment + speech bonus − suspicion + social/strategy + noise
+- [x] v2.6: Season results screen — full 1st–16th placement list
+- [x] v2.7: Hidden dev panel (backtick toggle) — State, Inspect, Balance tabs
+- [x] v2.7: DEV_CONFIG runtime overrides for vote noise and challenge randomness
+- [x] v2.7: Deterministic vote-target inspection per voter (no noise)
+- [x] v2.7: Balance sliders for merge threshold, final count, noise multipliers
+- [x] v2.8: Centralized flavor text system (src/data/flavor.js)
+- [x] v2.8: Contextual episode openers, tribal openers, elimination flavor lines
+- [x] v2.8: Varied vote reveal intros, jury join messages, FTC ceremony/winner text
+- [x] v2.8: Merge screen tribe survivor count breakdown
 - [ ] Stats: challenges won, votes received, relationships
 
 ---

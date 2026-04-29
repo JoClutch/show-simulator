@@ -331,6 +331,14 @@ button:disabled {
   display: none;
 }
 
+/* ── Camp Life: episode opener line ── */
+.camp-episode-opener {
+  font-size: 0.85rem;
+  font-style: italic;
+  margin-bottom: 0.6rem;
+  line-height: 1.5;
+}
+
 /* ── Camp Life Screen ── */
 .camp-header {
   display: flex;
@@ -650,6 +658,17 @@ button:disabled {
   border-radius: 0 4px 4px 0;
 }
 
+/* ── Tribal Council opener ── */
+.tribal-opener {
+  font-size: 0.88rem;
+  font-style: italic;
+  line-height: 1.6;
+  margin-bottom: 1rem;
+  padding: 0.65rem 1rem;
+  border-left: 3px solid #2e2e50;
+  border-radius: 0 4px 4px 0;
+}
+
 /* ── Tribal Council ── */
 .tribal-header {
   margin-bottom: 1rem;
@@ -811,6 +830,12 @@ button:disabled {
   line-height: 1.6;
 }
 
+.elim-body .elim-flavor {
+  margin-top: 0.4rem;
+  margin-bottom: 0;
+  font-style: italic;
+}
+
 .elim-status {
   background-color: var(--bg-card);
   border: 1px solid var(--border-dim);
@@ -921,6 +946,25 @@ button:disabled {
   padding: 0.15rem 0.5rem;
   border-radius: 4px;
   margin-right: 0.5rem;
+}
+
+/* ── Merge: tribe survivor tally ── */
+.merge-tribe-tally {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.8rem;
+  margin-bottom: 1.25rem;
+}
+
+.merge-tally-item {
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.merge-tally-sep {
+  color: var(--text-faint);
 }
 
 /* ── Merge Screen ── */
@@ -1207,6 +1251,12 @@ button:disabled {
 /* ── Final Tribal Council ── */
 
 /* Ceremony — finalist card row */
+.ftc-intro-player {
+  margin-top: -0.5rem;
+  margin-bottom: 1.25rem;
+  font-style: italic;
+}
+
 .ftc-intro {
   margin-bottom: 1.5rem;
 }

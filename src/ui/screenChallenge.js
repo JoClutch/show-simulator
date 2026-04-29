@@ -2,6 +2,8 @@
 //
 // Pre-merge:  tribe vs tribe → calls onChallengeResolved(losingTribeLabel)
 // Post-merge: individual immunity → calls onIndividualChallengeResolved(winnerId)
+//
+// Flavor text is sourced from src/data/flavor.js.
 
 function renderChallengeScreen(container, state) {
   if (state.merged) {
@@ -24,10 +26,19 @@ function renderTribalChallengeScreen(container, state) {
   const playerTribeLabel = getPlayerTribeLabel();
   const playerWon        = playerTribeLabel === result.winner;
 
-  const closeNote  = result.wasClose ? " It came down to the wire." : "";
+  // Challenge description — append a close-finish suffix when applicable.
+  const closeSuffix = result.wasClose ? pickFlavor(CHALLENGE_CLOSE_SUFFIXES) : "";
+  const description = result.description + closeSuffix;
+
+  // Status text shown to the player.
   const playerNote = playerWon
-    ? `Your tribe, <strong style="color:${winnerColor}">${winnerName}</strong>, wins immunity. Head back to camp.`
-    : `Your tribe, <strong style="color:${loserColor}">${loserName}</strong>, loses immunity. You will attend Tribal Council tonight.`;
+    ? pickFlavor(CHALLENGE_WIN_LINES)
+    : pickFlavor(CHALLENGE_LOSS_LINES);
+
+  // Context-sensitive continue button.
+  const continueLabel = playerWon
+    ? "Head Back to Camp →"
+    : "Return to Camp →";
 
   container.innerHTML = `
     <div class="screen">
@@ -36,14 +47,14 @@ function renderTribalChallengeScreen(container, state) {
       <p class="challenge-type-label">${result.name}</p>
 
       <div class="event-log">
-        <p>${result.description}${closeNote}</p>
+        <p>${description}</p>
       </div>
 
       <div class="challenge-outcome-grid">
         <div class="challenge-outcome-cell outcome-win">
           <div class="outcome-label">Immunity</div>
           <div class="outcome-tribe" style="color:${winnerColor}">${winnerName}</div>
-          <div class="outcome-sub">Safe from the vote</div>
+          <div class="outcome-sub">Safe from the vote tonight</div>
         </div>
         <div class="challenge-outcome-cell outcome-loss">
           <div class="outcome-label">Tribal Council</div>
@@ -57,7 +68,7 @@ function renderTribalChallengeScreen(container, state) {
       </div>
 
       <div class="spacer">
-        <button id="continue-btn">Return to Camp</button>
+        <button id="continue-btn">${continueLabel}</button>
       </div>
     </div>
   `;
@@ -70,17 +81,24 @@ function renderTribalChallengeScreen(container, state) {
 // ── Post-merge: individual immunity ──────────────────────────────────────────
 
 function renderIndividualChallengeScreen(container, state) {
-  const members  = state.tribes.merged;
-  const result   = runIndividualChallenge(members);
-  const player   = state.player;
+  const members   = state.tribes.merged;
+  const result    = runIndividualChallenge(members);
+  const player    = state.player;
   const playerWon = result.winner.id === player.id;
 
-  const mergeColor = SEASON_CONFIG.mergeTribeColor;
-  const closeNote  = result.wasClose ? " It came down to the wire." : "";
+  const mergeColor  = SEASON_CONFIG.mergeTribeColor;
 
+  const closeSuffix = result.wasClose ? pickFlavor(CHALLENGE_CLOSE_SUFFIXES) : "";
+  const description = result.description + closeSuffix;
+
+  // Status text — personal win vs watching someone else take it.
   const playerNote = playerWon
-    ? `You win Individual Immunity! You cannot be voted out tonight.`
-    : `<strong>${result.winner.name}</strong> wins Individual Immunity and is safe from the vote tonight.`;
+    ? pickFlavor(INDIV_WIN_LINES)
+    : getIndivLossLine(result.winner.name);
+
+  const continueLabel = playerWon
+    ? "Head Back to Camp →"
+    : "Return to Camp →";
 
   container.innerHTML = `
     <div class="screen">
@@ -89,7 +107,7 @@ function renderIndividualChallengeScreen(container, state) {
       <p class="challenge-type-label">${result.name}</p>
 
       <div class="event-log">
-        <p>${result.description}${closeNote}</p>
+        <p>${description}</p>
       </div>
 
       <div class="indiv-immunity-winner">
@@ -103,7 +121,7 @@ function renderIndividualChallengeScreen(container, state) {
       </div>
 
       <div class="spacer">
-        <button id="continue-btn">Return to Camp</button>
+        <button id="continue-btn">${continueLabel}</button>
       </div>
     </div>
   `;
