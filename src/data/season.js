@@ -96,6 +96,15 @@ function createSeasonState() {
     // Range 0–10. Default 0 (unaware) — populated lazily by
     // adjustIdolSuspicion() in engine/relationships.js as events occur.
     idolSuspicion: {},
+
+    // ── Alliances ──────────────────────────────────────────
+    // Persistent multi-member commitments to vote together. Populated
+    // dynamically as alliances form (player action or AI auto-formation).
+    // Each alliance: { id, name, memberIds, strength, status, formedRound, founderId }
+    //   status: "active" | "weakened" | "dissolved"
+    //   strength: 0–10 (drifts toward natural fit each round)
+    // See engine/alliances.js for the full lifecycle and API.
+    alliances: [],
   };
 }
 

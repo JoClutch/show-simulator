@@ -206,6 +206,47 @@ window.DEV_CONFIG = {
 
   // ── Tab: State ──────────────────────────────────────────────────────────────
 
+  // Builds the alliance summary block for the State tab.
+  // Shows ALL alliances (including AI-only ones the player can't normally see)
+  // because dev panel exists to expose hidden state.
+  function renderAlliances(g) {
+    const list = g?.alliances ?? [];
+    if (list.length === 0) return "";
+
+    const rows = list.map(a => {
+      const status = a.status;
+      const cls =
+        status === "dissolved" ? "dev-dim" :
+        status === "weakened"  ? "dev-lo"  :
+        a.strength >= 7        ? "dev-hi"  :
+        "dev-mid";
+
+      const members = a.memberIds.map(id => {
+        const c = allKnownPlayers().find(c => c.id === id);
+        const isMe = g.player && id === g.player.id;
+        const name = c?.name ?? id;
+        return isMe ? `${name}★` : name;
+      }).join(", ") || "(empty)";
+
+      return `<tr>
+        <td class="dev-dim">${a.id}</td>
+        <td>${a.name}</td>
+        <td class="${cls}">${a.strength.toFixed(1)}</td>
+        <td class="dev-dim">${status}</td>
+        <td>${members}</td>
+      </tr>`;
+    }).join("");
+
+    return `
+      <div class="dev-section">
+        <div class="dev-section-hd">Alliances</div>
+        <table class="dev-table">
+          <thead><tr><th>ID</th><th>Name</th><th>Str</th><th>Status</th><th>Members</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  }
+
   // Builds the idol summary block for the State tab.
   // Reads window.gameState.idols and calls isIdolAvailable() from idols.js.
   function renderIdols(g) {
@@ -323,6 +364,8 @@ window.DEV_CONFIG = {
       </div>
 
       ${renderIdols(g)}
+
+      ${renderAlliances(g)}
 
       ${juryHTML}
     `;

@@ -68,6 +68,13 @@ const CAMP_ACTIONS = [
     targetPrompt: "Who do you want to draw attention toward?",
   },
   {
+    id: "proposeAlliance",
+    label: "Propose an alliance",
+    detail: "Lock in a real pact with someone. Needs trust to land.",
+    needsTarget: true,
+    targetPrompt: "Who do you want to bring in?",
+  },
+  {
     id: "laylow",
     label: "Keep a low profile",
     detail: "Stay quiet and unthreatening. Eases suspicion when you're in the crosshairs.",
@@ -90,6 +97,7 @@ function executeAction(state, actionId, player, tribemates, target) {
     case "confide":     return actionConfide(state, player, target);
     case "lobby":       return actionLobby(state, player, tribemates, target);
     case "laylow":      return actionLayLow(state, player, tribemates);
+    case "proposeAlliance": return actionProposeAlliance(state, player, target);
     default:            return { feedback: "Nothing happened.", hint: null };
   }
 }
@@ -127,6 +135,8 @@ function actionTalk(state, player, target) {
 
   if (delta >= 5) {
     adjustTrust(state, player.id, target.id, 1);
+    // Deep connection reinforces any pact they've made together.
+    strengthenSharedAlliances(state, player.id, target.id, 0.5);
     return { feedback: pickFrom([
       `You and ${target.name} talked for a long time by the fire. It felt like a real connection.`,
       `${target.name} opened up about their life back home. You listened. It seemed to matter.`,
@@ -307,6 +317,11 @@ function actionStrategy(state, player, target) {
   adjustRelationship(state, player.id, target.id, delta);
   if (delta >= 3) adjustTrust(state, player.id, target.id, 1);
 
+  // Aligned strategy talk among allies tightens the pact;
+  // a sharp disagreement between allies erodes it.
+  if (delta >= 3)      strengthenSharedAlliances(state, player.id, target.id, 0.5);
+  else if (delta < 0)  strengthenSharedAlliances(state, player.id, target.id, -0.5);
+
   if (lowTrust && delta < 1) {
     return { feedback: pickFrom([
       `${target.name} listened to your pitch, but their arms were crossed the whole time. Something is off between you two.`,
@@ -352,7 +367,12 @@ function actionStrategy(state, player, target) {
 // Formula (finding target's real preference): compare getRelationship scores
 //   among all other tribemates; the person with the lowest score is their target.
 function actionAskVote(state, player, target, tribemates) {
-  const trust = getTrust(state, player.id, target.id);
+  // Effective trust gets a +2 bump if the player and target share an alliance.
+  // Allies don't keep secrets from each other; the same question that lands
+  // as a guarded answer with a stranger becomes candid with a partner.
+  const baseTrust  = getTrust(state, player.id, target.id);
+  const allianceUp = isInSameAlliance(state, player.id, target.id) ? 2 : 0;
+  const trust      = Math.min(10, baseTrust + allianceUp);
 
   // Everyone gets a small boost for being consulted.
   adjustRelationship(state, player.id, target.id, rand(1, 2));
@@ -452,6 +472,9 @@ function actionConfide(state, player, target) {
   // the target's idol suspicion of the player by 1 (or 2 on a deep connection).
   adjustIdolSuspicion(state, target.id, player.id, trustGain >= 4 ? -2 : -1);
 
+  // A real moment of vulnerability between allies is a meaningful bond-builder.
+  strengthenSharedAlliances(state, player.id, target.id, 1);
+
   if (trustGain >= 4) {
     return { feedback: pickFrom([
       `You and ${target.name} sat by the water for a long time. You told them something real. They did too. You felt a genuine shift.`,
@@ -547,6 +570,48 @@ function actionLayLow(state, player, tribemates) {
     `You let the others do the talking today. You listened, smiled at the right moments, and faded into the background. Safer here.`,
     `You spent the afternoon just being a normal tribemate. No moves. Sometimes not making a move is the move.`,
   ]), hint: null };
+}
+
+// PROPOSE ALLIANCE — explicit pact-making.
+//
+// Forms a new 2-person alliance between player and target on success.
+// Acceptance is a function of relationship, trust, and player's social skill.
+// (Strategy doesn't help here — alliances form on warmth, not gamesmanship.)
+//
+// Acceptance chance:
+//   base 20% + rel × 2.5% + trust × 4% + social × 2%, clamped to [5%, 85%]
+//
+// On accept: alliance formed at strength 4–8 (depending on trust/rel),
+//            relationship +2, trust +1 (the commitment binds)
+// On reject: trust −1 (they were uncomfortable being approached too soon)
+//
+// If already in a shared alliance, this is a no-op (with friendly feedback).
+function actionProposeAlliance(state, player, target) {
+  if (isInSameAlliance(state, player.id, target.id)) {
+    return { feedback: getAllianceAlreadyLine(target), hint: null };
+  }
+
+  const rel   = getRelationship(state, player.id, target.id);
+  const trust = getTrust(state, player.id, target.id);
+
+  const acceptChance = Math.max(0.05, Math.min(0.85,
+    0.20 + rel * 0.025 + trust * 0.04 + player.social * 0.02
+  ));
+
+  if (Math.random() < acceptChance) {
+    const initialStrength = 4 + Math.floor(trust / 3) + (rel >= 10 ? 1 : 0);
+    const alliance = createAlliance(state, [player, target], player.id, initialStrength);
+    adjustRelationship(state, player.id, target.id, 2);
+    adjustTrust(state, player.id, target.id, 1);
+    return {
+      feedback: getAllianceAcceptedLine(alliance.name, target),
+      hint: `alliance:formed:${alliance.id}`,
+    };
+  }
+
+  // Rejected — small trust hit (you misread the room)
+  adjustTrust(state, player.id, target.id, -1);
+  return { feedback: getAllianceRejectedLine(target), hint: null };
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────

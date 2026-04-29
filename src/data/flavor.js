@@ -358,3 +358,56 @@ const IDOL_NOT_PLAYED_LINES = [
   "The pause stretches. Nobody stands. The votes are read.",
   "A long beat passes. Nothing. Jeff turns to the urn.",
 ];
+
+// ── Alliances ────────────────────────────────────────────────────────────────
+
+// Pool of evocative names for newly-formed alliances. Engine/alliances.js
+// avoids duplicates within a single playthrough by filtering the in-use names
+// before picking. If the pool is exhausted (rare), engine falls back to a
+// numbered name ("The 17").
+const ALLIANCE_NAMES = [
+  "The Pact",
+  "The Inner Circle",
+  "Ride or Die",
+  "The Underdogs",
+  "The Quiet Ones",
+  "The Originals",
+  "The Outliers",
+  "The Final Card",
+  "The Movement",
+  "The Shadows",
+  "The Three",
+  "The Camp",
+  "The Long Game",
+  "The Roundtable",
+];
+
+// Player feedback when their alliance proposal is accepted.
+// `name` is the alliance's chosen name; `target` is the proposed partner.
+function getAllianceAcceptedLine(name, target) {
+  return pickFlavor([
+    `You laid out the case to ${target.name} quietly. Ride together, vote together, take this far. They agreed. "${name}" is on.`,
+    `${target.name} listened, weighed it, and then nodded. "Yeah. Let's do this." You're in an alliance — "${name}".`,
+    `You and ${target.name} talked it through behind the shelter. By the end, you had a real pact. You're calling it "${name}".`,
+    `${target.name} extended a hand. You shook on it. "${name}" — that's what you'll call this. It's real now.`,
+  ]);
+}
+
+// Player feedback when their alliance proposal is rejected.
+function getAllianceRejectedLine(target) {
+  return pickFlavor([
+    `You floated the idea to ${target.name}, but they pushed back. "Let's just keep playing it day by day." It didn't land.`,
+    `${target.name} smiled politely when you proposed working together. "Maybe down the line," they said. Translation: not now.`,
+    `Your alliance pitch with ${target.name} fell flat. They weren't comfortable being locked in. The conversation got awkward.`,
+    `${target.name} listened, then looked away. "I appreciate it, but I'm just trying to keep my options open." A no, dressed up.`,
+  ]);
+}
+
+// Quiet line shown when player tries to propose to an existing ally.
+function getAllianceAlreadyLine(target) {
+  return pickFlavor([
+    `You and ${target.name} already have a pact. No need to formalize twice.`,
+    `${target.name} laughed. "We already have an alliance. You getting paranoid?"`,
+    `You started to make the pitch, but ${target.name} cut you off. "We're already in this together. Save the speech."`,
+  ]);
+}

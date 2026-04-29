@@ -385,6 +385,117 @@ button:disabled {
   background-color: var(--bg-card);
 }
 
+/* ── Camp Life: alliance block ── */
+/* Shows the alliances the player is currently in. Multiple cards stack. */
+.camp-alliance-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.camp-alliance-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-mid);
+  border-left: 3px solid var(--border-mid);
+  border-radius: 4px;
+  padding: 0.55rem 0.85rem 0.65rem;
+  font-size: 0.82rem;
+}
+
+/* Strength tier accents */
+.camp-alliance-tight  { border-left-color: #5fa86f; }
+.camp-alliance-solid  { border-left-color: #b89545; }
+.camp-alliance-weakened { border-left-color: #8a4040; opacity: 0.85; }
+
+.camp-alliance-header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  margin-bottom: 0.35rem;
+}
+
+.camp-alliance-icon {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}
+
+.camp-alliance-name {
+  font-weight: bold;
+  color: var(--text-primary);
+  flex: 1;
+  letter-spacing: 0.01em;
+}
+
+.camp-alliance-strength-num {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.camp-alliance-members {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-bottom: 0.4rem;
+}
+
+.camp-alliance-chip {
+  display: inline-block;
+  background: var(--bg-raised);
+  border: 1px solid var(--border-dim);
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+
+.camp-alliance-chip-you {
+  background: #1f2c4a;
+  border-color: #4a6a98;
+  color: #b8c9e8;
+  font-weight: bold;
+}
+
+.camp-alliance-strength {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.camp-alliance-bar {
+  flex: 1;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.camp-alliance-bar-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #6a8aa0, #b89545);
+  transition: width 0.25s ease;
+}
+
+.camp-alliance-tight .camp-alliance-bar-fill {
+  background: linear-gradient(90deg, #4a8a5a, #5fa86f);
+}
+
+.camp-alliance-weakened .camp-alliance-bar-fill {
+  background: linear-gradient(90deg, #6a3030, #8a4040);
+}
+
+.camp-alliance-tier {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  flex-shrink: 0;
+  width: 4.5rem;
+  text-align: right;
+}
+
 /* ── Camp Life Screen ── */
 .camp-header {
   display: flex;

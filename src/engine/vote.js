@@ -93,6 +93,16 @@ function pickVoteTarget(state, voter, tribe) {
     // Bond protection: strong allies are shielded.
     const bondProtection = rel >= 15 ? 20 : rel >= 8 ? 8 : 0;
 
+    // Alliance protection: members of a shared alliance protect each other.
+    // Layered ON TOP of bondProtection — alliances and friendships compound.
+    // Uses the STRONGEST shared alliance (max, not sum) to avoid double-count
+    // when overlapping memberships exist.
+    //   loose alliance (str 4) → +6
+    //   solid alliance (str 7) → +10.5
+    //   tight alliance (str 10)→ +15
+    const sharedAlliance     = getStrongestSharedAlliance(state, voter.id, c.id);
+    const allianceProtection = sharedAlliance ? sharedAlliance.strength * 1.5 : 0;
+
     // Trust: shifted so trust 3 (baseline) = 0, trust 0 = −4.5, trust 10 = +10.5.
     const trust       = getTrust(state, voter.id, c.id);
     const trustFactor = (trust - 3) * 1.5;
@@ -128,7 +138,7 @@ function pickVoteTarget(state, voter, tribe) {
                      * (window.DEV_CONFIG?.voteNoiseMultiplier ?? 1);
     const noise      = (Math.random() - 0.5) * noiseRange;
 
-    const score = rel + bondProtection + trustFactor
+    const score = rel + bondProtection + allianceProtection + trustFactor
                 - suspicion - socialThreat - challengeThreat
                 + idolFactor
                 + noise;
@@ -136,10 +146,10 @@ function pickVoteTarget(state, voter, tribe) {
     if (VOTE_DEBUG) {
       console.log(
         `  [SCORE] ${voter.name} → ${c.name}: ` +
-        `rel=${rel.toFixed(1)} bond=+${bondProtection} trust=${trustFactor.toFixed(1)} ` +
-        `susp=${(-suspicion).toFixed(1)} soc=${(-socialThreat).toFixed(1)} ` +
-        `chal=${(-challengeThreat).toFixed(1)} idol=${idolFactor.toFixed(1)} ` +
-        `noise=${noise.toFixed(1)} = ${score.toFixed(1)}`
+        `rel=${rel.toFixed(1)} bond=+${bondProtection} ally=+${allianceProtection.toFixed(1)} ` +
+        `trust=${trustFactor.toFixed(1)} susp=${(-suspicion).toFixed(1)} ` +
+        `soc=${(-socialThreat).toFixed(1)} chal=${(-challengeThreat).toFixed(1)} ` +
+        `idol=${idolFactor.toFixed(1)} noise=${noise.toFixed(1)} = ${score.toFixed(1)}`
       );
     }
 

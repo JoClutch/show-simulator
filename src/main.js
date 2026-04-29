@@ -57,19 +57,25 @@ function onCampLifeDone() {
     return;
   }
 
-  // Phase 2 → tribal council ahead. Run a single gossip pass before votes
-  // crystallise: close allies share what they suspect about idol possession.
-  // Pre-merge it only matters for the tribe actually voting (the losing tribe);
-  // post-merge the entire merged tribe is voting.
+  // Phase 2 → tribal council ahead. Two engine passes happen overnight:
+  //   • aiFormAlliances    — NPC pairs with strong rel/trust may form pacts
+  //   • spreadIdolSuspicion — close allies share idol reads (gossip)
+  //
+  // Pre-merge: alliances form in BOTH tribes (they're both at camp), but
+  // gossip only matters for the tribe actually voting tonight.
+  // Post-merge: everything happens in the merged tribe.
   if (gameState.merged) {
+    aiFormAlliances(gameState, gameState.tribes.merged);
     spreadIdolSuspicion(gameState, gameState.tribes.merged);
     showScreen("tribal");
   } else if (getPlayerTribeLabel() === gameState.tribalTribe) {
+    aiFormAlliances(gameState, gameState.tribes.A);
+    aiFormAlliances(gameState, gameState.tribes.B);
     spreadIdolSuspicion(gameState, gameState.tribes[gameState.tribalTribe]);
     showScreen("tribal");
   } else {
-    // Player's tribe won — they don't see the other tribe's tribal, but the
-    // losing tribe still gossips overnight before they vote.
+    aiFormAlliances(gameState, gameState.tribes.A);
+    aiFormAlliances(gameState, gameState.tribes.B);
     spreadIdolSuspicion(gameState, gameState.tribes[gameState.tribalTribe]);
     advanceRound();
   }
@@ -100,6 +106,10 @@ function onTribalDone(eliminatedContestant) {
   gameState.eliminated.push(eliminatedContestant);
   removeFromTribes(eliminatedContestant);
 
+  // Prune the eliminated contestant from every alliance they were in.
+  // Alliances dropping below 2 members are dissolved automatically.
+  removeMemberFromAlliances(gameState, eliminatedContestant.id);
+
   // Post-merge eliminations are sent to the jury.
   // removeFromTribes() has already run, so getAllActive() returns only survivors —
   // that is the correct population for the sentiment snapshot.
@@ -123,6 +133,11 @@ function onEliminationDone() {
 // ── Round management ──────────────────────────────────────────────────────────
 
 function advanceRound() {
+  // Round-end alliance drift: strength shifts toward member rel/trust averages,
+  // suspicion penalties apply, dissolved alliances are cleaned up. Runs BEFORE
+  // round counter increment so it captures the round just played.
+  updateAlliances(gameState);
+
   gameState.round          += 1;
   gameState.campPhase       = 1;
   gameState.immunityWon     = null;

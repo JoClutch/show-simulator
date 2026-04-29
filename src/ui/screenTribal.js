@@ -65,6 +65,10 @@ function renderPreMergeTribalScreen(container, state) {
   container.querySelector("#cast-btn").addEventListener("click", () => {
     if (!playerVote) return;
     const allVotes = collectAiVotes(state, tribe, playerVote, player);
+    // Update alliance strength based on how members voted — runs on raw vote
+    // intent (before idol play) since loyalty is tested by what people put in
+    // the urn, not by what survives the count.
+    processVotingAftermath(state, allVotes);
     runIdolPlayPhase(container, state, tribe, protectedIds => {
       const eliminated  = tallyVotes(allVotes, state, protectedIds);
       const revealOrder = buildRevealOrder(allVotes, eliminated.id);
@@ -138,6 +142,7 @@ function renderMergedTribalScreen(container, state) {
     // Voters = everyone; candidates = everyone except immunity holder.
     const votePool = tribe.filter(c => c.id !== state.immunityHolder);
     const allVotes = collectAiVotes(state, tribe, playerVote, player, votePool);
+    processVotingAftermath(state, allVotes);
     runIdolPlayPhase(container, state, tribe, protectedIds => {
       const eliminated  = tallyVotes(allVotes, state, protectedIds);
       const revealOrder = buildRevealOrder(allVotes, eliminated.id);

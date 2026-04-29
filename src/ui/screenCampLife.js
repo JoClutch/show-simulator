@@ -116,6 +116,60 @@ function renderCampLifeScreen(container, state) {
 
   const idolBadgeHTML = buildIdolBadgeHTML();
 
+  // Alliance block — shows the alliances the player is a member of.
+  // Re-rendered after each action, like the idol badge: alliances can form
+  // (proposeAlliance succeeded) or dissolve (member eliminated) mid-session.
+  // Only displays alliances the PLAYER is in — the player can see their own
+  // pacts but not those formed silently between AIs (info asymmetry).
+  function buildAllianceBlockHTML() {
+    const mine = getAlliancesForMember(state, player.id);
+    if (mine.length === 0) return "";
+
+    const cards = mine.map(a => {
+      const strengthInt = Math.round(a.strength);
+      const widthPct    = Math.max(5, strengthInt * 10);
+      const tier =
+        strengthInt >= 7 ? "tight"   :
+        strengthInt >= 4 ? "solid"   :
+        "weakened";
+      const tierLabel =
+        tier === "tight"   ? "Tight"   :
+        tier === "solid"   ? "Solid"   :
+        "Weakened";
+
+      // Member chips — "You" first, then others by name. Eliminated members
+      // are pruned in removeMemberFromAlliances so they won't appear.
+      const memberChips = a.memberIds.map(id => {
+        if (id === player.id) {
+          return `<span class="camp-alliance-chip camp-alliance-chip-you">You</span>`;
+        }
+        const name = findContestant(state, id)?.name ?? "?";
+        return `<span class="camp-alliance-chip">${name}</span>`;
+      }).join("");
+
+      return `
+        <div class="camp-alliance-card camp-alliance-${tier}">
+          <div class="camp-alliance-header">
+            <span class="camp-alliance-icon">⚐</span>
+            <span class="camp-alliance-name">${a.name}</span>
+            <span class="camp-alliance-strength-num">${strengthInt}/10</span>
+          </div>
+          <div class="camp-alliance-members">${memberChips}</div>
+          <div class="camp-alliance-strength">
+            <span class="camp-alliance-bar">
+              <span class="camp-alliance-bar-fill" style="width:${widthPct}%"></span>
+            </span>
+            <span class="camp-alliance-tier">${tierLabel}</span>
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    return `<div class="camp-alliance-block">${cards}</div>`;
+  }
+
+  const allianceBlockHTML = buildAllianceBlockHTML();
+
   // ── Shell ─────────────────────────────────────────────────────────────────
 
   container.innerHTML = `
@@ -136,6 +190,8 @@ function renderCampLifeScreen(container, state) {
       ${episodeOpener}
 
       <div id="idol-badge-container">${idolBadgeHTML}</div>
+
+      <div id="alliance-block-container">${allianceBlockHTML}</div>
 
       ${statusBanner}
 
@@ -171,6 +227,11 @@ function renderCampLifeScreen(container, state) {
     // Refresh the idol badge — the player may have just found one this action.
     const badgeContainer = container.querySelector("#idol-badge-container");
     if (badgeContainer) badgeContainer.innerHTML = buildIdolBadgeHTML();
+
+    // Refresh the alliance block — proposeAlliance just succeeded, an existing
+    // alliance just shifted strength tier, etc.
+    const allianceContainer = container.querySelector("#alliance-block-container");
+    if (allianceContainer) allianceContainer.innerHTML = buildAllianceBlockHTML();
 
     // Re-read live idol state for the search button — same reason.
     const currentHoldsScope = getHeldIdols(state, player.id)
