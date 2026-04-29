@@ -496,6 +496,27 @@ button:disabled {
   text-align: right;
 }
 
+/* Stale alliance — no positive interaction in 2+ rounds. */
+.camp-alliance-stale {
+  opacity: 0.78;
+}
+
+.camp-alliance-stale .camp-alliance-bar-fill {
+  filter: grayscale(0.5);
+}
+
+.camp-alliance-stale-badge {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #b8956a;
+  background: rgba(184, 149, 106, 0.1);
+  border: 1px solid rgba(184, 149, 106, 0.3);
+  border-radius: 999px;
+  padding: 1px 7px;
+  margin-right: 0.4rem;
+}
+
 /* ── Camp Life Screen ── */
 .camp-header {
   display: flex;

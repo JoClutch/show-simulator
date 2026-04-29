@@ -157,6 +157,14 @@ window.DEV_CONFIG = {
     const socialThreat    = candidate.social    * (voter.strategy / 15);
     const challengeThreat = candidate.challenge * (voter.strategy / 25);
 
+    // Alliance protection × loyalty factor — must mirror pickVoteTarget exactly.
+    const sharedAlliance = getStrongestSharedAlliance(g, voter.id, candidate.id);
+    const baseAllianceProtection = sharedAlliance ? sharedAlliance.strength * 1.5 : 0;
+    const loyalty = Math.max(0.3, Math.min(2.0,
+      1 + (voter.social - 5) * 0.05 - (voter.strategy - 5) * 0.07
+    ));
+    const allianceProtection = baseAllianceProtection * loyalty;
+
     // Idol suspicion factor — must mirror pickVoteTarget exactly.
     const idolSusp = getIdolSuspicion(g, voter.id, candidate.id);
     let idolFactor = 0;
@@ -164,7 +172,7 @@ window.DEV_CONFIG = {
     else if (idolSusp >= 3) idolFactor = voter.strategy >= 6 ? -2 : +3;
 
     // No noise — fully deterministic for inspection.
-    return rel + bondProtection + trustFactor
+    return rel + bondProtection + allianceProtection + trustFactor
          - suspicion - socialThreat - challengeThreat
          + idolFactor;
   }
@@ -228,20 +236,59 @@ window.DEV_CONFIG = {
         return isMe ? `${name}★` : name;
       }).join(", ") || "(empty)";
 
+      // Staleness column: rounds since the alliance was last reinforced by a
+      // positive member interaction. ≥2 means the alliance is bleeding from
+      // neglect (visible cue: dev-lo class).
+      const lastReinforced = a.lastReinforcedRound ?? a.formedRound;
+      const staleRounds    = (g.round ?? 0) - lastReinforced;
+      const stCls          = staleRounds >= 2 ? "dev-lo" : staleRounds >= 1 ? "dev-mid" : "dev-dim";
+
       return `<tr>
         <td class="dev-dim">${a.id}</td>
         <td>${a.name}</td>
         <td class="${cls}">${a.strength.toFixed(1)}</td>
         <td class="dev-dim">${status}</td>
+        <td class="${stCls}">${staleRounds}</td>
         <td>${members}</td>
       </tr>`;
     }).join("");
 
     return `
       <div class="dev-section">
-        <div class="dev-section-hd">Alliances</div>
+        <div class="dev-section-hd">Alliances &nbsp;<span class="dev-dim" style="font-weight:normal">stale = rounds since reinforced</span></div>
         <table class="dev-table">
-          <thead><tr><th>ID</th><th>Name</th><th>Str</th><th>Status</th><th>Members</th></tr></thead>
+          <thead><tr><th>ID</th><th>Name</th><th>Str</th><th>Status</th><th>Stale</th><th>Members</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  }
+
+  // Voting blocs from the most recent tribal. Cleared on advanceRound, so
+  // this section only appears between tribal and the next round start.
+  function renderVotingBlocs(g) {
+    const blocs = g?.votingBlocs ?? [];
+    if (blocs.length === 0) return "";
+
+    const rows = blocs.map(b => {
+      const targetName = allKnownPlayers().find(c => c.id === b.targetId)?.name ?? b.targetId;
+      const memberNames = b.memberIds.map(id =>
+        allKnownPlayers().find(c => c.id === id)?.name ?? id
+      ).join(", ");
+      const noteCls = b.crossesAlliances ? "dev-mid" : "dev-dim";
+      const note    = b.crossesAlliances ? "cross-alliance" : "—";
+      return `<tr>
+        <td class="dev-dim">${b.id}</td>
+        <td>→ ${targetName}</td>
+        <td>${memberNames}</td>
+        <td class="${noteCls}">${note}</td>
+      </tr>`;
+    }).join("");
+
+    return `
+      <div class="dev-section">
+        <div class="dev-section-hd">Voting blocs (last tribal)</div>
+        <table class="dev-table">
+          <thead><tr><th>ID</th><th>Target</th><th>Members</th><th>Note</th></tr></thead>
           <tbody>${rows}</tbody>
         </table>
       </div>`;
@@ -366,6 +413,8 @@ window.DEV_CONFIG = {
       ${renderIdols(g)}
 
       ${renderAlliances(g)}
+
+      ${renderVotingBlocs(g)}
 
       ${juryHTML}
     `;

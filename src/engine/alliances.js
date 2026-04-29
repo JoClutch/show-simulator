@@ -72,13 +72,16 @@ function _pickAllianceName(state) {
 // Returns the new alliance object.
 function createAlliance(state, members, founderId, initialStrength = 5) {
   const alliance = {
-    id:          _nextAllianceId(),
-    name:        _pickAllianceName(state),
-    memberIds:   members.map(m => m.id),
-    founderId:   founderId ?? members[0].id,
-    formedRound: state.round,
-    strength:    Math.max(1, Math.min(10, initialStrength)),
-    status:      "active",
+    id:                  _nextAllianceId(),
+    name:                _pickAllianceName(state),
+    memberIds:           members.map(m => m.id),
+    founderId:           founderId ?? members[0].id,
+    formedRound:         state.round,
+    // Treat formation itself as the most recent reinforcement. A brand-new
+    // alliance won't get hit by the staleness penalty in its first round.
+    lastReinforcedRound: state.round,
+    strength:            Math.max(1, Math.min(10, initialStrength)),
+    status:              "active",
   };
   state.alliances.push(alliance);
   return alliance;
@@ -126,11 +129,16 @@ function adjustAllianceStrength(alliance, delta) {
 // Applies a delta to every active alliance that contains BOTH members.
 // Used by camp interactions where two specific members did something
 // together (deep talk, confide, aligned strategy talk).
+//
+// Positive deltas also bump lastReinforcedRound — the alliance is being
+// actively maintained. Negative deltas (erosion events) don't reset it;
+// nothing has been done to keep the pact warm.
 function strengthenSharedAlliances(state, idA, idB, delta) {
   for (const a of state.alliances ?? []) {
     if (a.status === "dissolved") continue;
     if (a.memberIds.includes(idA) && a.memberIds.includes(idB)) {
       adjustAllianceStrength(a, delta);
+      if (delta > 0) a.lastReinforcedRound = state.round;
     }
   }
 }
@@ -151,11 +159,15 @@ function removeMemberFromAlliances(state, contestantId) {
 
 // ── Round-end drift ───────────────────────────────────────────────────────────
 //
-// Once per round, each active alliance's strength drifts toward its "natural
-// fit" — the average relationship and trust among its members. Positive drift
-// when members genuinely like and trust each other; negative when those bonds
-// fray. Suspicion on members applies a separate penalty (suspicion is a public
-// red flag that destabilizes alliances).
+// Once per round, each active alliance's strength drifts based on five
+// signals. Each is small on its own; together they make alliances feel like
+// living organisms that need ongoing care.
+//
+//   1. Natural fit       — avg pair rel/trust drives ±0.5 / ±1 drift
+//   2. Suspicion penalty — −0.5 per member with public suspicion ≥ 6
+//   3. Challenge threat  — −0.2 per member with challenge ≥ 9 (flush targets)
+//   4. Staleness         — −0.5 if no positive member interaction for 2+ rounds
+//   5. Partial fracture  — outlier members drift out (avg rel < −3, trust < 2)
 //
 // Called from main.js advanceRound() at the end of each round.
 function updateAlliances(state) {
@@ -167,7 +179,21 @@ function updateAlliances(state) {
       continue;
     }
 
-    // Average pair relationship & trust within the alliance.
+    // ── Partial fracture ──────────────────────────────────────────────────
+    // For 3+ member alliances, find any member whose ties to the rest have
+    // genuinely collapsed — they silently drift out before drift is computed
+    // (so the post-fracture alliance isn't double-penalised by their hostility).
+    if (a.memberIds.length >= 3) {
+      _ejectFractureOutliers(state, a);
+      // Re-check size after potential ejections.
+      if (a.memberIds.length < 2) {
+        a.status = "dissolved";
+        a.strength = 0;
+        continue;
+      }
+    }
+
+    // ── 1. Natural fit (avg rel/trust drift) ──────────────────────────────
     let pairCount = 0, relSum = 0, trustSum = 0;
     for (let i = 0; i < a.memberIds.length; i++) {
       for (let j = i + 1; j < a.memberIds.length; j++) {
@@ -181,8 +207,6 @@ function updateAlliances(state) {
     const avgRel   = relSum   / pairCount;
     const avgTrust = trustSum / pairCount;
 
-    // Drift toward natural cohesion. Tuned so a healthy alliance slowly grows
-    // and a fraying one slowly bleeds out — roughly ±1 strength per round.
     if (avgRel >= 8 && avgTrust >= 5) {
       adjustAllianceStrength(a, +0.5);
     } else if (avgRel < 0 || avgTrust < 3) {
@@ -191,44 +215,205 @@ function updateAlliances(state) {
       adjustAllianceStrength(a, -0.5);
     }
 
-    // Suspicion penalty: each high-suspicion member shaves another 0.5.
+    // ── 2. Suspicion penalty ──────────────────────────────────────────────
     let highSuspCount = 0;
     for (const id of a.memberIds) {
       const c = findContestant(state, id);
       if (c && (c.suspicion ?? 0) >= 6) highSuspCount++;
     }
     if (highSuspCount > 0) adjustAllianceStrength(a, -0.5 * highSuspCount);
+
+    // ── 3. Challenge threat ───────────────────────────────────────────────
+    // High-stat physical players read as flush targets to outsiders, which
+    // creates ongoing destabilisation pressure on the alliance protecting them.
+    let threatCount = 0;
+    for (const id of a.memberIds) {
+      const c = findContestant(state, id);
+      if (c && c.challenge >= 9) threatCount++;
+    }
+    if (threatCount > 0) adjustAllianceStrength(a, -0.2 * threatCount);
+
+    // ── 4. Staleness ──────────────────────────────────────────────────────
+    // An alliance that hasn't seen a positive interaction in a couple rounds
+    // bleeds. This is the v3.5 "active maintenance" pressure — alliances
+    // need talking, confiding, aligned strategy to stay sharp.
+    const lastReinforced = a.lastReinforcedRound ?? a.formedRound;
+    if (state.round - lastReinforced >= 2) {
+      adjustAllianceStrength(a, -0.5);
+    }
+  }
+}
+
+// Ejects any member whose average relationship and trust with the rest of the
+// alliance has collapsed below a fracture threshold. Returns silently — the
+// member just leaves; their hostility is already encoded in the rel/trust
+// values. The alliance loses 1 strength to commemorate the loss (members will
+// need to recommit to absorb the destabilisation).
+function _ejectFractureOutliers(state, alliance) {
+  // Iterate over a snapshot — we may mutate alliance.memberIds inside the loop.
+  for (const candidateId of [...alliance.memberIds]) {
+    if (alliance.memberIds.length < 3) break;   // never fracture below 3 → 2
+
+    const others = alliance.memberIds.filter(id => id !== candidateId);
+    if (others.length === 0) continue;
+
+    let relSum = 0, trustSum = 0;
+    for (const otherId of others) {
+      relSum   += getRelationship(state, candidateId, otherId);
+      trustSum += getTrust(state, candidateId, otherId);
+    }
+    const avgRel   = relSum   / others.length;
+    const avgTrust = trustSum / others.length;
+
+    if (avgRel < -3 && avgTrust < 2) {
+      const idx = alliance.memberIds.indexOf(candidateId);
+      if (idx !== -1) alliance.memberIds.splice(idx, 1);
+      adjustAllianceStrength(alliance, -1);
+    }
   }
 }
 
 // ── Voting aftermath ──────────────────────────────────────────────────────────
 //
-// Run once per Tribal Council, immediately after votes are cast (before the
-// dramatic reveal). Inspects each alliance's voting alignment:
+// Runs once per Tribal Council, immediately after votes are cast (before the
+// dramatic reveal). Two passes per alliance:
 //
-//   unanimous (all same target)            → +1 strength  (shared move binds)
-//   majority (most agree but a split)      → −0.5 strength (small fracture)
-//   fragmented (<50% agree on top target)  → −2 strength  (real betrayal)
+//   1. BETRAYAL DETECTION — was any member's vote cast against a fellow ally?
+//      • Betrayer/betrayed pair: relationship −8, trust −4 (catastrophic)
+//      • Witness members:        relationship −3, trust −2 (everyone saw it)
+//      • Alliance structural:    strength −3
+//      • Betrayer is EJECTED from the alliance
 //
-// This is the main "alliances test under pressure" moment. Camps look unified;
-// votes reveal the truth.
+//   2. ALIGNMENT — among the REMAINING members (post-ejection):
+//      unanimous (all same target)            → +1 strength
+//      majority (most agree but a split)      → −0.5 strength
+//      fragmented (<50% agree on top target)  → −2 strength
+//
+// This is the alliance's true test. Camps look unified; votes reveal the truth.
 function processVotingAftermath(state, allVotes) {
   for (const a of state.alliances ?? []) {
     if (a.status === "dissolved") continue;
+    if (a.memberIds.length < 2) continue;
 
-    const memberVotes = allVotes.filter(v => a.memberIds.includes(v.voter.id));
-    if (memberVotes.length < 2) continue;   // need at least 2 voters to align
+    // ── Betrayal pass ─────────────────────────────────────────────────────
+    // Snapshot memberIds at the start — ejections happen below and we want
+    // "witness" hits to land on every member as of the moment the vote was cast.
+    const memberSnapshot = [...a.memberIds];
+    const betrayals = [];
+
+    for (const v of allVotes) {
+      if (!memberSnapshot.includes(v.voter.id))  continue;   // not a member
+      if (!memberSnapshot.includes(v.target.id)) continue;   // didn't target ally
+      if (v.voter.id === v.target.id)            continue;   // (sanity)
+      betrayals.push({ voterId: v.voter.id, targetId: v.target.id });
+    }
+
+    for (const { voterId, targetId } of betrayals) {
+      // The betrayed pair takes the heaviest hit.
+      adjustRelationship(state, voterId, targetId, -8);
+      adjustTrust(state, voterId, targetId, -4);
+
+      // Witness members — every other member of the alliance saw it too.
+      // Their trust in the betrayer collapses; relationship hardens.
+      for (const witnessId of memberSnapshot) {
+        if (witnessId === voterId || witnessId === targetId) continue;
+        adjustRelationship(state, voterId, witnessId, -3);
+        adjustTrust(state, voterId, witnessId, -2);
+      }
+
+      // Structural damage to the alliance and ejection of the betrayer.
+      adjustAllianceStrength(a, -3);
+      const idx = a.memberIds.indexOf(voterId);
+      if (idx !== -1) a.memberIds.splice(idx, 1);
+    }
+
+    // Post-ejection sanity: alliance may have collapsed.
+    if (a.memberIds.length < 2) {
+      a.status = "dissolved";
+      a.strength = 0;
+      continue;
+    }
+
+    // ── Alignment pass (on remaining members only) ────────────────────────
+    const remainingVotes = allVotes.filter(v => a.memberIds.includes(v.voter.id));
+    if (remainingVotes.length < 2) continue;
 
     const counts = {};
-    for (const v of memberVotes) {
+    for (const v of remainingVotes) {
       counts[v.target.id] = (counts[v.target.id] ?? 0) + 1;
     }
     const top   = Math.max(...Object.values(counts));
-    const ratio = top / memberVotes.length;
+    const ratio = top / remainingVotes.length;
 
-    if (ratio === 1)        adjustAllianceStrength(a, +1);
-    else if (ratio < 0.5)   adjustAllianceStrength(a, -2);
-    else                    adjustAllianceStrength(a, -0.5);
+    if (ratio === 1) {
+      adjustAllianceStrength(a, +1);
+      // Voting together IS active maintenance — refresh the staleness clock.
+      a.lastReinforcedRound = state.round;
+    } else if (ratio < 0.5) {
+      adjustAllianceStrength(a, -2);
+    } else {
+      adjustAllianceStrength(a, -0.5);
+    }
+  }
+}
+
+// ── Voting blocs ─────────────────────────────────────────────────────────────
+//
+// Detects ephemeral voting coalitions from the round's actual votes. Any
+// group of 2+ voters who picked the same target counts as a bloc. Blocs are
+// observational primarily — they expose the de-facto coordination structure
+// of a vote, separate from the persistent alliance graph.
+//
+// A bloc "crosses alliances" if its members aren't all in one shared alliance.
+// Cross-alliance blocs grant a small relationship +1 between every pair of
+// members — "we worked together this round" — which over time can seed new
+// alliances.
+//
+// Cleared at the start of each round in advanceRound().
+function detectVotingBlocs(state, allVotes) {
+  // Group voters by their chosen target.
+  const groups = {};
+  for (const v of allVotes) {
+    if (!groups[v.target.id]) groups[v.target.id] = [];
+    groups[v.target.id].push(v.voter);
+  }
+
+  for (const targetId of Object.keys(groups)) {
+    const voters = groups[targetId];
+    if (voters.length < 2) continue;
+
+    // Crosses alliances if any two voters in the bloc share NO common alliance.
+    let crossesAlliances = false;
+    outer: for (let i = 0; i < voters.length; i++) {
+      for (let j = i + 1; j < voters.length; j++) {
+        if (!isInSameAlliance(state, voters[i].id, voters[j].id)) {
+          crossesAlliances = true;
+          break outer;
+        }
+      }
+    }
+
+    state.votingBlocs.push({
+      id:               `bloc-${state.votingBlocs.length + 1}-r${state.round}`,
+      memberIds:        voters.map(v => v.id),
+      targetId,
+      formedRound:      state.round,
+      crossesAlliances,
+    });
+
+    // "We worked together" affinity — only for cross-alliance blocs, since
+    // members of an existing alliance don't need this nudge (they're already
+    // accumulating relationship through the alliance's own dynamics).
+    if (crossesAlliances) {
+      for (let i = 0; i < voters.length; i++) {
+        for (let j = i + 1; j < voters.length; j++) {
+          // Only bump for pairs not already in a shared alliance — pairs
+          // inside the same alliance get plenty of upside elsewhere.
+          if (isInSameAlliance(state, voters[i].id, voters[j].id)) continue;
+          adjustRelationship(state, voters[i].id, voters[j].id, 1);
+        }
+      }
+    }
   }
 }
 

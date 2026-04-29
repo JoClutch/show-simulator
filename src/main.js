@@ -134,9 +134,14 @@ function onEliminationDone() {
 
 function advanceRound() {
   // Round-end alliance drift: strength shifts toward member rel/trust averages,
-  // suspicion penalties apply, dissolved alliances are cleaned up. Runs BEFORE
-  // round counter increment so it captures the round just played.
+  // suspicion/threat/staleness penalties apply, outliers fracture out, dissolved
+  // alliances are cleaned up. Runs BEFORE round counter increment so it
+  // captures the round just played.
   updateAlliances(gameState);
+
+  // Clear ephemeral voting blocs from the just-concluded tribal. Blocs only
+  // persist for the round they formed in (visible in dev panel until reset).
+  gameState.votingBlocs = [];
 
   gameState.round          += 1;
   gameState.campPhase       = 1;

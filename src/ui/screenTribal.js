@@ -69,6 +69,7 @@ function renderPreMergeTribalScreen(container, state) {
     // intent (before idol play) since loyalty is tested by what people put in
     // the urn, not by what survives the count.
     processVotingAftermath(state, allVotes);
+    detectVotingBlocs(state, allVotes);
     runIdolPlayPhase(container, state, tribe, protectedIds => {
       const eliminated  = tallyVotes(allVotes, state, protectedIds);
       const revealOrder = buildRevealOrder(allVotes, eliminated.id);
@@ -143,6 +144,7 @@ function renderMergedTribalScreen(container, state) {
     const votePool = tribe.filter(c => c.id !== state.immunityHolder);
     const allVotes = collectAiVotes(state, tribe, playerVote, player, votePool);
     processVotingAftermath(state, allVotes);
+    detectVotingBlocs(state, allVotes);
     runIdolPlayPhase(container, state, tribe, protectedIds => {
       const eliminated  = tallyVotes(allVotes, state, protectedIds);
       const revealOrder = buildRevealOrder(allVotes, eliminated.id);

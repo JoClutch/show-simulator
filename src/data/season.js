@@ -100,11 +100,22 @@ function createSeasonState() {
     // ── Alliances ──────────────────────────────────────────
     // Persistent multi-member commitments to vote together. Populated
     // dynamically as alliances form (player action or AI auto-formation).
-    // Each alliance: { id, name, memberIds, strength, status, formedRound, founderId }
+    // Each alliance: { id, name, memberIds, strength, status, formedRound,
+    //                  founderId, lastReinforcedRound }
     //   status: "active" | "weakened" | "dissolved"
     //   strength: 0–10 (drifts toward natural fit each round)
+    //   lastReinforcedRound: most recent round any member-pair did a positive
+    //     interaction inside the alliance (drives staleness penalty)
     // See engine/alliances.js for the full lifecycle and API.
     alliances: [],
+
+    // ── Voting blocs ───────────────────────────────────────
+    // Ephemeral, single-tribal coordinations. Detected after votes are cast:
+    // any group of 2+ voters who picked the same target counts as a bloc.
+    // Cleared at the start of each new round (advanceRound).
+    // Each bloc: { id, memberIds, targetId, formedRound, crossesAlliances }
+    // See detectVotingBlocs() in engine/alliances.js.
+    votingBlocs: [],
   };
 }
 

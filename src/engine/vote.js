@@ -100,8 +100,20 @@ function pickVoteTarget(state, voter, tribe) {
     //   loose alliance (str 4) → +6
     //   solid alliance (str 7) → +10.5
     //   tight alliance (str 10)→ +15
-    const sharedAlliance     = getStrongestSharedAlliance(state, voter.id, c.id);
-    const allianceProtection = sharedAlliance ? sharedAlliance.strength * 1.5 : 0;
+    //
+    // Modulated by the voter's "loyalty factor" (v3.5):
+    //   loyalty = 1 + (social − 5) × 0.05 − (strategy − 5) × 0.07
+    //   clamped to [0.3, 2.0]
+    //
+    // High-social, low-strategy players are rocks — alliance protection
+    // boosted up to ~×1.6. High-strategy, low-social players are flippers —
+    // alliance protection halved to ~×0.5. Balanced 5/5 voters are neutral.
+    const sharedAlliance = getStrongestSharedAlliance(state, voter.id, c.id);
+    const baseAllianceProtection = sharedAlliance ? sharedAlliance.strength * 1.5 : 0;
+    const loyalty = Math.max(0.3, Math.min(2.0,
+      1 + (voter.social - 5) * 0.05 - (voter.strategy - 5) * 0.07
+    ));
+    const allianceProtection = baseAllianceProtection * loyalty;
 
     // Trust: shifted so trust 3 (baseline) = 0, trust 0 = −4.5, trust 10 = +10.5.
     const trust       = getTrust(state, voter.id, c.id);

@@ -137,6 +137,15 @@ function renderCampLifeScreen(container, state) {
         tier === "solid"   ? "Solid"   :
         "Weakened";
 
+      // Staleness cue: alliance hasn't seen a positive member interaction in
+      // 2+ rounds. The player's pact will start to bleed strength. Subtle visual.
+      const lastReinforced = a.lastReinforcedRound ?? a.formedRound;
+      const staleRounds    = state.round - lastReinforced;
+      const isStale        = staleRounds >= 2;
+      const staleBadge     = isStale
+        ? `<span class="camp-alliance-stale-badge" title="No reinforcing interactions for ${staleRounds} rounds">needs attention</span>`
+        : "";
+
       // Member chips — "You" first, then others by name. Eliminated members
       // are pruned in removeMemberFromAlliances so they won't appear.
       const memberChips = a.memberIds.map(id => {
@@ -148,10 +157,11 @@ function renderCampLifeScreen(container, state) {
       }).join("");
 
       return `
-        <div class="camp-alliance-card camp-alliance-${tier}">
+        <div class="camp-alliance-card camp-alliance-${tier}${isStale ? " camp-alliance-stale" : ""}">
           <div class="camp-alliance-header">
             <span class="camp-alliance-icon">⚐</span>
             <span class="camp-alliance-name">${a.name}</span>
+            ${staleBadge}
             <span class="camp-alliance-strength-num">${strengthInt}/10</span>
           </div>
           <div class="camp-alliance-members">${memberChips}</div>
