@@ -165,10 +165,22 @@ function getDay(state) {
 // which is fine because assignTribes overwrites the field. A future "play again"
 // button must call assignTribes again (or reset CONTESTANTS separately).
 function assignTribes(contestants, state) {
-  const shuffled = [...contestants].sort(() => Math.random() - 0.5);
+  // v4.1: respect explicit tribe pre-assignment from a custom template if
+  // ALL contestants have one. This lets the cast editor save fixed tribe
+  // setups. When tribes aren't pre-assigned (the default season's case),
+  // randomize as before.
+  const allPreAssigned = contestants.length > 0 &&
+                         contestants.every(c => c.tribe === "A" || c.tribe === "B");
 
-  const groupA = shuffled.slice(0, SEASON_CONFIG.tribeSize);
-  const groupB = shuffled.slice(SEASON_CONFIG.tribeSize);
+  let groupA, groupB;
+  if (allPreAssigned) {
+    groupA = contestants.filter(c => c.tribe === "A");
+    groupB = contestants.filter(c => c.tribe === "B");
+  } else {
+    const shuffled = [...contestants].sort(() => Math.random() - 0.5);
+    groupA = shuffled.slice(0, SEASON_CONFIG.tribeSize);
+    groupB = shuffled.slice(SEASON_CONFIG.tribeSize);
+  }
 
   // Set BOTH tribe (current) and originalTribe (immutable identity).
   // originalTribe is set once here and never overwritten — not by swap, not by

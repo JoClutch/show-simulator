@@ -51,6 +51,20 @@ function onContestantSelected(contestant) {
   showScreen("campLife");
 }
 
+// Called when the cast editor is dismissed.
+//   applied=true  → applyTemplate has already run; rebuild gameState so the
+//                   select screen reflects the new cast (CONTESTANTS now holds
+//                   different objects, and gameState.tribes is stale).
+//   applied=false → cancelled; no state changes; just route back.
+function onCastEditorDone(applied) {
+  if (applied) {
+    gameState = createSeasonState();
+    assignTribes(CONTESTANTS, gameState);
+    initIdols(gameState);
+  }
+  showScreen("select");
+}
+
 function onCampLifeDone() {
   if (gameState.campPhase === 1) {
     showScreen("challenge");
@@ -295,6 +309,7 @@ function showScreen(name) {
 
   switch (name) {
     case "select":       renderSelectScreen(app, gameState);       break;
+    case "castEditor":   renderCastEditorScreen(app, gameState);   break;
     case "swap":         renderSwapScreen(app, gameState);         break;
     case "merge":        renderMergeScreen(app, gameState);        break;
     case "campLife":     renderCampLifeScreen(app, gameState);     break;

@@ -10,7 +10,10 @@ function renderSelectScreen(container, state) {
       <div class="select-header">
         <h1>Survivor Simulator</h1>
         <p class="select-subtitle">
-          ${SEASON_CONFIG.name} &nbsp;·&nbsp; 16 contestants &nbsp;·&nbsp; 2 tribes
+          ${SEASON_CONFIG.name}
+          &nbsp;·&nbsp; ${CONTESTANTS.length} contestants
+          &nbsp;·&nbsp; ${SEASON_CONFIG.tribesCount} tribes
+          &nbsp;·&nbsp; <button class="select-edit-cast-link" id="edit-cast-link">Edit Cast →</button>
         </p>
         <p class="select-instructions">
           Choose one contestant to play as. You will see the game through their
@@ -86,6 +89,13 @@ function renderSelectScreen(container, state) {
   // so no need for a disabled state — the button is simply not visible yet.
   container.querySelector("#start-btn").addEventListener("click", () => {
     if (selected) onContestantSelected(selected);
+  });
+
+  // ── Edit Cast entry point ─────────────────────────────────────────────────
+  // Routes to the cast editor screen. The editor returns to this screen when
+  // saved (with the cast applied) or cancelled (with no changes).
+  container.querySelector("#edit-cast-link").addEventListener("click", () => {
+    showScreen("castEditor");
   });
 }
 

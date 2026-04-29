@@ -28,11 +28,30 @@
 // means a custom template can be applied before bootScreen() to start a
 // different season entirely.
 
+// ── Bundled default cast ─────────────────────────────────────────────────────
+//
+// A stable deep copy of the contestants from contestants.js, captured at
+// module load before anything else can mutate them. The cast editor's
+// "Reset to Default Cast" reads from here so resets always restore the
+// original 16-contestant Broken Compass roster, not whatever was applied last.
+//
+// Contains only schema fields (id, name, stats) — no runtime fields like
+// tribe/active/suspicion. applyTemplate stamps those when copying into the
+// runtime CONTESTANTS array.
+const BUNDLED_DEFAULT_CAST = CONTESTANTS.map(c => ({
+  id:        c.id,
+  name:      c.name,
+  challenge: c.challenge,
+  social:    c.social,
+  strategy:  c.strategy,
+  ...(c.description !== undefined ? { description: c.description } : {}),
+}));
+
 // ── Default season template ──────────────────────────────────────────────────
 //
-// Mirrors the existing SEASON_CONFIG (in season.js) and CONTESTANTS (in
-// contestants.js). The cast field references CONTESTANTS by reference so we
-// don't ship two copies of the same data.
+// Mirrors the existing SEASON_CONFIG (in season.js) and the bundled cast.
+// References BUNDLED_DEFAULT_CAST so the default template is stable even if
+// CONTESTANTS gets rewritten by a custom applyTemplate.
 const DEFAULT_SEASON_TEMPLATE = {
   schemaVersion: SCHEMA_VERSION,
 
@@ -75,11 +94,20 @@ const DEFAULT_SEASON_TEMPLATE = {
     campActionsPerRound: 3,
   },
 
-  // Cast is a live reference to CONTESTANTS (declared in contestants.js).
-  // Custom templates would inline their own cast; the apply function handles
-  // both cases — see applyTemplate below.
-  cast: CONTESTANTS,
+  // Cast references the bundled default cast (deep-copied at module load).
+  // Custom templates would inline their own cast.
+  cast: BUNDLED_DEFAULT_CAST,
 };
+
+// Tracks the most recently applied template. The cast editor reads this as the
+// base for any edits — preserving non-cast config (tribes, swap, merge, etc.)
+// while letting the editor swap out just the cast portion. Initialized when
+// applyTemplate runs at boot.
+let _activeTemplate = null;
+
+function getActiveTemplate() {
+  return _activeTemplate;
+}
 
 // ── apply ─────────────────────────────────────────────────────────────────────
 
@@ -125,29 +153,31 @@ function applyTemplate(template) {
   SEASON_CONFIG.finalCount          = template.finalTribal.finalists;
 
   // ── Cast ──
-  // Skip if the template's cast IS the existing CONTESTANTS array (default
-  // template case — nothing to copy). Otherwise rewrite CONTESTANTS contents
-  // in place so all engine references remain valid.
-  if (template.cast !== CONTESTANTS) {
-    CONTESTANTS.length = 0;
-    for (const c of template.cast) {
-      // Shallow-copy so the runtime can stamp tribe/originalTribe/suspicion
-      // without mutating the template's source data.
-      CONTESTANTS.push({
-        id:        c.id,
-        name:      c.name,
-        challenge: c.challenge,
-        social:    c.social,
-        strategy:  c.strategy,
-        // Runtime fields, initialized as null/0 for assignTribes() to stamp.
-        tribe:     null,
-        active:    true,
-        suspicion: 0,
-        ...(c.description !== undefined ? { description: c.description } : {}),
-      });
-    }
+  // Always rewrite CONTESTANTS contents in place — deep-copies template
+  // contestants and stamps fresh runtime fields. Mutating in place preserves
+  // the array reference that other modules captured at load time.
+  //
+  // The `tribe` field from the template (if set) is preserved into the
+  // runtime contestant. assignTribes() reads it: when ALL contestants have
+  // a pre-assigned tribe, the assignment is honored; otherwise a random
+  // shuffle runs (matching the original behavior).
+  CONTESTANTS.length = 0;
+  for (const c of template.cast) {
+    CONTESTANTS.push({
+      id:        c.id,
+      name:      c.name,
+      challenge: c.challenge,
+      social:    c.social,
+      strategy:  c.strategy,
+      // Runtime fields. tribe may be pre-assigned by the template or null.
+      tribe:     c.tribe ?? null,
+      active:    true,
+      suspicion: 0,
+      ...(c.description !== undefined ? { description: c.description } : {}),
+    });
   }
 
+  _activeTemplate = template;
   return true;
 }
 

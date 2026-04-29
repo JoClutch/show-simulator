@@ -118,6 +118,11 @@ const SCHEMA_VERSION = 1;
  * @property {number}  social       1–10.
  * @property {number}  strategy     1–10.
  * @property {string}  [description]Optional flavor.
+ * @property {string|null} [tribe]  Optional initial tribe label (e.g. "A").
+ *                                  When null/undefined, assignTribes randomizes.
+ *                                  When set, must match a label from tribes.initial.
+ *                                  Per-template rule: if any contestant has tribe set,
+ *                                  ALL must have it (no partial assignments).
  */
 
 /**
@@ -157,6 +162,13 @@ function validateContestant(c) {
 
   if (c.description !== undefined && typeof c.description !== "string") {
     errors.push("description must be a string when provided");
+  }
+
+  // tribe is optional; null/undefined means "to be assigned at game start".
+  // String values are validated against actual tribe labels in
+  // validateSeasonTemplate's cross-field section (we don't have that context here).
+  if (c.tribe !== undefined && c.tribe !== null && typeof c.tribe !== "string") {
+    errors.push("tribe must be a string label or null");
   }
 
   return errors;
@@ -280,6 +292,34 @@ function validateSeasonTemplate(t) {
     const totalTribeSize = initial.reduce((sum, tr) => sum + (tr.size || 0), 0);
     if (t.cast.length !== totalTribeSize) {
       errors.push(`cast count (${t.cast.length}) must equal sum of tribe sizes (${totalTribeSize})`);
+    }
+
+    // Tribe pre-assignment rules:
+    //   • If any contestant has tribe set, ALL must (partial states are ambiguous).
+    //   • Each contestant's tribe must match a defined tribe label.
+    //   • Per-tribe contestant counts must equal that tribe's `size`.
+    const tribeLabels = new Set(initial.map(t => t.label));
+    const someAssigned = t.cast.some(c => c?.tribe);
+    const allAssigned  = t.cast.every(c => c?.tribe);
+
+    if (someAssigned && !allAssigned) {
+      errors.push("if any contestant has a starting tribe set, all must");
+    }
+
+    for (let i = 0; i < t.cast.length; i++) {
+      const c = t.cast[i];
+      if (c?.tribe && !tribeLabels.has(c.tribe)) {
+        errors.push(`cast[${i}].tribe "${c.tribe}" is not a valid tribe label`);
+      }
+    }
+
+    if (allAssigned) {
+      for (const tr of initial) {
+        const count = t.cast.filter(c => c.tribe === tr.label).length;
+        if (count !== tr.size) {
+          errors.push(`tribe "${tr.label}" has ${count} contestants assigned but config expects ${tr.size}`);
+        }
+      }
     }
   }
 

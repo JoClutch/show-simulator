@@ -496,6 +496,452 @@ button:disabled {
   text-align: right;
 }
 
+/* ── Cast Editor (v4.1) ────────────────────────────────────────── */
+
+/* Edit Cast link in the select screen subtitle — looks like inline text. */
+.select-edit-cast-link {
+  background: transparent;
+  border: none;
+  color: var(--gold);
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+}
+
+.select-edit-cast-link:hover {
+  color: var(--gold-dim);
+}
+
+/* Editor screen container */
+.cast-editor-screen {
+  max-width: 900px;
+}
+
+.cast-editor-blurb {
+  margin-bottom: 1rem;
+  line-height: 1.55;
+}
+
+/* Errors panel */
+.cast-editor-errors {
+  margin-bottom: 1rem;
+}
+
+.cast-editor-errors:empty {
+  display: none;
+}
+
+.cast-editor-errors-header {
+  font-weight: bold;
+  color: var(--red-text);
+  margin-bottom: 0.4rem;
+  font-size: 0.9rem;
+}
+
+.cast-editor-errors-list {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+  background: var(--red-bg);
+  border: 1px solid var(--red-border);
+  border-radius: 4px;
+  padding: 0.6rem 0.85rem;
+}
+
+.cast-editor-errors-list li {
+  font-size: 0.82rem;
+  color: var(--red-text);
+  padding: 0.15rem 0;
+  line-height: 1.4;
+}
+
+/* Two-column layout for the tribe lists */
+.cast-editor-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+/* When an Unassigned section is added it becomes a third item — wrap. */
+.cast-editor-body > .cast-tribe-col:first-child:nth-last-child(3) {
+  grid-column: 1 / -1;
+}
+
+.cast-tribe-col {
+  background: var(--bg-card);
+  border: 1px solid var(--border-mid);
+  border-radius: 6px;
+  padding: 0.85rem 0.95rem 1rem;
+}
+
+.cast-tribe-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border-dim);
+  padding-bottom: 0.4rem;
+  margin-bottom: 0.55rem;
+}
+
+.cast-tribe-name {
+  font-weight: bold;
+  letter-spacing: 0.02em;
+}
+
+.cast-tribe-count {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* Highlight count when off — overflow or under tribe size */
+.cast-tribe-count-warn {
+  color: var(--red-text);
+}
+
+.cast-tribe-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.cast-tribe-empty {
+  font-style: italic;
+  font-size: 0.82rem;
+  text-align: center;
+  padding: 0.5rem 0;
+}
+
+/* Individual contestant row */
+.cast-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  background: var(--bg-raised);
+  border: 1px solid var(--border-dim);
+  border-radius: 4px;
+  padding: 0.5rem 0.7rem;
+  gap: 0.6rem;
+}
+
+.cast-row-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.cast-row-name {
+  font-weight: bold;
+  font-size: 0.92rem;
+  margin-bottom: 0.15rem;
+}
+
+.cast-row-stats {
+  display: flex;
+  gap: 0.65rem;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+}
+
+.cast-row-desc {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  font-style: italic;
+  margin-top: 0.3rem;
+  line-height: 1.4;
+}
+
+.cast-row-actions {
+  display: flex;
+  gap: 0.3rem;
+  flex-shrink: 0;
+}
+
+.cast-row-edit,
+.cast-row-remove {
+  background: transparent;
+  border: 1px solid var(--border-mid);
+  color: var(--text-dim);
+  padding: 0.25rem 0.55rem;
+  border-radius: 3px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.cast-row-edit:hover {
+  border-color: var(--text-dim);
+  color: var(--text-primary);
+}
+
+.cast-row-remove {
+  color: var(--red-text);
+  font-weight: bold;
+  padding: 0.25rem 0.5rem;
+  min-width: 1.6rem;
+}
+
+.cast-row-remove:hover {
+  border-color: var(--red-text);
+  background: rgba(192, 112, 128, 0.08);
+}
+
+/* Toolbar (add / reset) */
+.cast-editor-toolbar {
+  display: flex;
+  gap: 0.6rem;
+  margin-bottom: 1.2rem;
+}
+
+.cast-editor-add-btn,
+.cast-editor-reset-btn {
+  background: transparent;
+  border: 1px solid var(--border-mid);
+  color: var(--text-dim);
+  padding: 0.5rem 0.95rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.85rem;
+}
+
+.cast-editor-add-btn:hover,
+.cast-editor-reset-btn:hover {
+  border-color: var(--text-primary);
+  color: var(--text-primary);
+}
+
+.cast-editor-add-btn {
+  border-color: var(--gold-dim);
+  color: var(--gold);
+}
+
+.cast-editor-add-btn:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+/* Footer (cancel / save) */
+.cast-editor-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  border-top: 1px solid var(--border-dim);
+  padding-top: 1rem;
+}
+
+.cast-editor-cancel-btn {
+  background: transparent;
+  border: 1px solid var(--border-mid);
+  color: var(--text-dim);
+  padding: 0.55rem 1.1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.9rem;
+}
+
+.cast-editor-save-btn {
+  background: linear-gradient(135deg, var(--gold), var(--gold-dim));
+  color: #1a1a0a;
+  border: none;
+  padding: 0.55rem 1.3rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: bold;
+  font-size: 0.9rem;
+}
+
+.cast-editor-save-btn:hover {
+  filter: brightness(1.1);
+}
+
+/* ── Modal: contestant edit form ── */
+
+.cast-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 1rem;
+}
+
+.cast-modal-overlay.hidden {
+  display: none;
+}
+
+.cast-modal-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border-mid);
+  border-radius: 6px;
+  width: 100%;
+  max-width: 500px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.cast-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--border-dim);
+}
+
+.cast-modal-title {
+  font-weight: bold;
+  font-size: 1rem;
+  letter-spacing: 0.02em;
+}
+
+.cast-modal-close {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 0.15rem 0.4rem;
+  border-radius: 3px;
+}
+
+.cast-modal-close:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.cast-modal-body {
+  padding: 0.9rem 1rem;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.cast-form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-bottom: 0.85rem;
+}
+
+.cast-form-row label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.cast-form-row input[type="text"],
+.cast-form-row select,
+.cast-form-row textarea {
+  background: var(--bg-base);
+  border: 1px solid var(--border-mid);
+  color: var(--text-primary);
+  padding: 0.5rem 0.7rem;
+  border-radius: 3px;
+  font-family: inherit;
+  font-size: 0.9rem;
+}
+
+.cast-form-row textarea {
+  resize: vertical;
+  min-height: 2.6rem;
+}
+
+.cast-form-row input[type="text"]:focus,
+.cast-form-row select:focus,
+.cast-form-row textarea:focus,
+.cast-form-stat input:focus {
+  outline: none;
+  border-color: var(--gold-dim);
+}
+
+.cast-form-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+}
+
+.cast-form-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.cast-form-stat label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.cast-form-stat input {
+  background: var(--bg-base);
+  border: 1px solid var(--border-mid);
+  color: var(--text-primary);
+  padding: 0.45rem 0.55rem;
+  border-radius: 3px;
+  font-family: inherit;
+  font-size: 0.95rem;
+  text-align: center;
+}
+
+.cast-form-errors {
+  margin-top: 0.5rem;
+}
+
+.cast-form-error {
+  font-size: 0.78rem;
+  color: var(--red-text);
+  padding: 0.15rem 0;
+}
+
+.cast-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0.7rem 1rem;
+  border-top: 1px solid var(--border-dim);
+}
+
+.cast-modal-cancel,
+.cast-modal-save {
+  padding: 0.5rem 1.1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.85rem;
+}
+
+.cast-modal-cancel {
+  background: transparent;
+  border: 1px solid var(--border-mid);
+  color: var(--text-dim);
+}
+
+.cast-modal-save {
+  background: linear-gradient(135deg, var(--gold), var(--gold-dim));
+  color: #1a1a0a;
+  border: none;
+  font-weight: bold;
+}
+
+.cast-modal-save:hover {
+  filter: brightness(1.1);
+}
+
 /* ── Camp Life: Season Log button + modal (v3.8) ── */
 /* Header layout adjustment to fit the log button next to the actions counter. */
 .camp-header-right {
