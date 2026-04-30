@@ -218,6 +218,13 @@ function renderCampLifeScreen(container, state) {
 
       ${statusBanner}
 
+      <!-- v5 foundation: tribe relationship panel placeholder. -->
+      <!-- v5.0 leaves this empty (display:none via CSS); v5.x will populate -->
+      <!-- with per-tribemate relationship/trust readouts. The DOM hook is -->
+      <!-- here now so the panel can be slotted in without re-laying out the -->
+      <!-- camp screen. -->
+      <div id="camp-relationship-panel" class="camp-relationship-panel hidden"></div>
+
       <div class="camp-tribemates">
         <span class="camp-tribemates-label">Your tribe:</span>
         <span class="tribe-chip tribe-chip-you">You (${escapeHtml(player.name)})</span>
@@ -309,43 +316,78 @@ function renderCampLifeScreen(container, state) {
       return;
     }
 
-    const grid = document.createElement("div");
-    grid.className = "action-btn-grid";
+    // v5: group actions by category for readability. Each CAMP_ACTION_CATEGORY
+    // gets a section header and its own grid. Categories with no actions are
+    // skipped, so disabling the idol system silently shrinks "Manage Yourself"
+    // by one entry without leaving an empty header behind.
+    //
+    // The per-action click flow is unchanged (one click → execute or → target
+    // picker). Future v5.x can promote this into a true submenu navigation by
+    // making each category render as a clickable summary that drills in.
+    for (const category of CAMP_ACTION_CATEGORIES) {
+      const actionsInCategory = CAMP_ACTIONS
+        .filter(a => a.category === category.id)
+        .filter(a => actionShouldRender(a));
+      if (actionsInCategory.length === 0) continue;
 
-    for (const action of CAMP_ACTIONS) {
-      // v4.2: skip the idol search action entirely when idols are disabled.
-      // No engine call, no UI button — the player never sees this option.
-      if (action.id === "searchidol" && SEASON_CONFIG.idolsEnabled === false) continue;
-
-      const btn = document.createElement("button");
-      btn.className = "action-btn";
-
-      // The search action is disabled once there is nothing left to find in
-      // the current scope. The badge already tells the player they have it,
-      // so the detail text just confirms why this option is locked.
-      let detailText  = action.detail;
-      let unavailable = false;
-      if (action.id === "searchidol" && currentHoldsScope) {
-        detailText  = "You already hold the idol hidden at this camp.";
-        unavailable = true;
-      }
-
-      btn.innerHTML = `
-        <span class="action-btn-label">${action.label}</span>
-        <span class="action-btn-detail">${detailText}</span>
+      const section = document.createElement("div");
+      section.className = "action-category";
+      section.innerHTML = `
+        <div class="action-category-header">
+          <span class="action-category-label">${category.label}</span>
+          <span class="action-category-desc muted">${category.description}</span>
+        </div>
       `;
 
-      if (unavailable) {
-        btn.disabled = true;
-        btn.classList.add("action-btn-unavail");
-      } else {
-        btn.addEventListener("click", () => onActionClick(action));
+      const grid = document.createElement("div");
+      grid.className = "action-btn-grid";
+      for (const action of actionsInCategory) {
+        grid.appendChild(buildActionButton(action, currentHoldsScope));
       }
+      section.appendChild(grid);
+      actionArea.appendChild(section);
+    }
+  }
 
-      grid.appendChild(btn);
+  // Returns false for actions that should be hidden entirely from this run
+  // (e.g. idol search when the idol system is disabled in season config).
+  // Disabling-but-visible cases (idol already held) are handled in
+  // buildActionButton by setting the `unavailable` flag — those still render.
+  function actionShouldRender(action) {
+    if (action.id === "searchidol" && SEASON_CONFIG.idolsEnabled === false) return false;
+    return true;
+  }
+
+  // Builds a single action button. Extracted from showActionButtons so
+  // category sections share the per-button logic and future v5.x submenu
+  // variants can reuse it without duplicating click wiring.
+  function buildActionButton(action, currentHoldsScope) {
+    const btn = document.createElement("button");
+    btn.className = "action-btn";
+
+    // The search action is disabled once there is nothing left to find in
+    // the current scope. The badge already tells the player they have it,
+    // so the detail text just confirms why this option is locked.
+    let detailText  = action.detail;
+    let unavailable = false;
+    if (action.id === "searchidol" && currentHoldsScope) {
+      detailText  = "You already hold the idol hidden at this camp.";
+      unavailable = true;
     }
 
-    actionArea.appendChild(grid);
+    btn.innerHTML = `
+      <span class="action-btn-label">${action.label}</span>
+      <span class="action-btn-detail">${detailText}</span>
+    `;
+
+    if (unavailable) {
+      btn.disabled = true;
+      btn.classList.add("action-btn-unavail");
+    } else {
+      btn.addEventListener("click", () => onActionClick(action));
+    }
+
+    return btn;
   }
 
   function showTargetPicker(action) {

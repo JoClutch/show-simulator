@@ -372,6 +372,52 @@ button:disabled {
   font-style: italic;
 }
 
+/* ── Camp Life: action category sections (v5 foundation) ──────── */
+/* Action buttons are grouped by category. Each category gets a small */
+/* header so the menu reads as a structured list rather than a flat grid. */
+.action-category {
+  margin-bottom: 1rem;
+}
+
+.action-category:last-child {
+  margin-bottom: 0;
+}
+
+.action-category-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-bottom: 0.4rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid var(--border-dim);
+}
+
+.action-category-label {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--gold-dim);
+  font-weight: bold;
+}
+
+.action-category-desc {
+  font-size: 0.72rem;
+  font-style: italic;
+}
+
+/* ── Camp Life: tribe relationship panel placeholder (v5 foundation) ─ */
+/* Reserved DOM hook for the future per-tribemate relationship readout. */
+/* v5.0 keeps it hidden so layout is unchanged; v5.x will populate and */
+/* unhide. Sized to take a small block when shown — no surprises later. */
+.camp-relationship-panel {
+  margin-bottom: 0.9rem;
+}
+
+.camp-relationship-panel.hidden {
+  display: none;
+}
+
 /* ── Camp Life: unavailable action button ── */
 /* Used for "Search for idol" when the scope idol is already held. */
 .action-btn-unavail {

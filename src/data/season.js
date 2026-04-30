@@ -142,6 +142,14 @@ function createSeasonState() {
     // See detectVotingBlocs() in engine/alliances.js.
     votingBlocs: [],
 
+    // ── Camp intent / targets (v5 foundation) ──────────────
+    // Per-contestant vote intent built up during camp. Each entry:
+    //   { targetId, confidence (0–10), setRound }
+    // Populated lazily via setCampTargetForContestant() in engine/campLife.js.
+    // v5.0 declares the structure; v5.x will use it for the end-of-camp target
+    // list and AI strategic planning. Empty by default — no behavior change.
+    campTargets: {},
+
     // ── Event log ──────────────────────────────────────────
     // Unified chronological record of season milestones (idols, alliances,
     // swap, merge, eliminations). Each entry: { round, day, category, type,

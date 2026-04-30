@@ -22,6 +22,47 @@
 //   0–2  distrustful — will mislead or give useless intel
 //   3–5  guarded     — vague but honest; default starting state
 //   6–10 open        — candid, cooperative, easier to work with
+//
+// ── v5 foundation ────────────────────────────────────────────────────────────
+//
+// Camp Life is being expanded into a deeper menu-driven experience. v5.0 lays
+// the structural groundwork without changing observable behavior:
+//
+//   • CAMP_ACTION_CATEGORIES groups actions by intent (social / strategy /
+//     personal). The UI renders them in sections — foundation for future
+//     submenu navigation, deeper action sets, and category-aware AI.
+//
+//   • state.campTargets (declared in season.js, helpers below) tracks
+//     per-contestant vote intent during camp — foundation for the end-of-camp
+//     target list and AI strategic planning.
+//
+//   • runAICampActions() is a stub that future versions will fill in to make
+//     AI take camp-life actions, contributing to a more active camp world.
+//
+// All existing actions and their gameplay effects are unchanged. Each action
+// just gained a `category` field for grouping.
+
+// Categories for grouping CAMP_ACTIONS in the UI. Order here is the order
+// the camp screen renders sections in. Each action's `category` field
+// references one of these ids. New categories can be added safely; the UI
+// just renders any category that has at least one action.
+const CAMP_ACTION_CATEGORIES = [
+  {
+    id:    "social",
+    label: "Connect",
+    description: "Build relationships and trust with tribemates.",
+  },
+  {
+    id:    "strategy",
+    label: "Strategize",
+    description: "Discuss the game, share intel, position for the vote.",
+  },
+  {
+    id:    "personal",
+    label: "Manage Yourself",
+    description: "Stay above suspicion, search for advantages, lay low.",
+  },
+];
 
 const CAMP_ACTIONS = [
   {
@@ -29,36 +70,35 @@ const CAMP_ACTIONS = [
     label: "Talk to a tribemate",
     detail: "Get to know someone. Builds the relationship over time.",
     needsTarget: true,
+    category: "social",
   },
   {
     id: "improvecamp",
     label: "Improve camp",
     detail: "Pull your weight. The whole tribe notices.",
     needsTarget: false,
-  },
-  {
-    id: "searchidol",
-    label: "Search for an idol",
-    detail: "Slip away into the jungle. Being seen raises suspicion.",
-    needsTarget: false,
-  },
-  {
-    id: "strategy",
-    label: "Discuss strategy",
-    detail: "Float vote ideas. Works best when you think alike.",
-    needsTarget: true,
-  },
-  {
-    id: "askVote",
-    label: "Ask who they want out",
-    detail: "Fish for intel. What you hear depends on how much they trust you.",
-    needsTarget: true,
+    category: "social",
   },
   {
     id: "confide",
     label: "Open up to someone",
     detail: "Share something real. The fastest way to build genuine trust.",
     needsTarget: true,
+    category: "social",
+  },
+  {
+    id: "strategy",
+    label: "Discuss strategy",
+    detail: "Float vote ideas. Works best when you think alike.",
+    needsTarget: true,
+    category: "strategy",
+  },
+  {
+    id: "askVote",
+    label: "Ask who they want out",
+    detail: "Fish for intel. What you hear depends on how much they trust you.",
+    needsTarget: true,
+    category: "strategy",
   },
   {
     id: "lobby",
@@ -66,6 +106,7 @@ const CAMP_ACTIONS = [
     detail: "Steer attention toward someone. Strategy and social skill determine how it lands.",
     needsTarget: true,
     targetPrompt: "Who do you want to draw attention toward?",
+    category: "strategy",
   },
   {
     id: "proposeAlliance",
@@ -73,12 +114,21 @@ const CAMP_ACTIONS = [
     detail: "Lock in a real pact with someone. Needs trust to land.",
     needsTarget: true,
     targetPrompt: "Who do you want to bring in?",
+    category: "strategy",
+  },
+  {
+    id: "searchidol",
+    label: "Search for an idol",
+    detail: "Slip away into the jungle. Being seen raises suspicion.",
+    needsTarget: false,
+    category: "personal",
   },
   {
     id: "laylow",
     label: "Keep a low profile",
     detail: "Stay quiet and unthreatening. Eases suspicion when you're in the crosshairs.",
     needsTarget: false,
+    category: "personal",
   },
 ];
 
@@ -628,6 +678,73 @@ function actionProposeAlliance(state, player, target) {
   // Rejected — small trust hit (you misread the room)
   adjustTrust(state, player.id, target.id, -1);
   return { feedback: getAllianceRejectedLine(target), hint: null };
+}
+
+// ── Camp intent / target tracking (v5 foundation) ────────────────────────────
+//
+// Per-contestant vote intent during camp. v5.0 declares the API and storage;
+// behavior is added incrementally in v5.x:
+//
+//   • End-of-camp target list — the player sees a summary "you're leaning
+//     toward voting X tonight" before tribal.
+//
+//   • AI strategic planning — AI contestants set their own intents during
+//     camp so their behavior pre-tribal is consistent (e.g. an AI lobbying
+//     against X likely votes X at tribal).
+//
+// state.campTargets shape (lazy — entries are created on first set):
+//   { [contestantId]: { targetId, confidence: 0–10, setRound } }
+//
+// Cleared each round in advanceRound() (handler to be added when behavior is
+// wired in v5.x). For v5.0 the structure exists but is untouched by gameplay.
+
+function getCampTargetForContestant(state, contestantId) {
+  return state.campTargets?.[contestantId] ?? null;
+}
+
+function setCampTargetForContestant(state, contestantId, targetId, confidence = 5) {
+  if (!state.campTargets) state.campTargets = {};
+  state.campTargets[contestantId] = {
+    targetId,
+    confidence: Math.max(0, Math.min(10, confidence)),
+    setRound: state.round,
+  };
+}
+
+function clearCampTargets(state) {
+  state.campTargets = {};
+}
+
+// ── AI camp action hook (v5 foundation, stub) ────────────────────────────────
+//
+// Intentionally a no-op in v5.0. Future versions will fill this in to make
+// AI contestants take camp-life actions during their own camp phases —
+// talking, confiding, searching idols, proposing alliances, lobbying.
+// This contributes to a more active camp world without requiring per-feature
+// plumbing changes when behavior arrives.
+//
+//   state — the live gameState (engine functions mutate it in place)
+//   pool  — array of contestants attending the camp
+//           (one tribe pre-merge, the merged tribe post-merge)
+//
+// Call sites (when v5.x wires behavior):
+//   • main.js onChallengeResolved — AI takes phase 2 actions before tribal
+//   • main.js advanceRound        — AI takes phase 1 actions in the new round
+//
+// Each AI's action selection should respect:
+//   • Their stats (high-social → more relationship actions; high-strategy →
+//     more vote-positioning actions)
+//   • Their current intent (campTargets) — actions consistent with their plan
+//   • Existing alliance ties — strengthen with allies before betraying
+//
+// AI camp actions affect state the same way player actions do (via
+// executeAction or direct calls to actionXxx), so the existing engine handles
+// downstream updates (relationships, trust, suspicion, alliance strength).
+
+function runAICampActions(state, pool) {
+  // v5.0: no-op. Hook reserved for v5.x; call sites will be wired alongside
+  // the actual selection/execution logic so the empty function never runs in
+  // production. See documentation block above for intended behavior.
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
