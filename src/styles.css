@@ -2466,6 +2466,13 @@ button:disabled {
 .camp-role-card[data-role="schemer"]         { border-left-color: #b85060; }
 .camp-role-card[data-role="socialConnector"] { border-left-color: #c89a4a; }
 .camp-role-card[data-role="drifter"]         { border-left-color: #888;    }
+/* v5.15: leaning state — same hue, dashed edge so the player can see at a
+   glance that the read is forming but not committed. */
+.camp-role-card[data-leaning="true"]         { border-left-style: dashed; }
+.camp-role-card[data-leaning="true"] .camp-role-label {
+  font-style: italic;
+  font-weight: normal;
+}
 .camp-role-header {
   display: flex;
   flex-direction: column;

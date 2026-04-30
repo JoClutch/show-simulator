@@ -253,15 +253,20 @@ function recordSuspiciousAct(state, observerId, actorId, reason, weight = 1) {
   }
 }
 
-// Round-end pass: every observer's memory of every actor decays by 0.5.
-// Players who keep their nose clean for several rounds drop back toward zero;
-// repeat offenders accumulate faster than the decay can clear.
+// Round-end pass: every observer's memory of every actor decays by 0.4.
+// v5.15: tuned down from 0.5 — reputation should fade gradually but persist
+// long enough to matter. A single suspicious act now lingers ~3 rounds; a
+// concentrated burst persists 6–7 rounds even with a clean stretch after.
+// Heavy memory (≥ 4) decays at 0.6 so genuine reputation cliffs (caught in
+// repeated lies) don't linger forever once the player corrects course.
 function decaySuspicionMemory(state) {
   if (!state.suspicionMemory) return;
   for (const observerId of Object.keys(state.suspicionMemory)) {
     const inner = state.suspicionMemory[observerId];
     for (const actorId of Object.keys(inner)) {
-      inner[actorId] = Math.max(0, (inner[actorId] ?? 0) - 0.5);
+      const cur = inner[actorId] ?? 0;
+      const decay = cur >= 4 ? 0.6 : 0.4;
+      inner[actorId] = Math.max(0, cur - decay);
       if (inner[actorId] === 0) delete inner[actorId];
     }
     if (Object.keys(inner).length === 0) delete state.suspicionMemory[observerId];
@@ -313,7 +318,14 @@ function passiveDrift(state) {
       if (alliedPairs.has(a + "|" + b)) continue;
 
       const rel = getRelationship(state, a, b);
-      if (rel >= 20 || rel <= -20) continue;   // anchored
+      // v5.15: anchor threshold tightened to ±18 — past that, the bond is
+      // genuinely settled and one quiet round shouldn't budge it.
+      if (rel >= 18 || rel <= -18) continue;
+
+      // v5.15: drift fires 60% of rounds rather than always. Same long-term
+      // expected magnitude but less mechanically predictable — players can't
+      // count on rel ticking down by exactly 1 per quiet round.
+      if (Math.random() >= 0.60) continue;
 
       // Drift toward 0 by 1 point. Never cross zero.
       let drift;

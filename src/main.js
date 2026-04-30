@@ -278,11 +278,13 @@ function advanceRound() {
   // v5.14: drifter camp-role identity grants a small natural suspicion drop
   // each round — the read is "background presence, not a threat". Other
   // role effects fire situationally (in lobby, search, conversation).
+  // v5.15: "leaning:drifter" applies at 50% chance (background presence
+  // is forming but not fully read yet).
   for (const c of getAllActive()) {
     const role = getCampRole(gameState, c.id);
-    if (role === "drifter" && (c.suspicion ?? 0) > 0) {
-      adjustSuspicion(gameState, c.id, -1);
-    }
+    if ((c.suspicion ?? 0) <= 0) continue;
+    if (role === "drifter")                            adjustSuspicion(gameState, c.id, -1);
+    else if (role === "leaning:drifter" && Math.random() < 0.5) adjustSuspicion(gameState, c.id, -1);
   }
 
   gameState.round          += 1;

@@ -232,8 +232,10 @@ function renderCampLifeScreen(container, state) {
   // We surface a small "✦" marker next to names where trust is high so the
   // player can read at a glance who's a real ally vs. a friendly acquaintance.
   function getTrustMarker(trust) {
-    if (trust >=  6) return { id: "trusted",   symbol: "✦", title: "Trusts you"           };
-    if (trust <= -3) return { id: "distrusted", symbol: "⚠", title: "Doesn't trust you" };
+    // v5.15: trust ranges 0-10 and starts at 3. ✦ now requires 7 (above
+    // baseline AND beyond a single confide), ⚠ requires drop to 1 or below.
+    if (trust >=  7) return { id: "trusted",   symbol: "✦", title: "Trusts you"           };
+    if (trust <=  1) return { id: "distrusted", symbol: "⚠", title: "Doesn't trust you" };
     return null;
   }
 
@@ -250,18 +252,34 @@ function renderCampLifeScreen(container, state) {
     const label = (typeof getCampRoleLabel === "function")
       ? getCampRoleLabel(role) : "Finding your place";
 
+    // v5.15: "leaning:X" is a third state — the read is forming but the
+    // tribe hasn't committed yet. Use core flavor at half-confidence.
+    const isLeaning = role && role.startsWith("leaning:");
+    const coreRole  = isLeaning ? role.slice("leaning:".length) : role;
+
+    const committedFlavor = {
+      provider:        "The tribe sees you as someone who pulls weight. Quiet credit accumulates.",
+      strategist:      "You're being read as a thinker. Pitches you make carry a little extra weight.",
+      schemer:         "You've been visible enough that people are watching. Shady acts amplify.",
+      socialConnector: "People talk to you. Conversations land warmer than the numbers say they should.",
+      drifter:         "You're floating in the background. Suspicion fades a little faster on you each round.",
+    };
+    const leaningFlavor = {
+      provider:        "Your hands have been busy lately. People are starting to file you under 'reliable.'",
+      strategist:      "You've been thinking out loud more than most. The tribe is starting to read you that way.",
+      schemer:         "Your activity hasn't gone unnoticed. A few people are starting to wonder.",
+      socialConnector: "You've been in more conversations than most. The shape of a connector is forming.",
+      drifter:         "You've been on the edges more than the center. Easy to miss. That has its uses.",
+    };
+
     const flavor = role === "undefined"
-      ? `It's still early. The tribe doesn't have a fixed read on you yet. (${total} action${total === 1 ? "" : "s"} taken)`
-      : ({
-          provider:        "The tribe sees you as someone who pulls weight. Quiet credit accumulates.",
-          strategist:      "You're being read as a thinker. Pitches you make carry a little extra weight.",
-          schemer:         "You've been visible enough that people are watching. Shady acts amplify.",
-          socialConnector: "People talk to you. Conversations land warmer than the numbers say they should.",
-          drifter:         "You're floating in the background. Suspicion fades a little faster on you each round.",
-        })[role];
+      ? `Still early. The tribe doesn't have a fixed read on you yet. (${total} action${total === 1 ? "" : "s"} taken)`
+      : isLeaning
+        ? leaningFlavor[coreRole]
+        : committedFlavor[coreRole];
 
     return `
-      <div class="camp-role-card" data-role="${role}">
+      <div class="camp-role-card" data-role="${coreRole}"${isLeaning ? ` data-leaning="true"` : ""}>
         <div class="camp-role-header">
           <span class="camp-role-eyebrow">Your camp role</span>
           <span class="camp-role-label">${escapeHtml(label)}</span>

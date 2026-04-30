@@ -344,13 +344,16 @@ function pickConversationMood(state, player, target, ctx) {
           playerSocial, targetStrategy, voteAlignment } = ctx;
 
   // Each weight starts with a baseline floor so every mood is reachable.
+  // v5.15: positive moods keep a baseline of 1.0 — most camp conversations
+  // are at least cordial. Negative moods drop to 0.6 so they only surface
+  // when there's real signal, not from baseline noise.
   const weights = {
-    productive: 1,
-    warm:       1,
-    awkward:    1,
-    tense:      1,
-    suspicious: 1,
-    evasive:    1,
+    productive: 1.0,
+    warm:       1.0,
+    awkward:    0.8,
+    tense:      0.6,
+    suspicious: 0.6,
+    evasive:    0.6,
   };
 
   // Positive standing pushes productive/warm. v5.13: alliance tier scales
@@ -418,6 +421,13 @@ function pickConversationMood(state, player, target, ctx) {
   // the exchange afloat even when the underlying signal is bad.
   weights.awkward = Math.max(0.2, weights.awkward - playerSocial * 0.08);
   weights.tense   = Math.max(0.2, weights.tense   - playerSocial * 0.06);
+
+  // v5.15: small per-call jitter on each weight (±10%) so consecutive
+  // conversations with the same target feel different in flavor without
+  // contradicting the model's overall direction. Keeps replays varied.
+  for (const k of Object.keys(weights)) {
+    weights[k] = Math.max(0.1, weights[k] * (0.9 + Math.random() * 0.2));
+  }
 
   // Weighted pick.
   const total = Object.values(weights).reduce((a, b) => a + b, 0);
@@ -488,12 +498,16 @@ function pickTruthfulnessBand(state, player, target, ctx) {
   // v5.14: camp-role identity also shifts how others read you. A known
   // "Social Connector" gets warmer engagement; a known "Schemer" gets
   // hedged answers; "Provider" reputation buys a small candor cushion.
+  // v5.15: "leaning:X" roles apply at half magnitude — the read is forming
+  // but hasn't fully committed in others' minds.
   const askerRole = getCampRole(state, player.id);
-  switch (askerRole) {
-    case "socialConnector": archetypeShift += 1.0; break;
-    case "provider":        archetypeShift += 0.5; break;
-    case "schemer":         archetypeShift -= 1.0; break;
-    case "drifter":         archetypeShift -= 0.3; break;
+  const roleCore  = (askerRole || "").replace(/^leaning:/, "");
+  const roleScale = (askerRole || "").startsWith("leaning:") ? 0.5 : 1.0;
+  switch (roleCore) {
+    case "socialConnector": archetypeShift += 1.0 * roleScale; break;
+    case "provider":        archetypeShift += 0.5 * roleScale; break;
+    case "schemer":         archetypeShift -= 1.0 * roleScale; break;
+    case "drifter":         archetypeShift -= 0.3 * roleScale; break;
     // strategist is candor-neutral here; their role shows up via lobby
   }
 
@@ -509,8 +523,10 @@ function pickTruthfulnessBand(state, player, target, ctx) {
     - playerSusp      * 0.20
     + archetypeShift;
 
-  // Add small jitter so equivalent inputs don't always return the same band.
-  const jitter = (Math.random() - 0.5) * 2;
+  // v5.15: jitter widened from ±1.0 to ±1.4 so band selection isn't too
+  // mechanical — two near-identical conversations might land one band
+  // apart and feel different in flavor without contradicting the model.
+  const jitter = (Math.random() - 0.5) * 2.8;
   const score  = candor + jitter;
 
   // Long-game deception flip: chance the target lies even at high candor.
@@ -641,6 +657,8 @@ function actionTalk(state, player, target) {
     `You checked in on ${target.name}. Short conversation, but they seemed to appreciate it.`,
     `You ate next to ${target.name} and traded a few jokes. Nothing remarkable, but the warmth was real.`,
     `You and ${target.name} swapped small talk while sorting firewood. The kind of moment that quietly adds up.`,
+    `You and ${target.name} sat through a long stretch of nothing-conversation. Easy silence broken by easy words. The bones of trust.`,
+    `${target.name} asked how you were holding up — actually asked. You gave a real answer. They listened.`,
   ]), hint: null };
 }
 
@@ -780,10 +798,14 @@ function actionSearchIdol(state, player, tribemates) {
   // v5.14: camp-role identity adjusts the weight. A known Provider has built
   // up "they're not the type" reputation; a Schemer is read as "of course
   // they were doing that" and the witness pile-on is heavier.
+  // v5.15: "leaning" roles only half-apply — the read is forming but the
+  // tribe hasn't fully committed.
   let memoryWeight = prevSearches >= 2 ? 2 : 1;
-  const playerRole = getCampRole(state, player.id);
-  if (playerRole === "provider") memoryWeight = Math.max(0.5, memoryWeight - 0.5);
-  if (playerRole === "schemer")  memoryWeight += 0.5;
+  const _searchRole = getCampRole(state, player.id) || "";
+  const _searchRoleCore  = _searchRole.replace(/^leaning:/, "");
+  const _searchRoleScale = _searchRole.startsWith("leaning:") ? 0.5 : 1.0;
+  if (_searchRoleCore === "provider") memoryWeight = Math.max(0.5, memoryWeight - 0.5 * _searchRoleScale);
+  if (_searchRoleCore === "schemer")  memoryWeight += 0.5 * _searchRoleScale;
   recordSuspiciousAct(state, witness.id, player.id, "idolSearch", memoryWeight);
 
   // Ambient bleed: from the second repeat onward, other tribemates start
@@ -1168,12 +1190,16 @@ function actionLobby(state, player, tribemates, target) {
   // Persuade chance — see header comment for the formula.
   // v5.14: known "Strategist" role gets a small bump; known "Schemer" gets
   // a small penalty (others are wary of their pitches even when correct).
+  // v5.15: "leaning" roles half-apply.
   const listenerTrust = getTrust(state, listener.id, player.id);
-  const playerRole    = getCampRole(state, player.id);
-  const roleBonus =
-      playerRole === "strategist"      ?  0.05 :
-      playerRole === "socialConnector" ?  0.03 :
-      playerRole === "schemer"         ? -0.05 : 0;
+  const _lobbyRole       = getCampRole(state, player.id) || "";
+  const _lobbyRoleCore   = _lobbyRole.replace(/^leaning:/, "");
+  const _lobbyRoleScale  = _lobbyRole.startsWith("leaning:") ? 0.5 : 1.0;
+  const roleBonus = _lobbyRoleScale * (
+      _lobbyRoleCore === "strategist"      ?  0.05 :
+      _lobbyRoleCore === "socialConnector" ?  0.03 :
+      _lobbyRoleCore === "schemer"         ? -0.05 : 0
+  );
   const persuadeChance = Math.max(0.10, Math.min(0.85,
     0.40 + player.social * 0.04 + player.strategy * 0.02
        + (listenerTrust - 3) * 0.04
@@ -1613,6 +1639,8 @@ function actionCheckIn(state, player, target) {
         `You found ${target.name} alone and told them what was on your mind. They softened — really softened — and said the words you needed to hear: "We're good."`,
         `You named the friction with ${target.name} out loud. Instead of getting defensive, they exhaled. "I'd been carrying that too," they said. The air cleared.`,
         `${target.name} listened as you owned your part. When you were done, they reached out and squeezed your shoulder. "Thank you for saying it. We're fine."`,
+        `You sat down with ${target.name} and didn't talk strategy at all. Just the day, the wind, the fire. By the end, the thing between you wasn't a thing anymore.`,
+        `${target.name} cut you off halfway through your apology. "It's okay. I get it. We're good." It was that simple, in the end.`,
       ]), hint: null };
     }
     case "partial": {
@@ -1978,8 +2006,9 @@ function actionReadRoom(state, player, tribemates) {
 
   // Chaos noise: each picked line has a chance of being downgraded to a
   // generic "you couldn't quite parse" hedge. Higher chaos and lower social
-  // both raise this chance.
-  const noiseChance = Math.min(0.5, Math.max(0, (chaos - 2) * 0.10) + (5 - social) * 0.03);
+  // both raise this chance. v5.15: ceiling lowered from 0.5 → 0.4 — even
+  // a low-social player in a chaotic camp should usually get one real read.
+  const noiseChance = Math.min(0.4, Math.max(0, (chaos - 2) * 0.10) + (5 - social) * 0.03);
 
   // Pick lines: weighted-random without replacement so we don't repeat.
   const pool = [...candidates];
@@ -1997,6 +2026,9 @@ function actionReadRoom(state, player, tribemates) {
         `Something was happening today, but you couldn't quite parse it. Too much movement at once.`,
         `You felt a shift in the room and couldn't put your finger on it. The signal was buried under the noise.`,
         `There was a current under everything today. Whatever it was, you didn't catch it cleanly.`,
+        `Voices kept dropping right when you got close enough to hear. You came away with a feeling, not a read.`,
+        `The camp was busy with itself. You'd need another day to make sense of what you were seeing.`,
+        `You picked up that something mattered today. You couldn't say what — only that it did.`,
       ]);
     }
     lines.push(text);
@@ -2372,22 +2404,31 @@ function computeCampRoleShares(state, contestantId) {
   return { totals, shares, total };
 }
 
-// Returns the camp role id, or "undefined" if not enough data yet.
+// Returns the camp role id. v5.15: three states —
+//   "undefined"        : < 3 actions OR no category over 25% share
+//   "leaning:<role>"   : 3+ actions AND best share ≥ 25% but < 40%
+//   "<role>"           : 5+ actions AND best share ≥ 40%
+// Tightened the commit threshold from 35% → 40% so the role doesn't snap
+// in too early; introduced the leaning state so the player gets feedback
+// on the direction their behavior is pulling them well before commitment.
 function getCampRole(state, contestantId) {
-  const { totals, shares, total } = computeCampRoleShares(state, contestantId);
-  if (total < 5) return "undefined";
+  const { totals: _t, shares, total } = computeCampRoleShares(state, contestantId);
+  if (total < 3) return "undefined";
 
-  // Pick the role with the highest share. Require ≥ 35% share to commit;
-  // otherwise the contestant is doing a little of everything → undefined.
   let bestRole = null, bestShare = 0;
   for (const role of Object.keys(shares)) {
     if (shares[role] > bestShare) { bestShare = shares[role]; bestRole = role; }
   }
-  if (bestShare < 0.35) return "undefined";
-  return bestRole;
+  if (bestShare < 0.25) return "undefined";
+  if (total >= 5 && bestShare >= 0.40) return bestRole;
+  return "leaning:" + bestRole;
 }
 
 function getCampRoleLabel(roleId) {
+  if (roleId && roleId.startsWith("leaning:")) {
+    const real = roleId.slice("leaning:".length);
+    return "Leaning " + (CAMP_ROLE_LABELS[real] ?? "their way");
+  }
   return CAMP_ROLE_LABELS[roleId] ?? "Finding their place";
 }
 
