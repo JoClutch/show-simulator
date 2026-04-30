@@ -406,17 +406,122 @@ button:disabled {
   font-style: italic;
 }
 
-/* ── Camp Life: tribe relationship panel placeholder (v5 foundation) ─ */
-/* Reserved DOM hook for the future per-tribemate relationship readout. */
-/* v5.0 keeps it hidden so layout is unchanged; v5.x will populate and */
-/* unhide. Sized to take a small block when shown — no surprises later. */
+/* ── Camp Life: tribe relationship panel (v5.1) ─────────────────── */
+/* Replaces the old camp-tribemates chip row. Lists tribemates in       */
+/* alphabetical order with a colored tier dot, name, and short label.   */
+/* Compact rows so the panel reads as a social dashboard at a glance.   */
 .camp-relationship-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border-mid);
+  border-radius: 5px;
+  padding: 0.65rem 0.85rem 0.55rem;
   margin-bottom: 0.9rem;
 }
 
 .camp-relationship-panel.hidden {
   display: none;
 }
+
+.camp-tribe-panel-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border-dim);
+  padding-bottom: 0.3rem;
+  margin-bottom: 0.4rem;
+}
+
+.camp-tribe-panel-title {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--gold-dim);
+  font-weight: bold;
+}
+
+.camp-tribe-panel-count {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+}
+
+.camp-tribe-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+}
+
+.camp-tribe-row {
+  display: grid;
+  grid-template-columns: 0.8rem 1fr auto;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.25rem 0.15rem;
+  font-size: 0.85rem;
+  border-radius: 3px;
+}
+
+.camp-tribe-row + .camp-tribe-row {
+  border-top: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+/* Player's own row — distinguished from tribemates. Uses a star instead of
+   a relationship dot since you don't have a relationship "with yourself". */
+.camp-tribe-row-self {
+  background: rgba(74, 106, 152, 0.08);
+}
+
+.camp-tribe-self-icon {
+  font-size: 0.85rem;
+  color: var(--gold);
+  text-align: center;
+}
+
+.camp-tribe-name {
+  color: var(--text-primary);
+}
+
+.camp-tribe-row-self .camp-tribe-name {
+  color: #b8c9e8;
+  font-weight: bold;
+}
+
+.camp-tribe-tier-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+/* Relationship-tier dot. Color varies by data-tier on the parent row.
+   Each tier reads cleanly at a glance: green = good, gray = neutral,
+   amber = drifting, red = trouble. Two greens, one gray, one amber, one
+   red — five tiers map to five colors with no ambiguity. */
+.camp-tribe-dot {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  display: inline-block;
+  background: var(--text-muted);
+  margin: 0 auto;
+}
+
+.camp-tribe-row[data-tier="tight"]    .camp-tribe-dot { background: #5fa86f; }
+.camp-tribe-row[data-tier="friendly"] .camp-tribe-dot { background: #6a9a7a; }
+.camp-tribe-row[data-tier="neutral"]  .camp-tribe-dot { background: #888;    }
+.camp-tribe-row[data-tier="cool"]     .camp-tribe-dot { background: #b88545; }
+.camp-tribe-row[data-tier="strained"] .camp-tribe-dot { background: #b85060; }
+
+/* Tier label colors echo the dot — one color per tier, calmer than the
+   dot itself so the line stays scannable. */
+.camp-tribe-row[data-tier="tight"]    .camp-tribe-tier-label { color: #5fa86f; }
+.camp-tribe-row[data-tier="friendly"] .camp-tribe-tier-label { color: #7aa088; }
+.camp-tribe-row[data-tier="neutral"]  .camp-tribe-tier-label { color: var(--text-muted); }
+.camp-tribe-row[data-tier="cool"]     .camp-tribe-tier-label { color: #b88545; }
+.camp-tribe-row[data-tier="strained"] .camp-tribe-tier-label { color: #b85060; }
 
 /* ── Camp Life: unavailable action button ── */
 /* Used for "Search for idol" when the scope idol is already held. */

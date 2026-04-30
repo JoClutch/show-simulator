@@ -180,6 +180,78 @@ function renderCampLifeScreen(container, state) {
 
   const allianceBlockHTML = buildAllianceBlockHTML();
 
+  // ── Tribe relationship panel (v5.1) ───────────────────────────────────────
+  //
+  // Replaces the old chip row with a structured list showing the player's
+  // current standing with each tribemate. Each row has a colored dot (visual
+  // tier), the name, and a short text label. The raw numeric score is
+  // available via the row's `title` tooltip but never the primary display —
+  // the goal is a readable social dashboard, not a debug dump.
+  //
+  // Tier boundaries align with engine landmarks already in use:
+  //   • rel ≥ 15  triggers bondProtection +20 in voting     → "tight bond"
+  //   • rel ≥ 8   triggers bondProtection +8                → folded into
+  //                                                          the "friendly" tier
+  //   • rel ≥ 10  qualifies a pair for AI alliance auto-form
+  //   • rel ≤ -3  is the existing "enemy" threshold for AI danger reads
+  //
+  // Refreshed live in showActionButtons() so labels move as actions land.
+
+  function getRelationshipTier(rel) {
+    if (rel >=  15) return { id: "tight",    label: "tight bond" };
+    if (rel >=   5) return { id: "friendly", label: "friendly"   };
+    if (rel >=  -4) return { id: "neutral",  label: "neutral"    };
+    if (rel >= -14) return { id: "cool",     label: "cool"       };
+    return                  { id: "strained", label: "strained"  };
+  }
+
+  function buildTribePanelHTML() {
+    // Locale-aware alphabetical sort. Handles unicode names cleanly (accented
+    // characters, mixed case, etc.). The player is rendered first as a self-
+    // row, separate from the sort.
+    const sorted = [...tribemates].sort((a, b) => a.name.localeCompare(b.name));
+    const total  = sorted.length + 1;   // tribemates + the player
+
+    const playerRow = `
+      <li class="camp-tribe-row camp-tribe-row-self">
+        <span class="camp-tribe-self-icon" aria-hidden="true">★</span>
+        <span class="camp-tribe-name">You (${escapeHtml(player.name)})</span>
+      </li>
+    `;
+
+    const tribemateRows = sorted.map(c => {
+      const rel  = getRelationship(state, player.id, c.id);
+      const tier = getRelationshipTier(rel);
+      // Score in the title tooltip — available for the curious without
+      // cluttering the visible row.
+      const tooltip = `Relationship: ${rel.toFixed(0)}`;
+      return `
+        <li class="camp-tribe-row" data-tier="${tier.id}" title="${escapeHtmlAttr(tooltip)}">
+          <span class="camp-tribe-dot" aria-hidden="true"></span>
+          <span class="camp-tribe-name">${escapeHtml(c.name)}</span>
+          <span class="camp-tribe-tier-label">${tier.label}</span>
+        </li>
+      `;
+    }).join("");
+
+    return `
+      <div class="camp-tribe-panel-header">
+        <span class="camp-tribe-panel-title">Your Tribe</span>
+        <span class="camp-tribe-panel-count">${total} member${total !== 1 ? "s" : ""}</span>
+      </div>
+      <ul class="camp-tribe-list">
+        ${playerRow}
+        ${tribemateRows}
+      </ul>
+    `;
+  }
+
+  // Local attribute-context escape helper — same impl as in setup screens.
+  // Used by buildTribePanelHTML for the title tooltip text.
+  function escapeHtmlAttr(s) {
+    return escapeHtml(s);
+  }
+
   // ── Shell ─────────────────────────────────────────────────────────────────
 
   container.innerHTML = `
@@ -218,17 +290,12 @@ function renderCampLifeScreen(container, state) {
 
       ${statusBanner}
 
-      <!-- v5 foundation: tribe relationship panel placeholder. -->
-      <!-- v5.0 leaves this empty (display:none via CSS); v5.x will populate -->
-      <!-- with per-tribemate relationship/trust readouts. The DOM hook is -->
-      <!-- here now so the panel can be slotted in without re-laying out the -->
-      <!-- camp screen. -->
-      <div id="camp-relationship-panel" class="camp-relationship-panel hidden"></div>
-
-      <div class="camp-tribemates">
-        <span class="camp-tribemates-label">Your tribe:</span>
-        <span class="tribe-chip tribe-chip-you">You (${escapeHtml(player.name)})</span>
-        ${tribemates.map(c => `<span class="tribe-chip">${escapeHtml(c.name)}</span>`).join("")}
+      <!-- v5.1: tribe relationship panel — populated by buildTribePanelHTML.
+           Replaces the v5.0 placeholder and the old camp-tribemates chip row.
+           Refreshed live in showActionButtons after each camp action so tier
+           labels move as relationships change. -->
+      <div id="camp-relationship-panel" class="camp-relationship-panel">
+        ${buildTribePanelHTML()}
       </div>
 
       <div id="action-area" class="action-area"></div>
@@ -303,6 +370,11 @@ function renderCampLifeScreen(container, state) {
     // alliance just shifted strength tier, etc.
     const allianceContainer = container.querySelector("#alliance-block-container");
     if (allianceContainer) allianceContainer.innerHTML = buildAllianceBlockHTML();
+
+    // v5.1: refresh the tribe relationship panel. Talk/confide/strategy/etc.
+    // adjust relationships, so the tier labels need to follow.
+    const tribePanel = container.querySelector("#camp-relationship-panel");
+    if (tribePanel) tribePanel.innerHTML = buildTribePanelHTML();
 
     // Re-read live idol state for the search button — same reason.
     const currentHoldsScope = getHeldIdols(state, player.id)
