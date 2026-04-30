@@ -127,7 +127,10 @@ const CAMP_ACTIONS = [
   {
     id: "lobby",
     label: "Push a vote",
-    detail: "Steer attention toward someone. Strategy and social skill determine how it lands.",
+    // v5.4 deepened — three-tier outcome (persuaded / heard / backfired)
+    // and smart listener selection. The pitch may shift the listener's
+    // read on the target, or push them away from you entirely.
+    detail: "Pitch a target to a tribemate. Lands hard, lands soft, or blows up — depending on who you pick and how it reads.",
     needsTarget: true,
     targetPrompt: "Who do you want to draw attention toward?",
     category: "strategy",
@@ -135,9 +138,30 @@ const CAMP_ACTIONS = [
   {
     id: "proposeAlliance",
     label: "Propose an alliance",
-    detail: "Lock in a real pact with someone. Needs trust to land.",
+    // v5.4 deepened — when you're already allied with the target, this
+    // action strengthens that pact instead of being a no-op. Same option,
+    // smart engine.
+    detail: "Form a new pact — or deepen one you already share. Needs trust to land.",
     needsTarget: true,
     targetPrompt: "Who do you want to bring in?",
+    category: "strategy",
+  },
+  {
+    // v5.4: targeted observation of a single player's social position.
+    id: "observePair",
+    label: "Observe a player",
+    detail: "Watch one tribemate closely. Pick up on who they're drawn to and who they avoid.",
+    needsTarget: true,
+    targetPrompt: "Who do you want to watch?",
+    category: "strategy",
+  },
+  {
+    // v5.4: trust-gated intel sharing about THIRD parties.
+    id: "compareNotes",
+    label: "Compare notes",
+    detail: "Trade reads with someone you trust. The intel is only as honest as the relationship.",
+    needsTarget: true,
+    targetPrompt: "Who do you want to compare notes with?",
     category: "strategy",
   },
   {
@@ -174,6 +198,8 @@ function executeAction(state, actionId, player, tribemates, target) {
     case "proposeAlliance": return actionProposeAlliance(state, player, target);
     case "smoothOver":      return actionSmoothOver(state, player, target);
     case "observeCamp":     return actionObserveCamp(state, player, tribemates);
+    case "observePair":     return actionObservePair(state, player, tribemates, target);
+    case "compareNotes":    return actionCompareNotes(state, player, tribemates, target);
     default:            return { feedback: "Nothing happened.", hint: null };
   }
 }
@@ -596,57 +622,116 @@ function actionConfide(state, player, target) {
   ]), hint: null };
 }
 
-// LOBBY (PUSH A VOTE) — suspicion raiser; risky for low-social players.
+// LOBBY (PUSH A VOTE) — pitch a target to another tribemate (v5.4 deepened).
 //
 // "target" is the person you're steering attention toward. The engine picks a
-// random listener from the remaining tribemates to receive your pitch.
-// If there's no available listener (tribe too small), the action fizzles.
+// listener intelligently rather than at random — preferring someone who
+// isn't tightly bonded with the target AND has decent rapport with the
+// player, then randomizing among the top three so behavior isn't fully
+// deterministic. If there's no available listener (tribe too small), the
+// action fizzles harmlessly.
 //
-// How well it lands depends on your social and strategy stats:
-//   social ≥ 6 or strategy ≥ 6 → clean execution, no backlash
-//   social < 6 AND strategy < 6 → listener's trust in you −1 (it felt transparent)
-//   social < 4 AND strategy < 4 → additionally, your own suspicion +1 (you seemed desperate)
+// ── Three-tier outcome roll ──────────────────────────────────────────────────
 //
-// Suspicion added to target:
-//   base = 1 + floor(strategy / 5)   [strategy 0–4: +1, 5–9: +2, 10: +3]
+//   persuadeChance = 0.40 + social × 0.04 + strategy × 0.02
+//                  + (listenerTrust − 3) × 0.04
+//                  clamped to [0.10, 0.85]
+//
+//   roll < persuadeChance:                  PERSUADED
+//     • target suspicion +(2 + strategy/4)
+//     • listener-target rel −rand(1, 2)     (you planted real doubt)
+//     • player+listener trust +1, rel +1    (shared confidence builds rapport)
+//
+//   roll < persuadeChance + 0.30:            HEARD
+//     • target suspicion +(1 + strategy/6)  (smaller bump than persuaded)
+//     • no rel/trust change                 (listener stayed neutral)
+//
+//   else:                                    BACKFIRED
+//     • player+listener trust −1, rel −1
+//     • player suspicion +1                 (campaigning came across as scheming)
+//     • target suspicion unchanged          (the pitch didn't land at all)
+//
+// Listener trust gates the persuade chance because the pitch is fundamentally
+// trust-mediated: someone who barely knows you is harder to convince of
+// anything sensitive. Strategy stat helps slightly (you frame it well);
+// social skill matters more (you read them well).
 function actionLobby(state, player, tribemates, target) {
-  const potentialListeners = tribemates.filter(m => m.id !== target.id);
-
-  if (potentialListeners.length === 0) {
+  const eligible = tribemates.filter(m => m.id !== target.id);
+  if (eligible.length === 0) {
     return {
       feedback: `With so few of you left, pitching against ${target.name} openly felt too risky. You held back.`,
       hint: null,
     };
   }
 
-  const listener      = pickFrom(potentialListeners);
-  const suspicionGain = 1 + Math.floor(player.strategy / 5);
-  adjustSuspicion(state, target.id, suspicionGain);
+  // Smart listener selection. Favor:
+  //   • Listeners who AREN'T closely bonded with the target (rel < 10),
+  //     since target's allies are unlikely to entertain a flip.
+  //   • Listeners the player has rapport with (rel + trust score).
+  // Pick randomly from the top 3 by rapport so behavior is varied.
+  const filtered = eligible.filter(m =>
+    getRelationship(state, m.id, target.id) < 10
+  );
+  const candidatePool = filtered.length > 0 ? filtered : eligible;
+  const ranked = [...candidatePool].sort((a, b) => {
+    const aScore = getRelationship(state, player.id, a.id) + getTrust(state, player.id, a.id);
+    const bScore = getRelationship(state, player.id, b.id) + getTrust(state, player.id, b.id);
+    return bScore - aScore;
+  });
+  const topPool = ranked.slice(0, Math.min(3, ranked.length));
+  const listener = pickFrom(topPool);
 
-  const cleanExecution = player.social >= 6 || player.strategy >= 6;
-  const desperate      = player.social < 4 && player.strategy < 4;
+  // Persuade chance — see header comment for the formula.
+  const listenerTrust = getTrust(state, listener.id, player.id);
+  const persuadeChance = Math.max(0.10, Math.min(0.85,
+    0.40 + player.social * 0.04 + player.strategy * 0.02
+       + (listenerTrust - 3) * 0.04
+  ));
 
-  if (desperate) {
-    adjustSuspicion(state, player.id, 1);
-    adjustTrust(state, player.id, listener.id, -1);
+  const roll = Math.random();
+
+  // PERSUADED — the pitch landed. Multiple effects.
+  if (roll < persuadeChance) {
+    const suspicionGain = 2 + Math.floor(player.strategy / 4);
+    adjustSuspicion(state, target.id, suspicionGain);
+
+    // The listener's read on the target sours, indirectly making them more
+    // likely to vote target at the next tribal (rel feeds into pickVoteTarget).
+    adjustRelationship(state, listener.id, target.id, -rand(1, 2));
+
+    // Sharing a confidence builds rapport between you and the listener.
+    adjustTrust(state, player.id, listener.id, 1);
+    adjustRelationship(state, player.id, listener.id, 1);
+
     return { feedback: pickFrom([
-      `You pushed hard on ${target.name} with ${listener.name}, but your pitch came out wrong. ${listener.name} looked uncomfortable. You may have drawn attention to yourself.`,
-      `Your campaigning against ${target.name} landed badly with ${listener.name}. You could see them pulling back. You may have made things worse.`,
+      `You pulled ${listener.name} aside and made the case against ${target.name}. They listened — really listened — and by the end, they were nodding. The seed is planted.`,
+      `${listener.name} hadn't been thinking about ${target.name}. By the time you walked away, they were. Quiet, careful work.`,
+      `You laid out your read on ${target.name} with ${listener.name}. They asked smart follow-up questions, then said the magic words: "Yeah. I see it now."`,
+      `${listener.name} bought the pitch. They didn't say it explicitly, but the way they glanced at ${target.name} the rest of the afternoon told you everything.`,
     ]), hint: null };
   }
 
-  if (!cleanExecution) {
-    adjustTrust(state, player.id, listener.id, -1);
+  // HEARD — the pitch was noted but not committed to. Small effects.
+  if (roll < persuadeChance + 0.30) {
+    const suspicionGain = 1 + Math.floor(player.strategy / 6);
+    adjustSuspicion(state, target.id, suspicionGain);
     return { feedback: pickFrom([
-      `You pulled ${listener.name} aside and raised concerns about ${target.name}. They listened, but you could tell they were evaluating you as much as your pitch.`,
-      `You made your case to ${listener.name} about ${target.name}. It landed okay — but something in ${listener.name}'s expression made you second-guess yourself.`,
+      `You raised concerns about ${target.name} with ${listener.name}. They listened, polite and noncommittal. You think they noted it.`,
+      `${listener.name} heard you out about ${target.name} but didn't bite. "Maybe," they said. "I'll keep my eyes open."`,
+      `Your pitch about ${target.name} landed somewhere between "interesting" and "maybe." ${listener.name} didn't push back, but didn't agree either.`,
+      `${listener.name} shrugged after you finished. "Could be," they said. The conversation moved on. You're not sure if anything actually shifted.`,
     ]), hint: null };
   }
 
+  // BACKFIRED — the pitch made the listener wary of you, not the target.
+  adjustTrust(state, player.id, listener.id, -1);
+  adjustRelationship(state, player.id, listener.id, -1);
+  adjustSuspicion(state, player.id, 1);
   return { feedback: pickFrom([
-    `You had a quiet word with ${listener.name} about ${target.name}. They nodded. You think the seed is planted.`,
-    `You raised your concerns about ${target.name} with ${listener.name} at just the right moment. They seemed receptive.`,
-    `You steered the conversation toward ${target.name} with ${listener.name}. Smooth. You think it landed.`,
+    `You pushed ${listener.name} on ${target.name}. They pushed back. "I'm not sure I'm comfortable with this conversation," they said. You may have made yourself the target.`,
+    `${listener.name} listened to your pitch, then said something polite that meant "I don't trust this." They walked away. The conversation didn't help you.`,
+    `Your campaigning against ${target.name} landed wrong with ${listener.name}. You could see them recalibrating their read on YOU rather than the person you were pitching against.`,
+    `${listener.name} cut you off mid-sentence. "I think I'm gonna stay out of this one," they said. The way they said it told you they'd be remembering this conversation.`,
   ]), hint: null };
 }
 
@@ -693,10 +778,25 @@ function actionLayLow(state, player, tribemates) {
 //            relationship +2, trust +1 (the commitment binds)
 // On reject: trust −1 (they were uncomfortable being approached too soon)
 //
-// If already in a shared alliance, this is a no-op (with friendly feedback).
+// v5.4: when already in a shared alliance, this action becomes "strengthen
+// the existing pact" — adjusting strength on every shared alliance the pair
+// is in, with a small rel/trust bump for the renewed commitment. Same UI
+// option, smart engine. Per the prompt: alliance building should feel more
+// authentic than a simple toggle.
 function actionProposeAlliance(state, player, target) {
   if (isInSameAlliance(state, player.id, target.id)) {
-    return { feedback: getAllianceAlreadyLine(target), hint: null };
+    // Strengthen mode — the pact already exists, so this is a recommitment
+    // beat. Boost rel and trust modestly, and bump alliance strength on
+    // every alliance both members share.
+    strengthenSharedAlliances(state, player.id, target.id, 1);
+    adjustRelationship(state, player.id, target.id, rand(1, 2));
+    adjustTrust(state, player.id, target.id, 1);
+    return { feedback: pickFrom([
+      `You and ${target.name} sat down and reaffirmed the plan. No new ground covered, but the commitment landed cleaner this time. The pact feels tighter.`,
+      `${target.name} appreciated that you came to them directly. You compared notes on what could go wrong and walked away with a sharper plan together.`,
+      `You took a quiet moment with ${target.name} to confirm you were still on the same page. They were. Sometimes alliances need that — explicit, not assumed.`,
+      `${target.name} laughed a little when you brought it up. "We're still good," they said, and meant it. The pact stayed warm because you tended to it.`,
+    ]), hint: null };
   }
 
   const rel   = getRelationship(state, player.id, target.id);
@@ -934,6 +1034,233 @@ function actionObserveCamp(state, player, tribemates) {
   return {
     feedback: picked.map(c => c.text).join(" "),
     hint:     null,
+  };
+}
+
+// OBSERVE A PLAYER — targeted observation of one tribemate's social position
+// (v5.4, new).
+//
+// Distinct from the broader "Observe the camp" (v5.3, Social) — this action
+// focuses on a single tribemate the player picks. It scans that target's
+// relationships with each OTHER tribemate and surfaces:
+//   • Their strongest bond  (rel ≥ 8 with someone)
+//   • Their worst grudge     (rel ≤ −5 with someone)
+//
+// Strategy stat gates how much of that picture the player can read:
+//   strategy ≥ 6 → up to 2 observations (bond + grudge if both exist)
+//   strategy <  6 → 1 observation (whichever is stronger)
+//
+// If neither extreme exists, a generic "playing it close to the vest" line
+// is returned. Doesn't mutate game state — pure information, like its v5.3
+// cousin actionObserveCamp.
+function actionObservePair(state, player, tribemates, target) {
+  // Defensive: target must be a real tribemate. Filter out the target itself
+  // from the comparison set so we don't surface "X is close to themselves".
+  const others = tribemates.filter(c => c.id !== target.id);
+  if (others.length === 0) {
+    return {
+      feedback: `You watched ${target.name} for a while, but no one else was around to read against.`,
+      hint: null,
+    };
+  }
+
+  // Find target's strongest bond and worst grudge.
+  let topAlly = null,    topRel    = -Infinity;
+  let worstFoe = null,   worstRel  =  Infinity;
+  for (const c of others) {
+    const rel = getRelationship(state, target.id, c.id);
+    if (rel > topRel)   { topRel   = rel; topAlly  = c; }
+    if (rel < worstRel) { worstRel = rel; worstFoe = c; }
+  }
+
+  const observations = [];
+
+  if (topAlly && topRel >= 8) {
+    observations.push({
+      magnitude: topRel,
+      text: pickFrom([
+        `${target.name} and ${topAlly.name} have been spending real time together. There's a bond there — you can see it.`,
+        `Watching ${target.name}, they kept finding excuses to be near ${topAlly.name}. That tracks: those two are tight.`,
+        `${target.name} lights up around ${topAlly.name}. It's not subtle once you're looking for it.`,
+      ]),
+    });
+  }
+
+  if (worstFoe && worstRel <= -5) {
+    observations.push({
+      magnitude: Math.abs(worstRel),
+      text: pickFrom([
+        `${target.name} has been keeping their distance from ${worstFoe.name}. Whatever happened between them, it's not over.`,
+        `You watched ${target.name} go out of their way to avoid ${worstFoe.name}. The body language said it all.`,
+        `${target.name} and ${worstFoe.name} have a problem. Neither will say it out loud, but they don't pretend to like each other either.`,
+      ]),
+    });
+  }
+
+  // Fallback when neither bond nor grudge is strong enough.
+  if (observations.length === 0) {
+    return {
+      feedback: pickFrom([
+        `${target.name} seems neutral with most of the tribe — no strong bonds, no obvious feuds. They're playing it close to the vest.`,
+        `You watched ${target.name} for a while. They moved through the camp like everyone was equally important. Hard to read.`,
+        `${target.name} hasn't given you much to work with. They're disciplined about not picking sides — at least not visibly.`,
+      ]),
+      hint: null,
+    };
+  }
+
+  // Strategy gates how much you can piece together. Lower-strategy players
+  // see the bigger of the two signals; higher-strategy sees both.
+  if (player.strategy < 6) {
+    // Pick the most extreme one.
+    observations.sort((a, b) => b.magnitude - a.magnitude);
+    return { feedback: observations[0].text, hint: null };
+  }
+
+  return {
+    feedback: observations.map(o => o.text).join(" "),
+    hint: null,
+  };
+}
+
+// COMPARE NOTES — share strategic intel with someone (v5.4, new).
+//
+// Distinct from "Ask who they want out" (which targets the partner's own
+// vote intent) — this action asks the partner what they've SEEN about
+// THIRD parties. Returns information about the social graph (who's bonding,
+// who's feuding) with accuracy gated by trust, mirroring askVote's truth tiers.
+//
+// ── Truth tiers (by trust between player and partner) ──────────────────────
+//
+//   trust 0–2: 50% chance the partner gives misleading info, otherwise
+//              they hedge to the point of uselessness
+//   trust 3–5: vague but honest hint about a real bond/feud
+//   trust 6+:  candid, specific observation
+//
+// ── Always-applies side effect ───────────────────────────────────────────
+//
+//   trust(player, partner) +1
+//   rel(player, partner)   +1
+//
+// Trading reads is itself a trust-building act, regardless of what the
+// partner shares — you walked into camp with a piece of game and they took
+// the meeting. Even when the intel is unreliable, the act of comparing
+// notes builds rapport.
+//
+// Per the prompt: "Information should be imperfect. Some players should lie,
+// dodge, or mislead." Misleading info at low trust uses real tribemate names
+// to feel plausible — the partner asserts a connection that doesn't exist.
+function actionCompareNotes(state, player, tribemates, partner) {
+  const others = tribemates.filter(c => c.id !== partner.id);
+  if (others.length === 0) {
+    return {
+      feedback: `${partner.name} had nothing to share — there was no one else to talk about.`,
+      hint: null,
+    };
+  }
+
+  const trust = getTrust(state, player.id, partner.id);
+
+  // Mutual trust + rel bump for collaborating, regardless of intel quality.
+  adjustTrust(state, player.id, partner.id, 1);
+  adjustRelationship(state, player.id, partner.id, 1);
+
+  // ── Trust 0–2: mislead or dodge ──────────────────────────────────────
+  if (trust <= 2) {
+    if (Math.random() < 0.5) {
+      // Misleading info — claim a connection that's actually false. We pick
+      // two real tribemates whose actual rel is mediocre or negative; the
+      // partner asserts they're "tight." The player can't tell it's wrong.
+      const subject = pickFrom(others);
+      const subjectOthers = others.filter(c => c.id !== subject.id);
+      if (subjectOthers.length === 0) {
+        return {
+          feedback: `${partner.name} kept their cards close. "I don't really know much," they said. You weren't sure if they meant it.`,
+          hint: null,
+        };
+      }
+      // Prefer a target whose actual rel with subject is LOW (so the lie is
+      // genuinely misleading rather than coincidentally true).
+      const sortedByLowRel = [...subjectOthers].sort((a, b) =>
+        getRelationship(state, subject.id, a.id) - getRelationship(state, subject.id, b.id)
+      );
+      const supposedAlly = sortedByLowRel[0];
+      return { feedback: pickFrom([
+        `${partner.name} told you ${subject.name} has been working with ${supposedAlly.name}. You wondered if they actually believed it — or wanted you to.`,
+        `"Watch ${subject.name}," ${partner.name} said. "They're tighter with ${supposedAlly.name} than people think." Their delivery felt rehearsed.`,
+        `${partner.name} dropped a name. "${subject.name} and ${supposedAlly.name} — that's a thing." You couldn't tell if it was a real read or a planted seed.`,
+      ]), hint: null };
+    }
+    return {
+      feedback: pickFrom([
+        `${partner.name} hedged on everything. "I haven't really been paying attention," they said. You doubted that, but pressing felt risky.`,
+        `${partner.name} kept their answers vague — "I don't know, they all seem fine." You didn't believe them. They didn't seem to mind.`,
+      ]),
+      hint: null,
+    };
+  }
+
+  // ── Trust 3–5: vague but honest ─────────────────────────────────────
+  if (trust <= 5) {
+    // Pick someone real and surface a real (but understated) signal.
+    const subject = pickFrom(others);
+    const subjectOthers = others.filter(c => c.id !== subject.id);
+    let topAlly = null, topRel = -Infinity;
+    for (const c of subjectOthers) {
+      const rel = getRelationship(state, subject.id, c.id);
+      if (rel > topRel) { topRel = rel; topAlly = c; }
+    }
+    if (!topAlly || topRel < 5) {
+      return {
+        feedback: `${partner.name} shrugged. "Honestly? Nobody's clicking that hard yet. It's still early days." Probably true.`,
+        hint: null,
+      };
+    }
+    return { feedback: pickFrom([
+      `${partner.name} mentioned that ${subject.name} and ${topAlly.name} seem to be getting along. "I don't know how serious it is," they said.`,
+      `"Honestly?" ${partner.name} said. "${subject.name} and ${topAlly.name} are tighter than most people realize." They left it there.`,
+      `${partner.name} hedged a little but gave you something: "${subject.name} and ${topAlly.name} talk more than they let on."`,
+    ]), hint: null };
+  }
+
+  // ── Trust 6+: candid, specific ──────────────────────────────────────
+  // Find the most useful real observation among others' relationships.
+  // Prefer revealing a strong bond (rel ≥ 8); fall back to a strong grudge
+  // (rel ≤ −5); fall back to a generic candid take.
+  const subject = pickFrom(others);
+  const subjectOthers = others.filter(c => c.id !== subject.id);
+  let topAlly = null,   topRel   = -Infinity;
+  let worstFoe = null,  worstRel =  Infinity;
+  for (const c of subjectOthers) {
+    const rel = getRelationship(state, subject.id, c.id);
+    if (rel > topRel)   { topRel   = rel; topAlly  = c; }
+    if (rel < worstRel) { worstRel = rel; worstFoe = c; }
+  }
+
+  if (topAlly && topRel >= 8) {
+    return {
+      feedback: pickFrom([
+        `${partner.name} confirmed it: "${subject.name} and ${topAlly.name} are running together. They've been talking nonstop." Direct and unhedged.`,
+        `"You probably already know this," ${partner.name} said, "but ${subject.name} and ${topAlly.name} are the real pair to watch."`,
+      ]),
+      hint: null,
+    };
+  }
+  if (worstFoe && worstRel <= -5) {
+    return {
+      feedback: pickFrom([
+        `${partner.name} was direct: "${subject.name} and ${worstFoe.name} can't stand each other. There's a vote brewing there."`,
+        `"Watch ${subject.name} around ${worstFoe.name}," ${partner.name} said. "Something's coming — they're not hiding it well."`,
+      ]),
+      hint: null,
+    };
+  }
+  return {
+    feedback: pickFrom([
+      `${partner.name} shared what they'd seen, candid as ever. "${subject.name} is being careful — neutral with everyone, real with no one. That itself is data."`,
+      `"Honestly?" ${partner.name} said. "${subject.name} hasn't shown me anything. That's either great gameplay or they're lost." Useful in its own way.`,
+    ]),
+    hint: null,
   };
 }
 
