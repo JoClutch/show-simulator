@@ -283,7 +283,12 @@ function executeAction(state, actionId, player, tribemates, target) {
 function buildConversationContext(state, player, target) {
   const rel       = getRelationship(state, player.id, target.id);
   const trust     = getTrust(state, player.id, target.id);
-  const ally      = isInSameAlliance(state, player.id, target.id);
+  // v5.13: alliance tier shapes how candidly an ally talks. Core allies share
+  // freely; loose allies hedge; weakened allies behave like acquaintances.
+  const allyTier  = (typeof getSharedAllianceTier === "function")
+    ? getSharedAllianceTier(state, player.id, target.id)
+    : (isInSameAlliance(state, player.id, target.id) ? "loose" : null);
+  const ally      = allyTier !== null;
   const idolSusp  = state.idolSuspicion?.[target.id]?.[player.id] ?? 0;
   const targetSusp= target.suspicion ?? 0;
   const playerSusp= player.suspicion ?? 0;
@@ -301,13 +306,28 @@ function buildConversationContext(state, player, target) {
   }
 
   return {
-    rel, trust, ally, idolSusp, targetSusp, playerSusp,
+    rel, trust, ally, allyTier, idolSusp, targetSusp, playerSusp,
     voteAlignment,
     playerStrategy: player.strategy ?? 5,
     playerSocial:   player.social   ?? 5,
     targetStrategy: target.strategy ?? 5,
     targetSocial:   target.social   ?? 5,
+    // v5.13: archetype tendencies. Default to "balanced" if unset (e.g. for
+    // older save data) so the candor/mood model continues to work unchanged.
+    playerArchetype: player.archetype ?? "balanced",
+    targetArchetype: target.archetype ?? "balanced",
   };
+}
+
+// v5.13: alliance-tier candor weight. Used by both mood and truthfulness
+// pickers so a "core" co-member shares dramatically more than a "loose" one.
+function _allyCandor(allyTier) {
+  switch (allyTier) {
+    case "core":     return 6;
+    case "loose":    return 3;
+    case "weakened": return 1;
+    default:         return 0;
+  }
 }
 
 // Picks the conversation mood. Returns one of:
@@ -331,11 +351,49 @@ function pickConversationMood(state, player, target, ctx) {
     evasive:    1,
   };
 
-  // Positive standing pushes productive/warm.
+  // Positive standing pushes productive/warm. v5.13: alliance tier scales
+  // these — core allies are dramatically more productive than loose ones.
+  const allyCandor = _allyCandor(ctx.allyTier);
   weights.productive += Math.max(0, trust * 0.6) + Math.max(0, rel * 0.15)
-                       + (ally ? 3 : 0) + Math.max(0, voteAlignment);
+                       + allyCandor + Math.max(0, voteAlignment);
   weights.warm       += Math.max(0, rel * 0.25) + (playerSocial * 0.15)
                        + (ally ? 1.5 : 0);
+
+  // v5.13: archetype tilts. Soft tendencies — they shift weights, never
+  // override. Combined effect of multiple signals still dominates.
+  switch (ctx.targetArchetype) {
+    case "loyal":
+      weights.productive += 1.5;
+      weights.warm       += 1.0;
+      weights.suspicious -= 0.5;
+      weights.evasive    -= 0.5;
+      break;
+    case "sneaky":
+      weights.evasive    += 1.5;
+      weights.suspicious += 0.8;
+      weights.warm       -= 0.3;
+      break;
+    case "paranoid":
+      weights.suspicious += 2.0;
+      weights.tense      += 0.6;
+      weights.productive -= 0.5;
+      break;
+    case "socialButterfly":
+      weights.warm       += 2.0;
+      weights.productive += 0.5;
+      weights.awkward    -= 0.5;
+      weights.tense      -= 0.4;
+      break;
+    case "workhorse":
+      weights.awkward    += 0.8;
+      weights.warm       += 0.4;
+      weights.suspicious -= 0.3;
+      break;
+    case "challengeBeast":
+      weights.warm       += 0.5;
+      weights.evasive    += 0.4;
+      break;
+  }
 
   // Mid-low rapport without hostility leans awkward.
   weights.awkward    += Math.max(0, 4 - Math.abs(rel) * 0.3)
@@ -413,30 +471,50 @@ function pickTruthfulnessBand(state, player, target, ctx) {
   const { rel, trust, ally, idolSusp, targetSusp, playerSusp,
           voteAlignment, playerStrategy, targetStrategy } = ctx;
 
+  // v5.13: alliance-tier candor uses _allyCandor instead of a flat +4 for ally.
+  // Archetype hooks: loyal targets disclose more; sneaky disclose less.
+  let archetypeShift = 0;
+  switch (ctx.targetArchetype) {
+    case "loyal":          archetypeShift += 1.0; break;
+    case "sneaky":         archetypeShift -= 1.5; break;
+    case "paranoid":       archetypeShift -= 0.8; break;
+    case "socialButterfly":archetypeShift += 0.4; break;
+    case "challengeBeast": archetypeShift -= 0.3; break;
+    // workhorse is candor-neutral
+  }
+
   const candor =
       trust * 1.0
     + rel  * 0.25
-    + (ally ? 4 : 0)
+    + _allyCandor(ctx.allyTier)
     + voteAlignment
     + playerStrategy * 0.15
     - targetStrategy * 0.20
     - idolSusp        * 0.50
     - targetSusp      * 0.20
-    - playerSusp      * 0.20;
+    - playerSusp      * 0.20
+    + archetypeShift;
 
   // Add small jitter so equivalent inputs don't always return the same band.
   const jitter = (Math.random() - 0.5) * 2;
   const score  = candor + jitter;
 
-  // Long-game deception flip: ~12% chance the target lies even at high candor.
-  // Models a tribemate who's been close to the player but is privately
-  // lining up a betrayal. Tunable.
-  if (score >= 6 && Math.random() < 0.12) {
+  // Long-game deception flip: chance the target lies even at high candor.
+  // v5.13: sneaky archetypes flip more often (sometimes betray smiling);
+  // loyal archetypes flip much less.
+  let deceptionFlip = 0.12;
+  if (ctx.targetArchetype === "sneaky") deceptionFlip = 0.20;
+  if (ctx.targetArchetype === "loyal")  deceptionFlip = 0.04;
+  if (score >= 6 && Math.random() < deceptionFlip) {
     return Math.random() < 0.5 ? "misleading" : "incomplete";
   }
-  // Frustrated-truth flip: ~12% chance of an unexpected real disclosure
-  // even at low candor. Slipped tongues, venting, oversharing.
-  if (score < 2 && Math.random() < 0.12) {
+  // Frustrated-truth flip: chance of an unexpected real disclosure even at
+  // low candor. v5.13: social butterflies overshare more, paranoid players
+  // less.
+  let truthFlip = 0.12;
+  if (ctx.targetArchetype === "socialButterfly") truthFlip = 0.20;
+  if (ctx.targetArchetype === "paranoid")        truthFlip = 0.05;
+  if (score < 2 && Math.random() < truthFlip) {
     return Math.random() < 0.5 ? "mostly" : "incomplete";
   }
 
@@ -2250,6 +2328,8 @@ function runOneAICampAction(state, ai, pool) {
 // option if the AI has someone they actually dislike to lobby against).
 function pickAIActionWeighted(state, ai, others) {
   const options = [];
+  // v5.13: archetype shapes action preference. "balanced" is the no-tilt default.
+  const arch = ai.archetype ?? "balanced";
 
   // ── TALK ──
   // Pool: tribemates the AI hasn't already maxed out (rel < 12) and isn't
@@ -2260,11 +2340,12 @@ function pickAIActionWeighted(state, ai, others) {
     return r > -8 && r < 12;
   });
   if (talkPool.length > 0) {
-    options.push({
-      action: "talk",
-      weight: 4 + ai.social * 0.4,
-      target: pickFrom(talkPool),
-    });
+    let w = 4 + ai.social * 0.4;
+    if (arch === "socialButterfly") w += 3;
+    if (arch === "loyal")           w += 1;
+    if (arch === "paranoid")        w -= 0.5;
+    if (arch === "workhorse")       w -= 0.5;
+    options.push({ action: "talk", weight: w, target: pickFrom(talkPool) });
   }
 
   // ── CONFIDE ──
@@ -2276,11 +2357,12 @@ function pickAIActionWeighted(state, ai, others) {
     getTrust(state, ai.id, c.id)        >= 4
   );
   if (confidePool.length > 0) {
-    options.push({
-      action: "confide",
-      weight: 2 + ai.social * 0.4,
-      target: pickFrom(confidePool),
-    });
+    let w = 2 + ai.social * 0.4;
+    if (arch === "socialButterfly") w += 1.5;
+    if (arch === "loyal")           w += 1;
+    if (arch === "sneaky")          w -= 1;
+    if (arch === "paranoid")        w -= 1;
+    options.push({ action: "confide", weight: Math.max(0.2, w), target: pickFrom(confidePool) });
   }
 
   // ── STRENGTHEN existing alliance ──
@@ -2299,11 +2381,10 @@ function pickAIActionWeighted(state, ai, others) {
     }
   }
   if (allyPool.length > 0) {
-    options.push({
-      action: "strengthen",
-      weight: 3 + ai.social * 0.2,
-      target: pickFrom(allyPool),
-    });
+    let w = 3 + ai.social * 0.2;
+    if (arch === "loyal")  w += 2;
+    if (arch === "sneaky") w -= 1;
+    options.push({ action: "strengthen", weight: Math.max(0.2, w), target: pickFrom(allyPool) });
   }
 
   // ── LOBBY ──
@@ -2316,11 +2397,12 @@ function pickAIActionWeighted(state, ai, others) {
     enemyPool.sort((a, b) =>
       getRelationship(state, ai.id, a.id) - getRelationship(state, ai.id, b.id)
     );
-    options.push({
-      action: "lobby",
-      weight: 2 + ai.strategy * 0.6,
-      target: enemyPool[0],
-    });
+    let w = 2 + ai.strategy * 0.6;
+    if (arch === "sneaky")    w += 2;
+    if (arch === "paranoid")  w += 1;
+    if (arch === "loyal")     w -= 1;
+    if (arch === "workhorse") w -= 1;
+    options.push({ action: "lobby", weight: Math.max(0.2, w), target: enemyPool[0] });
   }
 
   // ── ASK VOTE ──
@@ -2330,11 +2412,10 @@ function pickAIActionWeighted(state, ai, others) {
   // distrustful people.
   const askPool = others.filter(c => getTrust(state, ai.id, c.id) >= 4);
   if (askPool.length > 0) {
-    options.push({
-      action: "askVote",
-      weight: 1 + ai.strategy * 0.5,
-      target: pickFrom(askPool),
-    });
+    let w = 1 + ai.strategy * 0.5;
+    if (arch === "sneaky")   w += 1.5;
+    if (arch === "paranoid") w += 1;
+    options.push({ action: "askVote", weight: w, target: pickFrom(askPool) });
   }
 
   // ── FORM ALLIANCE ──
@@ -2353,34 +2434,35 @@ function pickAIActionWeighted(state, ai, others) {
       (getRelationship(state, ai.id, b.id) + getTrust(state, ai.id, b.id) * 2)
       - (getRelationship(state, ai.id, a.id) + getTrust(state, ai.id, a.id) * 2)
     );
-    options.push({
-      action: "formAlly",
-      weight: 1 + ai.strategy * 0.4,
-      target: formPool[0],
-    });
+    let w = 1 + ai.strategy * 0.4;
+    if (arch === "loyal")    w += 1.5;
+    if (arch === "sneaky")   w -= 0.5;
+    if (arch === "paranoid") w -= 0.5;
+    options.push({ action: "formAlly", weight: Math.max(0.2, w), target: formPool[0] });
   }
 
   // ── LAY LOW ──
   // Only when the AI has real heat. Otherwise laylow is a wasted action
-  // for them.
+  // for them. v5.13: paranoid archetypes lay low even with mild heat.
   const ownSusp = ai.suspicion ?? 0;
-  if (ownSusp >= 4) {
-    options.push({
-      action: "laylow",
-      weight: 1 + ownSusp * 0.6,
-      target: null,
-    });
+  const laylowFloor = arch === "paranoid" ? 2 : 4;
+  if (ownSusp >= laylowFloor) {
+    let w = 1 + ownSusp * 0.6;
+    if (arch === "paranoid") w += 1.5;
+    if (arch === "sneaky")   w += 0.5;
+    options.push({ action: "laylow", weight: w, target: null });
   }
 
   // ── TEND CAMP ──
   // Always a valid baseline option (visible labor is always somewhat
-  // useful). High-challenge AIs prioritize it more — the prompt's
-  // "challenge-focused players may care more about tribe strength."
-  options.push({
-    action: "tendCamp",
-    weight: 1 + (ai.challenge >= 7 ? 1 : 0),
-    target: null,
-  });
+  // useful). v5.13: workhorse archetypes lean heavily into it; challenge
+  // beasts also weight it up; sneaky/social-butterfly weight it down.
+  let tendW = 1 + (ai.challenge >= 7 ? 1 : 0);
+  if (arch === "workhorse")       tendW += 3;
+  if (arch === "challengeBeast")  tendW += 1.5;
+  if (arch === "sneaky")          tendW -= 0.5;
+  if (arch === "socialButterfly") tendW -= 0.5;
+  options.push({ action: "tendCamp", weight: Math.max(0.2, tendW), target: null });
 
   if (options.length === 0) return null;
 

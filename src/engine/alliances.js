@@ -71,6 +71,7 @@ function _pickAllianceName(state) {
 // `members` is an array of contestant objects (length ≥ 2).
 // Returns the new alliance object.
 function createAlliance(state, members, founderId, initialStrength = 5) {
+  const strength = Math.max(1, Math.min(10, initialStrength));
   const alliance = {
     id:                  _nextAllianceId(),
     name:                _pickAllianceName(state),
@@ -80,8 +81,13 @@ function createAlliance(state, members, founderId, initialStrength = 5) {
     // Treat formation itself as the most recent reinforcement. A brand-new
     // alliance won't get hit by the staleness penalty in its first round.
     lastReinforcedRound: state.round,
-    strength:            Math.max(1, Math.min(10, initialStrength)),
+    strength,
     status:              "active",
+    // v5.13: tier is a player-facing read on the alliance's depth, derived
+    // from strength. core = ride-or-die; loose = functional but uncommitted;
+    // weakened = hanging by a thread. Distinct from voting blocs, which are
+    // ephemeral single-tribal coordinations stored in state.votingBlocs.
+    tier:                _strengthToTier(strength),
   };
   state.alliances.push(alliance);
 
@@ -138,6 +144,35 @@ function adjustAllianceStrength(alliance, delta) {
   if      (alliance.strength <= 0) { alliance.status = "dissolved"; alliance.strength = 0; }
   else if (alliance.strength <= 3) { alliance.status = "weakened"; }
   else                             { alliance.status = "active";   }
+  alliance.tier = _strengthToTier(alliance.strength);
+}
+
+// v5.13: tier mapping. Designed to be read by the candor/info-share system
+// and the UI rather than swapped in for "strength" directly — strength
+// remains the underlying float that drives drift; tier is the categorical
+// surface read.
+//
+//   strength ≥ 7  → "core"      (ride-or-die)
+//   strength 4–6  → "loose"     (functional cooperation)
+//   strength 1–3  → "weakened"  (hanging by a thread)
+//   strength 0    → handled as dissolved upstream
+function _strengthToTier(strength) {
+  if (strength >= 7) return "core";
+  if (strength >= 4) return "loose";
+  return "weakened";
+}
+
+function getAllianceTier(alliance) {
+  if (!alliance) return null;
+  return alliance.tier ?? _strengthToTier(alliance.strength ?? 0);
+}
+
+// Returns the tier of the strongest shared alliance between two contestants,
+// or null if they share none. Used by the conversation candor model to scale
+// information sharing.
+function getSharedAllianceTier(state, idA, idB) {
+  const a = getStrongestSharedAlliance(state, idA, idB);
+  return a ? getAllianceTier(a) : null;
 }
 
 // Applies a delta to every active alliance that contains BOTH members.
@@ -516,7 +551,17 @@ function aiFormAlliances(state, pool) {
       const sameOrigin = a.originalTribe === b.originalTribe;
       const minRel     = sameOrigin ? 12 : 14;
       const minTrust   = sameOrigin ? 6  : 7;
-      const formChance = sameOrigin ? 0.20 : 0.10;
+      let   formChance = sameOrigin ? 0.20 : 0.10;
+      // v5.13: archetype tilt on formation. Loyal pairs lock in faster;
+      // sneaky pairs hesitate (less interested in committed pacts);
+      // paranoid pairs hesitate (don't trust the structure).
+      const tilt = (arch) =>
+        arch === "loyal"    ?  0.08 :
+        arch === "sneaky"   ? -0.05 :
+        arch === "paranoid" ? -0.04 : 0;
+      formChance = Math.max(0.02, Math.min(0.50,
+        formChance + tilt(a.archetype) + tilt(b.archetype)
+      ));
       if (rel < minRel || trust < minTrust) continue;
       if (Math.random() >= formChance) continue;
 

@@ -138,13 +138,21 @@ function renderCampLifeScreen(container, state) {
     const cards = mine.map(a => {
       const strengthInt = Math.round(a.strength);
       const widthPct    = Math.max(5, strengthInt * 10);
+      // v5.13: prefer the alliance.tier set by the engine; fall back to
+      // strength-derived tier for older saves. Map engine tier names to
+      // existing CSS class IDs so styling stays unchanged.
+      const engineTier = a.tier ?? (
+        strengthInt >= 7 ? "core" :
+        strengthInt >= 4 ? "loose" :
+        "weakened"
+      );
       const tier =
-        strengthInt >= 7 ? "tight"   :
-        strengthInt >= 4 ? "solid"   :
+        engineTier === "core"     ? "tight"    :
+        engineTier === "loose"    ? "solid"    :
         "weakened";
       const tierLabel =
-        tier === "tight"   ? "Tight"   :
-        tier === "solid"   ? "Solid"   :
+        engineTier === "core"     ? "Core"     :
+        engineTier === "loose"    ? "Loose"    :
         "Weakened";
 
       // Staleness cue: alliance hasn't seen a positive member interaction in

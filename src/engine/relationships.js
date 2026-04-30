@@ -32,6 +32,10 @@ function initRelationships(state) {
   for (const c of all) {
     state.relationships[c.id] = {};
     state.trust[c.id]         = {};
+    // v5.13: assign each contestant a soft archetype based on their stats.
+    // Archetypes are tendencies — they tilt action selection and
+    // conversation behavior but never override active context.
+    if (!c.archetype) c.archetype = pickArchetype(c);
   }
 
   for (let i = 0; i < all.length; i++) {
@@ -46,6 +50,48 @@ function initRelationships(state) {
       state.trust[b][a] = 3;
     }
   }
+}
+
+// ── v5.13: Soft archetypes ───────────────────────────────────────────────────
+//
+// Six archetypes, picked once per contestant via stat-biased weighted random.
+// Multiple contestants with identical stats can still land different
+// archetypes (random component) so cast variety persists even with similar
+// templates.
+//
+//   loyal           — sticks to alliances, candid, low deception flip
+//   sneaky          — high deception flip, more evasive, pushes lobbies
+//   paranoid        — quick to read schemes, suspicious mood-tilt, lays low
+//   socialButterfly — talkative, oversharing, weights talk/confide
+//   workhorse       — quiet labor, weights tendCamp, candor-neutral
+//   challengeBeast  — stat-defined, neutral social tilt, slight evasiveness
+//
+// Stored on contestant.archetype as a string; default "balanced" if missing
+// (e.g. legacy save data) so all archetype-aware code falls through cleanly.
+const ARCHETYPES = ["loyal", "sneaky", "paranoid", "socialButterfly", "workhorse", "challengeBeast"];
+
+function pickArchetype(c) {
+  const social    = c.social    ?? 5;
+  const strategy  = c.strategy  ?? 5;
+  const challenge = c.challenge ?? 5;
+
+  // Each archetype gets a baseline 1 weight so any cast composition is
+  // possible; stat fits add additional weight.
+  const w = {
+    loyal:           1 + (social >= 6 ? 1 : 0) + (strategy <= 6 ? 1 : 0),
+    sneaky:          1 + (strategy >= 7 ? 2 : 0) + (social <= 5 ? 1 : 0),
+    paranoid:        1 + (strategy >= 6 ? 1 : 0) + (social <= 5 ? 1 : 0),
+    socialButterfly: 1 + (social >= 7 ? 2 : 0),
+    workhorse:       1 + (challenge >= 6 && social <= 5 ? 2 : 0),
+    challengeBeast:  1 + (challenge >= 8 ? 3 : 0),
+  };
+
+  const total = Object.values(w).reduce((s, v) => s + v, 0);
+  let roll = Math.random() * total;
+  for (const arch of ARCHETYPES) {
+    if ((roll -= w[arch]) <= 0) return arch;
+  }
+  return "loyal";
 }
 
 // ── Relationship API ──────────────────────────────────────────────────────────
@@ -325,8 +371,19 @@ function spreadIdolSuspicion(state, pool) {
         const trust = getTrust(state, gossiper.id, listener.id);
         if (rel < 5 || trust < 4) continue;   // only close allies trade reads
 
-        // Base 20%, +2% per gossiper social point — capped at 40%.
-        const chance = Math.min(0.40, 0.20 + gossiper.social * 0.02);
+        // v5.13: idol gossip travels through CORE alliance ties most freely
+        // and through loose ties at half rate. Pairs with no shared alliance
+        // can still trade if they meet the rel/trust floor (informal close
+        // friends), but at base rate.
+        const allyTier = (typeof getSharedAllianceTier === "function")
+          ? getSharedAllianceTier(state, gossiper.id, listener.id)
+          : null;
+        const tierMult = allyTier === "core"  ? 1.5 :
+                         allyTier === "loose" ? 0.7 :
+                         allyTier === "weakened" ? 0.4 : 1.0;
+
+        // Base 20%, +2% per gossiper social point, scaled by alliance tier.
+        const chance = Math.min(0.50, (0.20 + gossiper.social * 0.02) * tierMult);
         if (Math.random() < chance) {
           adjustIdolSuspicion(state, listener.id, holderId, 1);
         }
