@@ -348,6 +348,132 @@ function clearRoundEphemera(state) {
   state.checkInsThisRound  = {};
 }
 
+// ── v5.16: Social capital ────────────────────────────────────────────────────
+//
+// Hidden derived metric. Returns a float roughly in [0, 10] representing how
+// well a contestant is "doing" socially across the WHOLE tribe — not just
+// in any one pair. Computed on demand from existing state (no new storage)
+// so it never goes stale and remains easy to tune in one place.
+//
+// Why derive instead of store: every camp action already mutates the inputs
+// (rel, suspicion, action history, suspicion memory, conflicts). Recomputing
+// on demand keeps the metric exactly synchronized with current state without
+// adding a fanout problem (where to update from each event).
+//
+// ── Inputs ────────────────────────────────────────────────────────────────────
+//   • Likability       — average rel with active tribemates
+//   • Provider rep     — share of tendCamp in action history
+//   • Consistency      — variety bonus when action history isn't one-note
+//   • Strategic heat   — share of lobby + searchidol in action history (penalty)
+//   • Suspicion        — contestant.suspicion (penalty)
+//   • Conflict load    — count of unresolved recent conflicts (penalty)
+//   • Memory cliff     — sum of all observers' suspicion memory of them (penalty)
+//   • Camp role        — provider/socialConnector/drifter +; schemer −
+//
+// Final value clamped to [0, 10]. Baseline (no signal) sits near 5.0.
+//
+// ── Where it's read ───────────────────────────────────────────────────────────
+//   • vote.js scoreVoteTarget — low capital adds vote pressure (consensus
+//                                target); high capital adds light protection
+//   • campLife.js pickTruthfulnessBand — asker's capital lightly shifts candor
+//   • campLife.js actionLobby — listener resists pitches against high-capital
+//                                targets ("everyone likes them")
+//   • campLife.js actionReadRoom — surfaces a hedged self-read about the
+//                                   player's standing in the camp
+//
+// Not exposed as a number anywhere in the UI. Player feedback is purely
+// indirect — voting outcomes, conversation tone, and hedged observation lines.
+function getSocialCapital(state, contestantId) {
+  // Pool: active tribemates the contestant currently shares camp with.
+  const c = findContestant(state, contestantId);
+  if (!c) return 5;
+
+  const pool = state.merged
+    ? (state.tribes?.merged || [])
+    : (state.tribes?.[c.tribe] || []);
+  const tribemates = pool.filter(m => m.id !== contestantId);
+  if (tribemates.length === 0) return 5;
+
+  // ── Likability — avg rel across tribemates, mapped onto [0, 10] ────────────
+  let relSum = 0;
+  for (const m of tribemates) relSum += getRelationship(state, contestantId, m.id);
+  const avgRel = relSum / tribemates.length;
+  // Map avgRel −15..+15 onto roughly −2.5..+2.5
+  const likability = Math.max(-2.5, Math.min(2.5, avgRel * 0.16));
+
+  // ── Action-history derived signals ────────────────────────────────────────
+  const hist = state.actionHistory?.[contestantId] ?? {};
+  let totalActions = 0;
+  for (const k of Object.keys(hist)) totalActions += hist[k];
+
+  const providerCount = (hist.tendCamp ?? 0);
+  const schemerCount  = (hist.lobby ?? 0) + (hist.searchidol ?? 0);
+  const providerShare = totalActions > 0 ? providerCount / totalActions : 0;
+  const schemerShare  = totalActions > 0 ? schemerCount  / totalActions : 0;
+
+  const providerRep   = providerShare * 1.5;       // 0..1.5
+  const strategicHeat = schemerShare  * 1.8;       // 0..1.8
+
+  // Consistency bonus — well-roundedness. Count distinct categories used.
+  const distinctActions = Object.keys(hist).filter(k => hist[k] > 0).length;
+  const consistency = totalActions >= 4
+    ? Math.min(1.0, distinctActions * 0.18)        // 0..1.0
+    : 0;
+
+  // ── Suspicion ─────────────────────────────────────────────────────────────
+  const suspicion = (c.suspicion ?? 0) * 0.35;     // 0..3.5
+
+  // ── Conflict load ─────────────────────────────────────────────────────────
+  // Count active conflicts within 2 rounds, weighted by severity.
+  let conflictLoad = 0;
+  const conflicts = state.lastConflicts?.[contestantId] ?? {};
+  const round = state.round ?? 0;
+  for (const otherId of Object.keys(conflicts)) {
+    const e = conflicts[otherId];
+    if (!e) continue;
+    const age = round - (e.round ?? 0);
+    if (age > 2) continue;
+    conflictLoad += Math.min(2, e.severity ?? 1) * 0.25;
+  }
+  conflictLoad = Math.min(2.0, conflictLoad);
+
+  // ── Aggregate suspicion memory against this contestant ────────────────────
+  // Sum every observer's memory of them; map to a small penalty.
+  let memorySum = 0;
+  for (const obs of Object.keys(state.suspicionMemory ?? {})) {
+    memorySum += state.suspicionMemory[obs][contestantId] ?? 0;
+  }
+  const memoryPenalty = Math.min(2.5, memorySum * 0.10);
+
+  // ── Camp role identity ────────────────────────────────────────────────────
+  let roleShift = 0;
+  if (typeof getCampRole === "function") {
+    const role     = getCampRole(state, contestantId) || "";
+    const core     = role.replace(/^leaning:/, "");
+    const scale    = role.startsWith("leaning:") ? 0.5 : 1.0;
+    if      (core === "provider")        roleShift = +0.8 * scale;
+    else if (core === "socialConnector") roleShift = +0.7 * scale;
+    else if (core === "drifter")         roleShift = +0.2 * scale;
+    else if (core === "schemer")         roleShift = -0.7 * scale;
+    // strategist is capital-neutral — high strategy reads as neither vibe
+  }
+
+  // ── Compose ───────────────────────────────────────────────────────────────
+  const baseline = 5.0;
+  const capital  =
+      baseline
+    + likability
+    + providerRep
+    + consistency
+    + roleShift
+    - strategicHeat
+    - suspicion
+    - conflictLoad
+    - memoryPenalty;
+
+  return Math.max(0, Math.min(10, capital));
+}
+
 // ── v5.12: Conflict / repair accessors ──────────────────────────────────────
 //
 // "Has there been recent friction with this person?" — used by Check In

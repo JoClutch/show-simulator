@@ -511,6 +511,13 @@ function pickTruthfulnessBand(state, player, target, ctx) {
     // strategist is candor-neutral here; their role shows up via lobby
   }
 
+  // v5.16: asker's social capital lightly shifts how candidly they're
+  // received. Well-liked askers earn a small benefit-of-the-doubt; askers
+  // whose stock is low get answers a band cooler than candor would predict.
+  const askerCapital = (typeof getSocialCapital === "function")
+    ? getSocialCapital(state, player.id) : 5;
+  const capitalShift = (askerCapital - 5) * 0.20;
+
   const candor =
       trust * 1.0
     + rel  * 0.25
@@ -521,7 +528,8 @@ function pickTruthfulnessBand(state, player, target, ctx) {
     - idolSusp        * 0.50
     - targetSusp      * 0.20
     - playerSusp      * 0.20
-    + archetypeShift;
+    + archetypeShift
+    + capitalShift;
 
   // v5.15: jitter widened from ±1.0 to ±1.4 so band selection isn't too
   // mechanical — two near-identical conversations might land one band
@@ -1200,10 +1208,19 @@ function actionLobby(state, player, tribemates, target) {
       _lobbyRoleCore === "socialConnector" ?  0.03 :
       _lobbyRoleCore === "schemer"         ? -0.05 : 0
   );
+  // v5.16: target's broad social standing affects how willing the listener
+  // is to entertain the pitch. Pitching against the camp's well-liked
+  // anchor is harder than pitching against someone with weak standing.
+  // Centered on 5 → up to ±0.10 swing.
+  const targetCapital = (typeof getSocialCapital === "function")
+    ? getSocialCapital(state, target.id) : 5;
+  const capitalShield = (targetCapital - 5) * 0.02;
+
   const persuadeChance = Math.max(0.10, Math.min(0.85,
     0.40 + player.social * 0.04 + player.strategy * 0.02
        + (listenerTrust - 3) * 0.04
        + roleBonus
+       - capitalShield
   ));
 
   const roll = Math.random();
@@ -1992,6 +2009,27 @@ function actionReadRoom(state, player, tribemates) {
       `There are multiple grudges simmering at once. Whoever can ride the right one will own the next vote.`,
       `The camp has more than one open feud beneath the surface. You can feel the lines being drawn.`,
     ])});
+  }
+
+  // v5.16: hedged self-read on the player's own social capital. Only
+  // surfaces at the extremes (well above or well below baseline) so the
+  // player gets useful indirect feedback without the model becoming a
+  // numerical readout. Mid-range capital produces no line, intentionally.
+  if (typeof getSocialCapital === "function") {
+    const cap = getSocialCapital(state, player.id);
+    if (cap >= 7) {
+      candidates.push({ weight: 4, text: pickFrom([
+        `The room reads warm toward you. People aren't actively talking about you — usually a good sign.`,
+        `You'd say the tribe is broadly comfortable with you right now. Not loud allies, not enemies — just steady reads.`,
+        `Whatever you've been doing, it's working. You can feel the room giving you a benefit of the doubt you haven't asked for.`,
+      ])});
+    } else if (cap <= 3.5) {
+      candidates.push({ weight: 5, text: pickFrom([
+        `You'd swear the tribe has cooled on you. Conversations don't quite include you the way they did. You're not paranoid — you're noticing.`,
+        `Your stock is down with the camp. Multiple people seem to be holding something back. Whatever the read on you is, it isn't kind.`,
+        `Something's shifted in how the camp talks to you. Shorter answers, fewer eye contacts. The vibe isn't on your side.`,
+      ])});
+    }
   }
 
   // ── Quality and noise ────────────────────────────────────────────────────

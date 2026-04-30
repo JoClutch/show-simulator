@@ -197,10 +197,19 @@ function scoreVoteTarget(state, voter, c) {
     idolFactor = voter.strategy >= 6 ? -2 : +3;
   }
 
+  // v5.16: social capital — broad tribe-standing nudge. High-capital targets
+  // are slightly harder to vote out (the room defaults to giving them
+  // benefit of the doubt); low-capital targets become consensus targets a
+  // bit faster. Centered on 5 so it's a ±2.5 swing at the extremes.
+  const capital = (typeof getSocialCapital === "function")
+    ? getSocialCapital(state, c.id) : 5;
+  const capitalFactor = (capital - 5) * 0.5;
+
   return rel + bondProtection + allianceProtection + trustFactor
        - suspicion - socialThreat - challengeThreat
        + idolFactor
-       + crossTribeFactor + tribeStrengthFactor;
+       + crossTribeFactor + tribeStrengthFactor
+       + capitalFactor;
 }
 
 // pickVoteTarget — returns the contestant the given voter would vote for
