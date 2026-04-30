@@ -239,6 +239,195 @@ function renderCampLifeScreen(container, state) {
     return null;
   }
 
+  // ── v5.20: end-of-camp recap ──────────────────────────────────────────────
+  //
+  // When the player runs out of actions, instead of a blank "you've used
+  // all your actions for today" line we surface a concise recap of what
+  // shifted during the camp phase. Hidden systems stay hidden; the recap
+  // speaks in social/strategic language only.
+  //
+  // Built by diffing the phase-entry snapshot against current state.
+
+  function buildPhaseSnapshot() {
+    const snap = {
+      pairs:    {},   // [tribemateId] → { rel, trust, allyTier }
+      alliances:{},   // [allianceId]  → strength
+      pressure: 0,
+      capital:  5,
+      rumorCount: 0,
+    };
+    for (const c of tribemates) {
+      const allyA = (typeof getStrongestSharedAlliance === "function")
+        ? getStrongestSharedAlliance(state, player.id, c.id) : null;
+      snap.pairs[c.id] = {
+        rel:      getRelationship(state, player.id, c.id),
+        trust:    getTrust(state, player.id, c.id),
+        allyTier: allyA ? (allyA.tier ?? null) : null,
+      };
+    }
+    for (const a of state.alliances ?? []) {
+      if (a.status === "dissolved") continue;
+      if (!a.memberIds.includes(player.id)) continue;
+      snap.alliances[a.id] = a.strength;
+    }
+    snap.pressure   = (typeof getPressureScore   === "function") ? getPressureScore(state, player.id)   : 5;
+    snap.capital    = (typeof getSocialCapital   === "function") ? getSocialCapital(state, player.id)    : 5;
+    snap.rumorCount = (typeof getRumorsKnownBy   === "function") ? getRumorsKnownBy(state, player.id).length : 0;
+    return snap;
+  }
+
+  function buildRecapHTML() {
+    const snap = phaseSnapshot;
+    const lines = [];
+
+    // ── Per-pair shifts ─────────────────────────────────────────────────
+    // We're interested in changes the player would actually feel: rel
+    // moves of 3+, trust crossing the marker thresholds, alliance tier
+    // flips. We pick at most 3 pair-lines so the recap stays readable.
+    const pairChanges = [];
+    for (const c of tribemates) {
+      const before = snap.pairs[c.id];
+      if (!before) continue;
+      const relNow   = getRelationship(state, player.id, c.id);
+      const trustNow = getTrust(state, player.id, c.id);
+      const allyA = (typeof getStrongestSharedAlliance === "function")
+        ? getStrongestSharedAlliance(state, player.id, c.id) : null;
+      const tierNow = allyA ? (allyA.tier ?? null) : null;
+
+      const dRel   = relNow   - before.rel;
+      const dTrust = trustNow - before.trust;
+
+      // Trust threshold crossings (markers were at 7 / 1 in v5.15)
+      const wasTrusted     = before.trust   >= 7;
+      const isTrusted      = trustNow       >= 7;
+      const wasDistrusted  = before.trust   <= 1;
+      const isDistrusted   = trustNow       <= 1;
+
+      let line = null, weight = 0;
+
+      if (!wasTrusted && isTrusted) {
+        line = `${escapeHtml(c.name)} feels like a real ally now — they've started trusting you in a way they didn't this morning.`;
+        weight = 10;
+      } else if (wasTrusted && !isTrusted) {
+        line = `Something cooled with ${escapeHtml(c.name)}. You don't have the same standing with them you did this morning.`;
+        weight = 9;
+      } else if (!wasDistrusted && isDistrusted) {
+        line = `${escapeHtml(c.name)} pulled back hard. Whatever's between you, they're not extending you the benefit of the doubt anymore.`;
+        weight = 9;
+      } else if (before.allyTier !== tierNow) {
+        if (!before.allyTier && tierNow) {
+          line = `You and ${escapeHtml(c.name)} are now in something formal — a ${tierNow} alliance.`;
+          weight = 9;
+        } else if (before.allyTier && !tierNow) {
+          line = `Your alliance with ${escapeHtml(c.name)} is no longer holding.`;
+          weight = 9;
+        } else if (before.allyTier === "loose" && tierNow === "core") {
+          line = `Your bond with ${escapeHtml(c.name)} has hardened — that pact feels real now.`;
+          weight = 8;
+        } else if (before.allyTier === "core" && tierNow === "loose") {
+          line = `Your tie with ${escapeHtml(c.name)} loosened today. Still allies, but the certainty has gone out of it.`;
+          weight = 7;
+        } else if (tierNow === "weakened") {
+          line = `Your alliance with ${escapeHtml(c.name)} is hanging on by a thread.`;
+          weight = 8;
+        }
+      } else if (dRel >= 4) {
+        line = `You and ${escapeHtml(c.name)} got closer today. Real ground was covered.`;
+        weight = 5;
+      } else if (dRel >= 2) {
+        line = `Things with ${escapeHtml(c.name)} feel a touch warmer than this morning.`;
+        weight = 3;
+      } else if (dRel <= -4) {
+        line = `${escapeHtml(c.name)} cooled on you noticeably. You'll feel that next time you talk.`;
+        weight = 6;
+      } else if (dRel <= -2) {
+        line = `${escapeHtml(c.name)} seems a little wary of you compared to this morning.`;
+        weight = 4;
+      }
+
+      if (line) pairChanges.push({ line, weight });
+    }
+    pairChanges.sort((a, b) => b.weight - a.weight);
+    for (const p of pairChanges.slice(0, 3)) lines.push(p.line);
+
+    // ── Alliance strength shifts beyond the per-pair tier flip ─────────
+    for (const a of state.alliances ?? []) {
+      if (a.status === "dissolved") continue;
+      if (!a.memberIds.includes(player.id)) continue;
+      const before = snap.alliances[a.id];
+      if (before === undefined) {
+        // New alliance — already covered by pair-change line above when
+        // tier flipped; skip duplicate.
+        continue;
+      }
+      const dStrength = a.strength - before;
+      if (dStrength >= 1.5) {
+        lines.push(`Your alliance "${escapeHtml(a.name)}" tightened today.`);
+      } else if (dStrength <= -1.5) {
+        lines.push(`Your alliance "${escapeHtml(a.name)}" lost some footing today.`);
+      }
+    }
+
+    // ── Pressure / target-list movement ────────────────────────────────
+    const pressureNow = (typeof getPressureScore === "function")
+      ? getPressureScore(state, player.id) : 5;
+    const dPressure = pressureNow - snap.pressure;
+    if (dPressure >= 1.0) {
+      lines.push(`Your name is getting more momentum than it had this morning. The room is warming on you in the wrong way.`);
+    } else if (dPressure <= -1.0) {
+      lines.push(`Your name has faded a little since this morning. Heat is moving elsewhere.`);
+    }
+
+    // ── Social capital shift ───────────────────────────────────────────
+    const capitalNow = (typeof getSocialCapital === "function")
+      ? getSocialCapital(state, player.id) : 5;
+    const dCapital = capitalNow - snap.capital;
+    if (dCapital >= 0.8) {
+      lines.push(`Your overall standing in the camp ticked up. People are reading you a touch more favorably.`);
+    } else if (dCapital <= -0.8) {
+      lines.push(`Your standing in the camp slipped today. The room read you a little colder by evening.`);
+    }
+
+    // ── New rumors picked up ───────────────────────────────────────────
+    const rumorCountNow = (typeof getRumorsKnownBy === "function")
+      ? getRumorsKnownBy(state, player.id).length : 0;
+    const dRumors = rumorCountNow - snap.rumorCount;
+    if (dRumors >= 2) {
+      lines.push(`You picked up multiple new whispers today. Some of them might even be true.`);
+    } else if (dRumors === 1) {
+      lines.push(`You walked away from camp with one fresh whisper that wasn't there this morning.`);
+    }
+
+    // ── Camp tone fallback ─────────────────────────────────────────────
+    if (lines.length === 0) {
+      const calm = pickFrom([
+        `A quiet day at camp. Nothing moved that you can name.`,
+        `The day didn't shift the picture much. Tomorrow is its own thing.`,
+        `Camp held steady today. Whatever's coming, it's still coming.`,
+      ]);
+      lines.push(calm);
+    }
+
+    // Trim to a readable max — recap should land in one breath, not a wall.
+    const final = lines.slice(0, 5);
+
+    const items = final.map(l => `<li class="camp-recap-item">${l}</li>`).join("");
+    return `
+      <div class="camp-recap-card">
+        <div class="camp-recap-header">
+          <span class="camp-recap-eyebrow">End of camp</span>
+          <span class="camp-recap-title">Today's read</span>
+        </div>
+        <ul class="camp-recap-list">${items}</ul>
+        <p class="muted camp-recap-footer">You've used all your actions for today.</p>
+      </div>
+    `;
+  }
+
+  function pickFrom(arr) {
+    return arr[Math.floor(Math.random() * arr.length)];
+  }
+
   // v5.14: emerging camp-role identity card. Reads state via the engine
   // helper and only renders once the player has enough action history
   // (≥ 5 actions and a dominant category share). Otherwise renders a quiet
@@ -579,6 +768,12 @@ function renderCampLifeScreen(container, state) {
     if (e.target === logOverlay) logOverlay.classList.add("hidden");
   });
 
+  // v5.20: phase-entry snapshot — the comparison baseline for the
+  // end-of-phase recap. Captured ONCE per camp screen render, before any
+  // player action lands. Per-pair rel/trust + alliance strengths + the
+  // player's pressure score and known-rumor count.
+  const phaseSnapshot = buildPhaseSnapshot();
+
   showActionButtons();
 
   // ── Render phases ─────────────────────────────────────────────────────────
@@ -620,8 +815,10 @@ function renderCampLifeScreen(container, state) {
     actionArea.innerHTML = "";
 
     if (actionsLeft === 0) {
-      actionArea.innerHTML =
-        `<p class="muted camp-done-msg">You've used all your actions for today.</p>`;
+      // v5.20: end-of-camp recap replaces the bland "no actions left" line.
+      // Diffs the phase-entry snapshot against current state and surfaces
+      // the meaningful shifts in social/strategic language.
+      actionArea.innerHTML = buildRecapHTML();
       return;
     }
 

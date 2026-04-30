@@ -2551,6 +2551,65 @@ button:disabled {
 .strategic-notes-item[data-cat="idol"]     .strategic-notes-text { color: #7aa088; }
 .strategic-notes-item[data-cat="tribal"]   .strategic-notes-text { color: var(--text-primary); }
 
+/* ── v5.20: end-of-camp recap card ─────────────────────────────────────────
+   Renders in the center column when the player has spent all their actions
+   for the phase. Replaces the prior "you've used all your actions" line
+   with a structured social/strategic summary of what shifted that day.   */
+.camp-recap-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-mid);
+  border-left: 3px solid var(--gold);
+  border-radius: 5px;
+  padding: 0.85rem 1rem 0.7rem;
+}
+.camp-recap-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  margin-bottom: 0.55rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--border-dim);
+}
+.camp-recap-eyebrow {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+.camp-recap-title {
+  font-size: 1.05rem;
+  font-weight: bold;
+  color: var(--text-primary);
+}
+.camp-recap-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.camp-recap-item {
+  font-size: 0.88rem;
+  color: var(--text-dim);
+  line-height: 1.45;
+  padding-left: 0.85rem;
+  position: relative;
+}
+.camp-recap-item::before {
+  content: "•";
+  position: absolute;
+  left: 0;
+  color: var(--gold-dim);
+}
+.camp-recap-footer {
+  margin-top: 0.65rem;
+  padding-top: 0.45rem;
+  border-top: 1px solid var(--border-dim);
+  font-size: 0.78rem;
+  font-style: italic;
+}
+
 /* ── Challenge Screen ── */
 .challenge-type-label {
   text-align: center;
