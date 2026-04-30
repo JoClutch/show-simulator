@@ -56,10 +56,31 @@ function getRelationship(state, idA, idB) {
 
 // Applies delta to both directions. No clamp — relationships can go very
 // negative (enemies) or positive (close allies) over many rounds.
+//
+// v5.12: every pair adjustment is also logged as an "interaction" in
+// state.recentInteractions, so the round-end passive drift pass knows which
+// pairs DIDN'T engage (and should drift). Material drops (delta ≤ −2) also
+// stamp state.lastConflicts, used by the Check In After Conflict action to
+// detect a recent rift.
 function adjustRelationship(state, idA, idB, delta) {
   if (!state.relationships[idA] || !state.relationships[idB]) return;
   state.relationships[idA][idB] = (state.relationships[idA][idB] ?? 0) + delta;
   state.relationships[idB][idA] = (state.relationships[idB][idA] ?? 0) + delta;
+
+  if (state.recentInteractions) {
+    if (!state.recentInteractions[idA]) state.recentInteractions[idA] = {};
+    if (!state.recentInteractions[idB]) state.recentInteractions[idB] = {};
+    state.recentInteractions[idA][idB] = true;
+    state.recentInteractions[idB][idA] = true;
+  }
+
+  if (delta <= -2 && state.lastConflicts) {
+    if (!state.lastConflicts[idA]) state.lastConflicts[idA] = {};
+    if (!state.lastConflicts[idB]) state.lastConflicts[idB] = {};
+    const entry = { round: state.round ?? 0, severity: -delta, kind: "rel" };
+    state.lastConflicts[idA][idB] = entry;
+    state.lastConflicts[idB][idA] = entry;
+  }
 }
 
 // ── Trust API ─────────────────────────────────────────────────────────────────
@@ -149,6 +170,144 @@ function idolSuspicionTier(score) {
 // This is intentionally restrained: only meaningful suspicions spread, only to
 // already-close allies, and only one point at a time. Suspicion forms slow,
 // realistic clusters around alliances rather than spreading like wildfire.
+// ── v5.12: Suspicion memory API ──────────────────────────────────────────────
+//
+// Asymmetric, persistent: state.suspicionMemory[observerId][actorId] = score.
+// Range 0–10. Logged when an actor does something visibly shady in the
+// observer's range — idol search, hard lobbying, an exposed lie, scrambling.
+// Decays gradually each round so a clean stretch lets reputation recover, but
+// nothing wipes overnight.
+//
+// Read by AI vote scoring as a small additional penalty; read by the camp
+// UI in tooltips so the player can see why someone has cooled on them.
+function getSuspicionMemory(state, observerId, actorId) {
+  return state.suspicionMemory?.[observerId]?.[actorId] ?? 0;
+}
+
+function adjustSuspicionMemory(state, observerId, actorId, delta) {
+  if (!state.suspicionMemory) state.suspicionMemory = {};
+  if (!state.suspicionMemory[observerId]) state.suspicionMemory[observerId] = {};
+  const cur = state.suspicionMemory[observerId][actorId] ?? 0;
+  state.suspicionMemory[observerId][actorId] = Math.max(0, Math.min(10, cur + delta));
+}
+
+// Records a flagged behavior. `reason` is a short tag for debugging/UI.
+// `weight` defaults to 1 — pass higher for more egregious acts.
+function recordSuspiciousAct(state, observerId, actorId, reason, weight = 1) {
+  if (observerId === actorId) return;
+  adjustSuspicionMemory(state, observerId, actorId, weight);
+  // Stamp a lightweight conflict marker so Check In knows there's something
+  // to repair even if rel hasn't yet dropped below the −2 threshold.
+  if (state.lastConflicts) {
+    if (!state.lastConflicts[observerId]) state.lastConflicts[observerId] = {};
+    if (!state.lastConflicts[actorId])    state.lastConflicts[actorId]    = {};
+    const entry = { round: state.round ?? 0, severity: weight, kind: reason };
+    state.lastConflicts[observerId][actorId] = entry;
+    state.lastConflicts[actorId][observerId] = entry;
+  }
+}
+
+// Round-end pass: every observer's memory of every actor decays by 0.5.
+// Players who keep their nose clean for several rounds drop back toward zero;
+// repeat offenders accumulate faster than the decay can clear.
+function decaySuspicionMemory(state) {
+  if (!state.suspicionMemory) return;
+  for (const observerId of Object.keys(state.suspicionMemory)) {
+    const inner = state.suspicionMemory[observerId];
+    for (const actorId of Object.keys(inner)) {
+      inner[actorId] = Math.max(0, (inner[actorId] ?? 0) - 0.5);
+      if (inner[actorId] === 0) delete inner[actorId];
+    }
+    if (Object.keys(inner).length === 0) delete state.suspicionMemory[observerId];
+  }
+}
+
+// ── v5.12: Passive relationship drift ────────────────────────────────────────
+//
+// Round-end pass. For every pair that did NOT have a recorded interaction
+// during the just-finished round, rel drifts gently toward 0:
+//
+//   • Allies (sharing an active alliance): exempt — alliance system already
+//     manages their drift.
+//   • Anchored bonds (rel ≥ 20): exempt — past a certain depth a bond
+//     doesn't fade from a single quiet round.
+//   • Otherwise: rel moves 1 point toward 0 (positive rel decays down,
+//     negative rel softens up). Caps at 0 (never crosses).
+//
+// Doesn't run on contestants who are already eliminated. Runs across the
+// merged pool post-merge or both tribes pre-merge.
+function passiveDrift(state) {
+  const pool = state.merged
+    ? [...(state.tribes?.merged || [])]
+    : [...(state.tribes?.A || []), ...(state.tribes?.B || [])];
+
+  // Build a quick lookup of allied pairs to skip them.
+  const alliedPairs = new Set();
+  if (state.alliances) {
+    for (const a of state.alliances) {
+      if (a.dissolved || a.status === "dissolved") continue;
+      const ids = a.memberIds || [];
+      for (let i = 0; i < ids.length; i++) {
+        for (let j = i + 1; j < ids.length; j++) {
+          alliedPairs.add(ids[i] + "|" + ids[j]);
+          alliedPairs.add(ids[j] + "|" + ids[i]);
+        }
+      }
+    }
+  }
+
+  for (let i = 0; i < pool.length; i++) {
+    for (let j = i + 1; j < pool.length; j++) {
+      const a = pool[i].id;
+      const b = pool[j].id;
+
+      // Skip if they engaged this round.
+      if (state.recentInteractions?.[a]?.[b]) continue;
+      // Skip allied pairs.
+      if (alliedPairs.has(a + "|" + b)) continue;
+
+      const rel = getRelationship(state, a, b);
+      if (rel >= 20 || rel <= -20) continue;   // anchored
+
+      // Drift toward 0 by 1 point. Never cross zero.
+      let drift;
+      if (rel > 0)      drift = -1;
+      else if (rel < 0) drift = +1;
+      else continue;
+
+      // Apply directly without re-marking interaction (drift isn't engagement).
+      state.relationships[a][b] = (state.relationships[a][b] ?? 0) + drift;
+      state.relationships[b][a] = (state.relationships[b][a] ?? 0) + drift;
+    }
+  }
+}
+
+// Round-end housekeeping: clear per-round interaction log and per-round
+// check-in records. Called from advanceRound() AFTER passiveDrift and
+// decaySuspicionMemory have done their work.
+function clearRoundEphemera(state) {
+  state.recentInteractions = {};
+  state.checkInsThisRound  = {};
+}
+
+// ── v5.12: Conflict / repair accessors ──────────────────────────────────────
+//
+// "Has there been recent friction with this person?" — used by Check In
+// After Conflict to gate its eligibility detection and shape its tone.
+// A conflict counts as "recent" if logged within the last 2 rounds.
+function getRecentConflict(state, idA, idB) {
+  const entry = state.lastConflicts?.[idA]?.[idB];
+  if (!entry) return null;
+  const age = (state.round ?? 0) - (entry.round ?? 0);
+  if (age > 2) return null;
+  return { ...entry, age };
+}
+
+function clearConflict(state, idA, idB) {
+  if (state.lastConflicts?.[idA]) delete state.lastConflicts[idA][idB];
+  if (state.lastConflicts?.[idB]) delete state.lastConflicts[idB][idA];
+}
+
 function spreadIdolSuspicion(state, pool) {
   if (!pool || pool.length < 2) return;
 

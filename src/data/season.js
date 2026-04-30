@@ -150,6 +150,34 @@ function createSeasonState() {
     // list and AI strategic planning. Empty by default — no behavior change.
     campTargets: {},
 
+    // ── Recent interactions (v5.12) ────────────────────────
+    // Per-round log of who engaged with whom, used by the passive drift pass
+    // at round end. Cleared in advanceRound. Populated automatically by
+    // adjustRelationship — any meaningful pair adjustment counts as engagement.
+    //   Structure: { [idA]: { [idB]: true } }   (symmetric)
+    recentInteractions: {},
+
+    // ── Suspicion memory (v5.12) ───────────────────────────
+    // Asymmetric, persistent memory of suspicious behavior. Each contestant
+    // privately accumulates a score against everyone they've seen do shady
+    // things (idol searches, aggressive lobbying, lies caught, scrambling).
+    // Decays gradually each round so reputations recover but don't reset.
+    //   Structure: { [observerId]: { [actorId]: number } }   range 0–10
+    suspicionMemory: {},
+
+    // ── Last conflict timestamps (v5.12) ───────────────────
+    // Set whenever rel or trust drops materially between a pair. Drives the
+    // "Check In After Conflict" action's eligibility detection and tone.
+    //   Structure: { [aId]: { [bId]: { round, severity, kind } } }
+    lastConflicts: {},
+
+    // ── Per-round check-in record (v5.12) ──────────────────
+    // Tracks who has already used Check In After Conflict on whom in the
+    // current round (rate limit: once per pair per round). Cleared in
+    // advanceRound.
+    //   Structure: { [aId]: { [bId]: round } }
+    checkInsThisRound: {},
+
     // ── Tend-camp bonus (v5.5) ─────────────────────────────
     // Counts unconsumed "I've been visible at camp today" credits. Each
     // Tend Camp action grants +1 (cap 2). The next idol search reads this

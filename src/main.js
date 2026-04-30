@@ -267,6 +267,14 @@ function advanceRound() {
   // round without searching.
   gameState.tendCampBonus = 0;
 
+  // v5.12: end-of-round social maintenance.
+  //   1. Passive drift on pairs that didn't engage this round
+  //   2. Decay suspicion memory by 0.5 per observer/actor pair
+  //   3. Clear per-round interaction log + check-in records (after drift uses them)
+  passiveDrift(gameState);
+  decaySuspicionMemory(gameState);
+  clearRoundEphemera(gameState);
+
   gameState.round          += 1;
   gameState.campPhase       = 1;
   gameState.immunityWon     = null;

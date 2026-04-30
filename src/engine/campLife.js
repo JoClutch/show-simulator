@@ -99,6 +99,19 @@ const CAMP_ACTIONS = [
     category: "social",
   },
   {
+    // v5.12: dedicated post-conflict repair. Distinct from "Smooth things
+    // over" — that action addresses ambient strain (a generally cool rel).
+    // Check In addresses RECENT, SPECIFIC friction: a bad conversation, a
+    // caught lie, an exposed agenda push. Repair is possible but not
+    // guaranteed; without a real recent conflict, the action mostly fizzles.
+    id: "checkIn",
+    label: "Check in after conflict",
+    detail: "Reach out after a recent rift. Acknowledging it can repair — or remind them it happened.",
+    needsTarget: true,
+    targetPrompt: "Who do you want to check in with?",
+    category: "social",
+  },
+  {
     // v5.3: new — observe social dynamics without doing anything yourself.
     id: "observeCamp",
     label: "Observe the camp",
@@ -226,6 +239,7 @@ function executeAction(state, actionId, player, tribemates, target) {
     case "laylow":      return actionLayLow(state, player, tribemates);
     case "proposeAlliance": return actionProposeAlliance(state, player, target);
     case "smoothOver":      return actionSmoothOver(state, player, target);
+    case "checkIn":         return actionCheckIn(state, player, target);
     case "observeCamp":     return actionObserveCamp(state, player, tribemates);
     case "observePair":     return actionObservePair(state, player, tribemates, target);
     case "readRoom":        return actionReadRoom(state, player, tribemates);
@@ -669,6 +683,10 @@ function actionSearchIdol(state, player, tribemates) {
     + (found && player.social < 6 ? 1 : 0);
   adjustIdolSuspicion(state, witness.id, player.id, Math.max(1, witnessGain));
 
+  // v5.12: witness logs an "idol-search" memory against the player. Repeats
+  // amplify — first catch is suspicious, third catch is reputation.
+  recordSuspiciousAct(state, witness.id, player.id, "idolSearch", prevSearches >= 2 ? 2 : 1);
+
   // Ambient bleed: from the second repeat onward, other tribemates start
   // noticing the pattern even without seeing the search directly. Each
   // non-witness tribemate has a 40% chance to gain +1 idol suspicion.
@@ -677,6 +695,9 @@ function actionSearchIdol(state, player, tribemates) {
       if (mate.id === witness.id) continue;
       if (Math.random() < 0.40) {
         adjustIdolSuspicion(state, mate.id, player.id, 1);
+        // v5.12: ambient memory — they didn't see it directly, but they're
+        // adding the player to the "watch this person" list at lower weight.
+        recordSuspiciousAct(state, mate.id, player.id, "scrambling", 0.5);
       }
     }
   }
@@ -1091,6 +1112,9 @@ function actionLobby(state, player, tribemates, target) {
   adjustTrust(state, player.id, listener.id, -1);
   adjustRelationship(state, player.id, listener.id, -1);
   adjustSuspicion(state, player.id, 1);
+  // v5.12: the listener remembers this — the player came at them with an
+  // agenda that didn't pass the smell test.
+  recordSuspiciousAct(state, listener.id, player.id, "agendaPushing", 2);
   return { feedback: pickFrom([
     `You pushed ${listener.name} on ${target.name}. They pushed back. "I'm not sure I'm comfortable with this conversation," they said. You may have made yourself the target.`,
     `${listener.name} listened to your pitch, then said something polite that meant "I don't trust this." They walked away. The conversation didn't help you.`,
@@ -1387,6 +1411,138 @@ function actionSmoothOver(state, player, target) {
     `You apologized. ${target.name} didn't accept it — and now the rift was something they'd named out loud. That made it harder to let go.`,
     `${target.name} listened, then walked away mid-sentence. You stood there alone, replaying everything you'd just said. None of it had landed right.`,
   ]), hint: null };
+}
+
+// CHECK IN AFTER CONFLICT — recent-rift repair (v5.12, new).
+//
+// Distinct from Smooth Things Over (which targets ambient strain in any
+// rel < 0 relationship). This action specifically addresses a RECENT,
+// SPECIFIC friction: a bad conversation, a caught lie, an exposed agenda
+// push, an idol-search the target witnessed. The engine looks at:
+//
+//   • state.lastConflicts[player][target]            (within 2 rounds)
+//   • state.suspicionMemory[target][player]          (their memory of you)
+//   • current rel and trust between you
+//
+// to determine how much there IS to repair, and how likely the attempt is
+// to land. Repair is bounded — you can recover most of the rel hit and
+// soften the suspicion memory, but you can't erase a conflict that just
+// happened.
+//
+// ── Outcomes ───────────────────────────────────────────────────────────────
+//
+//   "received"  : repair lands. Rel +rand(2,4), trust +1, suspicionMemory −2.
+//                 Conflict marker cleared.
+//   "partial"   : they hear you out but don't fully forgive. Rel +1,
+//                 suspicionMemory −1. Conflict NOT cleared.
+//   "awkward"   : neutral. No mechanical change beyond a tiny rel +1 (the
+//                 attempt itself signals you care).
+//   "reopened"  : the check-in reminded them why they were upset. Rel −1,
+//                 suspicionMemory +1, conflict marker re-stamped.
+//
+// Rate-limited: one check-in per pair per round. Repeating against the same
+// target in the same round always returns the awkward branch.
+//
+// Outcome odds are shaped by:
+//   • player.social        (smooth players land repair more reliably)
+//   • severity of conflict (small rifts heal easier than deep ones)
+//   • target.suspicionMemory of player (heavy memory resists repair)
+//   • current rel          (warm baselines forgive faster)
+function actionCheckIn(state, player, target) {
+  // Rate limit: one per pair per round.
+  const round = state.round ?? 0;
+  if (state.checkInsThisRound?.[player.id]?.[target.id] === round) {
+    return { feedback: pickFrom([
+      `You'd already had this conversation with ${target.name} today. Going back to it now would only make things worse.`,
+      `You'd already pulled ${target.name} aside earlier. Pressing again would feel desperate.`,
+    ]), hint: null };
+  }
+  if (!state.checkInsThisRound[player.id]) state.checkInsThisRound[player.id] = {};
+  state.checkInsThisRound[player.id][target.id] = round;
+
+  const conflict = getRecentConflict(state, player.id, target.id);
+  const memory   = getSuspicionMemory(state, target.id, player.id);
+  const rel      = getRelationship(state, player.id, target.id);
+  const trust    = getTrust(state, player.id, target.id);
+
+  // No real conflict, no memory — there's nothing to repair, and bringing it
+  // up just makes the conversation strange.
+  if (!conflict && memory < 1.5 && rel >= 0) {
+    return { feedback: pickFrom([
+      `You went looking for ${target.name} to clear the air. They blinked at you. "We're good, aren't we?" You couldn't think of how to answer.`,
+      `You tried to check in with ${target.name} after... whatever you'd been worried about. The conversation never quite found its shape.`,
+      `${target.name} seemed surprised that you'd pulled them aside. "Did something happen?" they asked. You weren't sure how to say no without making it weirder.`,
+    ]), hint: null };
+  }
+
+  // Compute a landing score.
+  // Higher score = more likely to land cleanly.
+  const severity   = conflict ? conflict.severity : Math.max(1, memory);
+  const ageBonus   = conflict ? Math.min(2, conflict.age) : 0;   // older rifts a bit easier
+  const score =
+      (player.social ?? 5) * 0.35
+    + Math.max(0, rel) * 0.10
+    + (trust - 3) * 0.30
+    + ageBonus
+    - severity * 0.50
+    - memory * 0.40
+    + (Math.random() - 0.5) * 2;        // jitter
+
+  // Resolve outcome.
+  let outcome;
+  if (score >= 3.5)  outcome = "received";
+  else if (score >= 1.5) outcome = "partial";
+  else if (score >= -0.5) outcome = "awkward";
+  else outcome = "reopened";
+
+  // Apply effects per outcome.
+  switch (outcome) {
+    case "received": {
+      adjustRelationship(state, player.id, target.id, rand(2, 4));
+      adjustTrust(state, player.id, target.id, 1);
+      adjustSuspicionMemory(state, target.id, player.id, -2);
+      clearConflict(state, player.id, target.id);
+      return { feedback: pickFrom([
+        `You found ${target.name} alone and told them what was on your mind. They softened — really softened — and said the words you needed to hear: "We're good."`,
+        `You named the friction with ${target.name} out loud. Instead of getting defensive, they exhaled. "I'd been carrying that too," they said. The air cleared.`,
+        `${target.name} listened as you owned your part. When you were done, they reached out and squeezed your shoulder. "Thank you for saying it. We're fine."`,
+      ]), hint: null };
+    }
+    case "partial": {
+      adjustRelationship(state, player.id, target.id, 1);
+      adjustSuspicionMemory(state, target.id, player.id, -1);
+      // Conflict marker stays — they need more time.
+      return { feedback: pickFrom([
+        `You laid it out for ${target.name}. They listened, nodded, said the right things — but you could tell some of it was still there. Not gone. Just quieter.`,
+        `${target.name} heard you out. "I appreciate you saying that," they said. The smile didn't quite reach their eyes. Progress, but not full repair.`,
+        `You apologized as best you could. ${target.name} accepted it, but the conversation ended early. You'd done some of the work. Not all of it.`,
+      ]), hint: null };
+    }
+    case "awkward": {
+      adjustRelationship(state, player.id, target.id, 1);
+      return { feedback: pickFrom([
+        `You tried to check in with ${target.name}, but neither of you knew quite where to start. The conversation drifted into camp logistics. At least the effort was there.`,
+        `${target.name} let you talk. They didn't engage much — just nodded in the right places. You weren't sure if you'd helped or just gone through the motions.`,
+        `You'd meant to say something specific, but it came out generic. ${target.name} accepted the gesture without really hearing it. Not a loss. Not really a win either.`,
+      ]), hint: null };
+    }
+    case "reopened":
+    default: {
+      adjustRelationship(state, player.id, target.id, -1);
+      adjustSuspicionMemory(state, target.id, player.id, +1);
+      // Re-stamp conflict so the next attempt knows it's still hot.
+      if (!state.lastConflicts[player.id]) state.lastConflicts[player.id] = {};
+      if (!state.lastConflicts[target.id]) state.lastConflicts[target.id] = {};
+      const entry = { round, severity: severity + 1, kind: "reopened" };
+      state.lastConflicts[player.id][target.id] = entry;
+      state.lastConflicts[target.id][player.id] = entry;
+      return { feedback: pickFrom([
+        `Bringing it up with ${target.name} only reminded them why they'd been upset. Their face hardened halfway through your sentence. You should have left it alone.`,
+        `${target.name} listened, but you could see the moment it landed wrong. "I wasn't even thinking about that until you brought it up," they said. The room got smaller.`,
+        `You tried to clear the air with ${target.name}. By the end of the conversation, the air felt thicker than before.`,
+      ]), hint: null };
+    }
+  }
 }
 
 // OBSERVE THE CAMP — read social dynamics without participating (v5.3, new).
