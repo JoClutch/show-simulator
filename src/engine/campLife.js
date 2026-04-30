@@ -72,8 +72,10 @@ const CAMP_ACTION_CATEGORIES = [
 const CAMP_ACTIONS = [
   {
     id: "talk",
-    label: "Talk to a tribemate",
-    detail: "Get to know someone. Builds the relationship over time.",
+    // v5.3: renamed to make the "spend time with another player" framing
+    // explicit. Engine logic is enhanced (rel momentum) but compatible.
+    label: "Spend time with someone",
+    detail: "Hang out, share stories, build a real bond over time.",
     needsTarget: true,
     category: "social",
   },
@@ -89,6 +91,23 @@ const CAMP_ACTIONS = [
     label: "Open up to someone",
     detail: "Share something real. The fastest way to build genuine trust.",
     needsTarget: true,
+    category: "social",
+  },
+  {
+    // v5.3: new — repair a strained relationship.
+    id: "smoothOver",
+    label: "Smooth things over",
+    detail: "Try to repair a strained bond. Works best on small rifts.",
+    needsTarget: true,
+    targetPrompt: "Who do you want to mend things with?",
+    category: "social",
+  },
+  {
+    // v5.3: new — observe social dynamics without doing anything yourself.
+    id: "observeCamp",
+    label: "Observe the camp",
+    detail: "Read the room. You'll notice what others are putting out there.",
+    needsTarget: false,
     category: "social",
   },
   {
@@ -153,24 +172,34 @@ function executeAction(state, actionId, player, tribemates, target) {
     case "lobby":       return actionLobby(state, player, tribemates, target);
     case "laylow":      return actionLayLow(state, player, tribemates);
     case "proposeAlliance": return actionProposeAlliance(state, player, target);
+    case "smoothOver":      return actionSmoothOver(state, player, target);
+    case "observeCamp":     return actionObserveCamp(state, player, tribemates);
     default:            return { feedback: "Nothing happened.", hint: null };
   }
 }
 
 // ── Action implementations ────────────────────────────────────────────────────
 
-// TALK — relationship builder.
+// TALK / "Spend time with someone" — relationship builder.
 //
 // Backfire chance starts at 20% and drops by 2% per trust point with the target,
 // so a trusted ally (trust 8) has only a 4% chance of an awkward conversation.
 // A strong deep connection (delta ≥ 5) also yields a small trust gain.
 //
+// v5.3: rel-momentum modifier shapes the delta toward "repeated investment in
+// one person matters". A high existing relationship makes new conversations
+// land harder; an existing rift makes them feel awkward and produce less.
+//
 // Formula:
 //   backfireChance = max(0, 0.20 − trust × 0.02)
-//   delta (success) = floor(social / 3) + rand(1, 3)   [roughly 2–6 for social 5]
+//   momentum       = +2 if rel ≥ 12, +1 if rel ≥ 5, −1 if rel < −5, 0 otherwise
+//   delta (success) = floor(social / 3) + rand(1, 3) + momentum
+//                       (clamped at minimum 1 — every honest hangout is at least
+//                        a tiny step forward, even with friction)
 //   delta (backfire) = −rand(1, 3)
 //   trust gain on deep connection (delta ≥ 5): +1
 function actionTalk(state, player, target) {
+  const rel          = getRelationship(state, player.id, target.id);
   const trust        = getTrust(state, player.id, target.id);
   const backfireChance = Math.max(0, 0.20 - trust * 0.02);
   const backfire     = Math.random() < backfireChance;
@@ -185,7 +214,15 @@ function actionTalk(state, player, target) {
     ]), hint: null };
   }
 
-  const delta = Math.floor(player.social / 3) + rand(1, 3);
+  // v5.3: momentum reflects how "in rhythm" the pair already is. Existing
+  // closeness makes new conversations land more meaningfully; existing
+  // friction makes them mildly awkward and less productive.
+  const momentum =
+    rel >=  12 ?  2 :
+    rel >=   5 ?  1 :
+    rel <   -5 ? -1 :
+    0;
+  const delta = Math.max(1, Math.floor(player.social / 3) + rand(1, 3) + momentum);
   adjustRelationship(state, player.id, target.id, delta);
 
   if (delta >= 5) {
@@ -683,6 +720,221 @@ function actionProposeAlliance(state, player, target) {
   // Rejected — small trust hit (you misread the room)
   adjustTrust(state, player.id, target.id, -1);
   return { feedback: getAllianceRejectedLine(target), hint: null };
+}
+
+// SMOOTH THINGS OVER — repair a strained relationship (v5.3, new).
+//
+// Distinct from "spend time" — this is the action you take when you've
+// already broken something with someone and want to actively mend it.
+// Effectiveness scales inversely with how bad the rift is: shallow cool-downs
+// can be patched up; deep grudges require time and luck.
+//
+// ── Outcome paths ───────────────────────────────────────────────────────────
+//
+//   rel >= 0 ......... no rift to repair → gentle backfire (rel −1).
+//                      Trying to "smooth over" with someone who's fine reads
+//                      as overstepping and makes things slightly worse.
+//
+//   rel < 0 .......... three-way roll based on success chance:
+//     • Real repair    rel + (rand(1,2) + floor(social/4)); +1 trust if ≥4
+//     • Partial mend   rel + 1 (small step in the right direction)
+//     • Backfire       rel − rand(1, 3) (the apology dredged up worse stuff)
+//
+// ── Success chance ──────────────────────────────────────────────────────────
+//
+//   base    = max(0.15, 0.75 − severity × 0.04)   // shallower rift = easier
+//   social  = (player.social − 5) × 0.04           // ±20% across the range
+//   final   = clamp(0.10, 0.85, base + social)
+//
+//   shallow rift (rel −5),  social 5 → ~55%
+//   deep grudge  (rel −15), social 5 → ~15%
+//   deep grudge  (rel −15), social 10 → ~35%
+//
+// Backfire is intentional: not every repair lands. The prompt's goal — "this
+// should feel like building trust, not pressing a buff button" — applies
+// doubly to repair, where the wrong words can dig the rift deeper.
+function actionSmoothOver(state, player, target) {
+  const rel = getRelationship(state, player.id, target.id);
+
+  // Already-positive path: nothing to repair. The act of trying to apologize
+  // when there's nothing to apologize for reads as defensive or odd.
+  if (rel >= 0) {
+    adjustRelationship(state, player.id, target.id, -1);
+    return { feedback: pickFrom([
+      `You tried to clear the air with ${target.name}, but there was nothing to clear. The conversation came across as oddly defensive — they seemed to wonder what you were trying to fix.`,
+      `You opened with an apology to ${target.name}. They looked confused. "It's fine," they said. "Everything's fine." It wasn't, after that.`,
+      `${target.name} smiled politely while you tried to smooth something they hadn't even noticed. "Sure, no problem," they said. The "problem" was now you bringing it up.`,
+    ]), hint: null };
+  }
+
+  // Repair path. Severity drives the floor of the success chance; social
+  // skill modulates by ±20%; the dice handle the rest.
+  const severity = Math.abs(rel);
+  const baseChance   = Math.max(0.15, 0.75 - severity * 0.04);
+  const socialMod    = (player.social - 5) * 0.04;
+  const successChance = Math.max(0.10, Math.min(0.85, baseChance + socialMod));
+
+  const roll = Math.random();
+
+  // Real repair — they heard you, the air actually cleared.
+  if (roll < successChance) {
+    const gain = rand(1, 2) + Math.floor(player.social / 4);
+    adjustRelationship(state, player.id, target.id, gain);
+    if (gain >= 4) adjustTrust(state, player.id, target.id, 1);
+    return { feedback: pickFrom([
+      `You sat down with ${target.name} and named the tension instead of pretending it wasn't there. They listened. By the end, you'd both said things you'd been holding back. Something shifted.`,
+      `${target.name} was guarded at first. You didn't push — just stayed honest. After a while their shoulders dropped. "Yeah. Okay," they said. The conversation kept going from there.`,
+      `You apologized for what you actually did, not what they thought you did. ${target.name} noticed the difference. The walls didn't drop entirely, but they cracked.`,
+      `It was a hard talk. ${target.name} called you on a few things. You owned them. By the end, you weren't best friends — but you were back to talking like adults.`,
+    ]), hint: null };
+  }
+
+  // Partial mend — they didn't fully accept it, but it's not worse.
+  // Wide window after the success roll so genuine backfires stay rare.
+  if (roll < successChance + 0.30) {
+    adjustRelationship(state, player.id, target.id, 1);
+    return { feedback: pickFrom([
+      `${target.name} heard you out. They didn't fully accept the apology, but they didn't dismiss it either. Small step.`,
+      `The conversation with ${target.name} was awkward. Some of what you said landed. Some of it didn't. You're not back to normal — but you're not worse, either.`,
+      `${target.name} thanked you for the effort, then changed the subject. You couldn't tell if they meant it. Probably halfway.`,
+    ]), hint: null };
+  }
+
+  // Backfire — apology dredged up something worse, or landed wrong.
+  const loss = rand(1, 3);
+  adjustRelationship(state, player.id, target.id, -loss);
+  return { feedback: pickFrom([
+    `You tried to smooth things over with ${target.name}. They weren't ready to hear it. The conversation surfaced things you didn't even know they were upset about.`,
+    `${target.name} cut you off mid-sentence. "You don't get to decide we're fine," they said. You backed off, but the damage stuck.`,
+    `You apologized. ${target.name} didn't accept it — and now the rift was something they'd named out loud. That made it harder to let go.`,
+    `${target.name} listened, then walked away mid-sentence. You stood there alone, replaying everything you'd just said. None of it had landed right.`,
+  ]), hint: null };
+}
+
+// OBSERVE THE CAMP — read social dynamics without participating (v5.3, new).
+//
+// Generates one or two flavor-text observations about the current state of
+// the tribe — close pairs, tense pairs, isolated players, suspicion targets.
+// Doesn't mutate state significantly: this is the "step back and watch"
+// action, the social equivalent of laying low.
+//
+// Observations are sourced from the actual relationship/suspicion graph, so
+// they reflect reality. The player's social skill gates volume:
+//   • social >= 7 → 2 observations
+//   • social <  7 → 1 observation
+//
+// If nothing in the tribe stands out (everyone's middling), a generic "quiet
+// day at camp" observation surfaces so the action never reads as broken.
+//
+// Future v5.x can extend this with: alliance suspicion ("X and Y were
+// whispering"), idol-suspicion hints, or post-swap "old loyalties" callouts.
+function actionObserveCamp(state, player, tribemates) {
+  if (tribemates.length === 0) {
+    return { feedback: "There was no one around to observe today.", hint: null };
+  }
+
+  // Build candidate observations. Each has a weight (used to prefer more
+  // dramatic dynamics) and a text (one of several variants chosen at build).
+  const candidates = [];
+
+  // 1. Close pairs — strong mutual rel between two non-player tribemates.
+  for (let i = 0; i < tribemates.length; i++) {
+    for (let j = i + 1; j < tribemates.length; j++) {
+      const a = tribemates[i];
+      const b = tribemates[j];
+      const rel = getRelationship(state, a.id, b.id);
+      if (rel >= 12) {
+        candidates.push({
+          weight: rel,
+          text: pickFrom([
+            `You noticed ${a.name} and ${b.name} have been spending a lot of time together. Whatever they've got, it's real.`,
+            `${a.name} and ${b.name} keep gravitating toward each other at camp. Something is forming there.`,
+            `Watching the camp, you saw ${a.name} and ${b.name} pull away to talk in private — twice. They're tighter than they're letting on.`,
+          ]),
+        });
+      }
+    }
+  }
+
+  // 2. Tense pairs — strong mutual hostility between two non-player tribemates.
+  for (let i = 0; i < tribemates.length; i++) {
+    for (let j = i + 1; j < tribemates.length; j++) {
+      const a = tribemates[i];
+      const b = tribemates[j];
+      const rel = getRelationship(state, a.id, b.id);
+      if (rel <= -10) {
+        candidates.push({
+          weight: Math.abs(rel),
+          text: pickFrom([
+            `There's clear tension between ${a.name} and ${b.name}. They barely speak.`,
+            `You watched ${a.name} and ${b.name} avoid each other across camp. Something happened — and it didn't get resolved.`,
+            `${a.name} and ${b.name} have a problem with each other. It's not loud, but it's there.`,
+          ]),
+        });
+      }
+    }
+  }
+
+  // 3. High-suspicion individuals — the camp is watching them.
+  for (const c of tribemates) {
+    const susp = c.suspicion ?? 0;
+    if (susp >= 5) {
+      candidates.push({
+        weight: susp,
+        text: pickFrom([
+          `${c.name} seems on edge. Others have been keeping their distance.`,
+          `${c.name} has been drawing nervous glances from around the camp. You're not the only one watching them.`,
+          `You realized people stop talking when ${c.name} walks up. They're being read as a problem.`,
+        ]),
+      });
+    }
+  }
+
+  // 4. Isolated members — low average rel with the rest of the tribe.
+  for (const c of tribemates) {
+    const others = tribemates.filter(o => o.id !== c.id);
+    if (others.length === 0) continue;
+    let total = 0;
+    for (const o of others) total += getRelationship(state, c.id, o.id);
+    const avg = total / others.length;
+    if (avg < -3) {
+      candidates.push({
+        weight: Math.abs(avg) * 2,
+        text: pickFrom([
+          `${c.name} seems disconnected from the rest. Wherever they go, the conversations fade.`,
+          `You realized ${c.name} hasn't been part of any of the camp's natural circles. They're alone in a crowd.`,
+          `${c.name} eats by themselves more often than not. The tribe has quietly written them off.`,
+        ]),
+      });
+    }
+  }
+
+  // Fallback — nothing notable surfaced. Make sure the action always returns
+  // something; the absence of drama IS information.
+  if (candidates.length === 0) {
+    candidates.push({
+      weight: 1,
+      text: pickFrom([
+        "You watched the camp without doing much yourself. Nothing stood out — yet. Sometimes the absence of drama is its own data.",
+        "The afternoon was quiet. People moved around their routines. No one made a move worth noting today.",
+        "You took a long look around. Everyone was being civil. Civil isn't always honest, but it isn't loud either.",
+        "You spent the afternoon listening more than talking. The camp had no obvious cracks — at least not ones anyone was showing.",
+      ]),
+    });
+  }
+
+  // Pick observations. Higher social = more visibility into the dynamics.
+  const count = player.social >= 7 ? 2 : 1;
+
+  // Shuffle then take the first N. Random rather than weighted-top so the
+  // same dynamics don't always read as the only headline.
+  const shuffled = [...candidates].sort(() => Math.random() - 0.5);
+  const picked   = shuffled.slice(0, count);
+
+  return {
+    feedback: picked.map(c => c.text).join(" "),
+    hint:     null,
+  };
 }
 
 // ── Camp intent / target tracking (v5 foundation) ────────────────────────────
