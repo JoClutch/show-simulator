@@ -43,24 +43,29 @@
 // just gained a `category` field for grouping.
 
 // Categories for grouping CAMP_ACTIONS in the UI. Order here is the order
-// the camp screen renders sections in. Each action's `category` field
+// the camp screen renders categories in. Each action's `category` field
 // references one of these ids. New categories can be added safely; the UI
 // just renders any category that has at least one action.
+//
+// v5.2: the camp screen now uses these categories as a two-step submenu —
+// the player picks a category first, then an action within it. Adding a new
+// action only requires adding an entry to CAMP_ACTIONS with the right
+// category id; the UI auto-routes it into the correct submenu.
 const CAMP_ACTION_CATEGORIES = [
   {
     id:    "social",
-    label: "Connect",
-    description: "Build relationships and trust with tribemates.",
+    label: "Social",
+    description: "Build relationships and trust with your tribemates.",
   },
   {
     id:    "strategy",
-    label: "Strategize",
-    description: "Discuss the game, share intel, position for the vote.",
+    label: "Strategy",
+    description: "Plan votes, share intel, lock in alliances.",
   },
   {
-    id:    "personal",
-    label: "Manage Yourself",
-    description: "Stay above suspicion, search for advantages, lay low.",
+    id:    "island",
+    label: "Island",
+    description: "Explore the jungle, manage your profile, search for advantages.",
   },
 ];
 
@@ -121,14 +126,14 @@ const CAMP_ACTIONS = [
     label: "Search for an idol",
     detail: "Slip away into the jungle. Being seen raises suspicion.",
     needsTarget: false,
-    category: "personal",
+    category: "island",
   },
   {
     id: "laylow",
     label: "Keep a low profile",
     detail: "Stay quiet and unthreatening. Eases suspicion when you're in the crosshairs.",
     needsTarget: false,
-    category: "personal",
+    category: "island",
   },
 ];
 

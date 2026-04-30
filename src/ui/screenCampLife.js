@@ -88,6 +88,16 @@ function renderCampLifeScreen(container, state) {
 
   let actionsLeft = maxActions;
 
+  // v5.2 submenu navigation state.
+  //   null         → top-level: show category cards
+  //   "<category>" → drilled in: show actions for that category + Back link
+  //
+  // Reset to null on each camp phase render (this closure is rebuilt then).
+  // Within a single phase, drilling/back/executing all preserve the user's
+  // place — after taking an action they stay in the same category so they
+  // can immediately pick another, matching the "spend N actions" budget.
+  let _currentCategory = null;
+
   // ── Idol state for this screen ────────────────────────────────────────────
   //
   // idolScope: the scope the player can search at their current camp.
@@ -388,37 +398,103 @@ function renderCampLifeScreen(container, state) {
       return;
     }
 
-    // v5: group actions by category for readability. Each CAMP_ACTION_CATEGORY
-    // gets a section header and its own grid. Categories with no actions are
-    // skipped, so disabling the idol system silently shrinks "Manage Yourself"
-    // by one entry without leaving an empty header behind.
-    //
-    // The per-action click flow is unchanged (one click → execute or → target
-    // picker). Future v5.x can promote this into a true submenu navigation by
-    // making each category render as a clickable summary that drills in.
-    for (const category of CAMP_ACTION_CATEGORIES) {
-      const actionsInCategory = CAMP_ACTIONS
-        .filter(a => a.category === category.id)
-        .filter(a => actionShouldRender(a));
-      if (actionsInCategory.length === 0) continue;
-
-      const section = document.createElement("div");
-      section.className = "action-category";
-      section.innerHTML = `
-        <div class="action-category-header">
-          <span class="action-category-label">${category.label}</span>
-          <span class="action-category-desc muted">${category.description}</span>
-        </div>
-      `;
-
-      const grid = document.createElement("div");
-      grid.className = "action-btn-grid";
-      for (const action of actionsInCategory) {
-        grid.appendChild(buildActionButton(action, currentHoldsScope));
-      }
-      section.appendChild(grid);
-      actionArea.appendChild(section);
+    // v5.2: two-step submenu navigation.
+    //   _currentCategory === null  → top-level category picker
+    //   _currentCategory === "id"  → action list for that category + Back
+    if (_currentCategory === null) {
+      renderCategoryPicker(currentHoldsScope);
+    } else {
+      renderActionsInCategory(_currentCategory, currentHoldsScope);
     }
+  }
+
+  // Renders the top-level category picker — three cards (Social, Strategy,
+  // Island), each labeled with the count of currently-available actions.
+  //
+  // Categories with zero available actions are skipped. This keeps the
+  // picker tidy when, e.g. the idol system is disabled and Island shrinks
+  // to one action — but if all of Island's actions are unavailable for
+  // some reason, the card disappears entirely rather than dead-ending.
+  function renderCategoryPicker(currentHoldsScope) {
+    const grid = document.createElement("div");
+    grid.className = "category-picker-grid";
+
+    for (const category of CAMP_ACTION_CATEGORIES) {
+      const actions = actionsForCategory(category.id);
+      if (actions.length === 0) continue;
+
+      const card = document.createElement("button");
+      card.className = "category-card";
+      card.innerHTML = `
+        <div class="category-card-row">
+          <span class="category-card-label">${category.label}</span>
+          <span class="category-card-count">
+            ${actions.length} action${actions.length !== 1 ? "s" : ""}
+          </span>
+        </div>
+        <div class="category-card-desc">${category.description}</div>
+      `;
+      card.addEventListener("click", () => {
+        _currentCategory = category.id;
+        showActionButtons();
+      });
+      grid.appendChild(card);
+    }
+
+    actionArea.appendChild(grid);
+  }
+
+  // Renders the action list inside a specific category. Includes a Back
+  // link at the top that returns to the category picker. Reuses the
+  // existing buildActionButton for each action, so per-action gating
+  // (search disabled when idol already held, etc.) is preserved.
+  function renderActionsInCategory(categoryId, currentHoldsScope) {
+    const category = CAMP_ACTION_CATEGORIES.find(c => c.id === categoryId);
+
+    // Defensive: if state.swapped or some external change invalidated the
+    // category id, fall back to the picker rather than render nothing.
+    if (!category) {
+      _currentCategory = null;
+      renderCategoryPicker(currentHoldsScope);
+      return;
+    }
+
+    // Back link
+    const back = document.createElement("button");
+    back.className = "action-back-btn";
+    back.textContent = "← Back to categories";
+    back.addEventListener("click", () => {
+      _currentCategory = null;
+      showActionButtons();
+    });
+    actionArea.appendChild(back);
+
+    // Category title + description, so the user knows where they are.
+    const title = document.createElement("div");
+    title.className = "category-section-title";
+    title.innerHTML = `
+      <span class="category-section-label">${category.label}</span>
+      <span class="category-section-desc">${category.description}</span>
+    `;
+    actionArea.appendChild(title);
+
+    // Action grid for this category.
+    const actions = actionsForCategory(category.id);
+    const grid    = document.createElement("div");
+    grid.className = "action-btn-grid";
+    for (const action of actions) {
+      grid.appendChild(buildActionButton(action, currentHoldsScope));
+    }
+    actionArea.appendChild(grid);
+  }
+
+  // Helper: returns the actions in a given category that should currently
+  // render (some are gated by season config — e.g. searchidol when idols are
+  // disabled). Used both by the picker (for counts) and the in-category view.
+  function actionsForCategory(categoryId) {
+    return CAMP_ACTIONS
+      .filter(a => a.category === categoryId)
+      .filter(a => actionShouldRender(a));
   }
 
   // Returns false for actions that should be hidden entirely from this run

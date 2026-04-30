@@ -372,28 +372,98 @@ button:disabled {
   font-style: italic;
 }
 
-/* ── Camp Life: action category sections (v5 foundation) ──────── */
-/* Action buttons are grouped by category. Each category gets a small */
-/* header so the menu reads as a structured list rather than a flat grid. */
-.action-category {
-  margin-bottom: 1rem;
+/* ── Camp Life: category submenu (v5.2) ────────────────────────── */
+/* Two-step menu flow. Top level shows category cards; clicking a card    */
+/* drills into that category's action list with a "← Back" link.          */
+
+/* Top-level: stacked vertical cards. Stacking (rather than 3-column grid) */
+/* keeps each card readable and lets future versions add a 4th category    */
+/* without re-laying out. */
+.category-picker-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
 }
 
-.action-category:last-child {
-  margin-bottom: 0;
+.category-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.2rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-mid);
+  border-left: 3px solid var(--gold-dim);
+  border-radius: 4px;
+  padding: 0.7rem 0.95rem;
+  font-family: inherit;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.1s ease, background 0.1s ease;
 }
 
-.action-category-header {
+.category-card:hover {
+  background: var(--bg-raised);
+  border-color: var(--text-dim);
+  border-left-color: var(--gold);
+}
+
+.category-card-row {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 0.6rem;
-  margin-bottom: 0.4rem;
-  padding-bottom: 0.25rem;
+  gap: 0.5rem;
+}
+
+.category-card-label {
+  font-size: 1rem;
+  font-weight: bold;
+  letter-spacing: 0.01em;
+  color: var(--text-primary);
+}
+
+.category-card-count {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.category-card-desc {
+  font-size: 0.82rem;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+
+/* In-category: Back link + category title + standard action grid below. */
+.action-back-btn {
+  background: transparent;
+  border: 1px solid var(--border-mid);
+  color: var(--text-dim);
+  padding: 0.35rem 0.75rem;
+  border-radius: 3px;
+  font-family: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+  margin-bottom: 0.55rem;
+  align-self: flex-start;
+}
+
+.action-back-btn:hover {
+  border-color: var(--text-primary);
+  color: var(--text-primary);
+}
+
+.category-section-title {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin-bottom: 0.55rem;
+  padding-bottom: 0.3rem;
   border-bottom: 1px solid var(--border-dim);
 }
 
-.action-category-label {
+.category-section-label {
   font-size: 0.78rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -401,9 +471,10 @@ button:disabled {
   font-weight: bold;
 }
 
-.action-category-desc {
+.category-section-desc {
   font-size: 0.72rem;
   font-style: italic;
+  color: var(--text-dim);
 }
 
 /* ── Camp Life: tribe relationship panel (v5.1) ─────────────────── */
