@@ -429,6 +429,16 @@ function pickConversationMood(state, player, target, ctx) {
     weights[k] = Math.max(0.1, weights[k] * (0.9 + Math.random() * 0.2));
   }
 
+  // v5.19: jury-aware softening. Once the jury exists, every active player
+  // is a future juror or a future juror-vote-recipient. Conversations
+  // visibly soften — fewer tense exchanges, more warm/awkward ones.
+  if (state.merged && (state.jury?.length ?? 0) >= 1) {
+    weights.tense      *= 0.8;
+    weights.suspicious *= 0.85;
+    weights.warm       *= 1.15;
+    weights.awkward    *= 1.10;
+  }
+
   // Weighted pick.
   const total = Object.values(weights).reduce((a, b) => a + b, 0);
   let roll = Math.random() * total;
@@ -2074,6 +2084,59 @@ function actionReadRoom(state, player, tribemates) {
     ])});
   }
 
+  // v5.19: post-merge specific reads. The shape of the camp is different
+  // once tribes merge — old lines are softening, new partnerships are
+  // forming, and resumes start to matter. These lines surface only when
+  // state.merged is true and the merge has had at least one round to settle.
+  if (state.merged) {
+    candidates.push({ weight: 2.5, text: pickFrom([
+      `The old tribe lines are still there, but you can feel them softening. People are testing new conversations.`,
+      `It doesn't feel like two tribes anymore — it feels like ten people each running their own game. Different math.`,
+      `The merged camp is louder than the tribe camp ever was. Everyone is talking to everyone. Most of it isn't accidental.`,
+    ])});
+
+    // Cross-original-tribe pair forming — surfaces if any non-allied pair
+    // crosses originalTribe lines and has rel ≥ 8 (a meaningful new bond).
+    if (state.swapped || tribemates.some(c => c.originalTribe)) {
+      for (let i = 0; i < tribemates.length && candidates.length < 12; i++) {
+        for (let j = i + 1; j < tribemates.length; j++) {
+          const a = tribemates[i], b = tribemates[j];
+          if (!a.originalTribe || !b.originalTribe) continue;
+          if (a.originalTribe === b.originalTribe) continue;
+          const rel = getRelationship(state, a.id, b.id);
+          if (rel >= 8) {
+            candidates.push({ weight: 3, text: pickFrom([
+              `${a.name} and ${b.name} have been spending real time together. The old tribe line between them isn't holding anymore.`,
+              `You'd never have predicted ${a.name} and ${b.name} on the same side. The merge has rewritten more than the camp roster.`,
+            ])});
+            break;
+          }
+        }
+      }
+    }
+
+    // Jury-aware: once the jury has formed, surface a flavor line about
+    // people watching their own behavior more carefully.
+    const juryStarted = (state.jury?.length ?? 0) >= 1;
+    if (juryStarted) {
+      candidates.push({ weight: 2.5, text: pickFrom([
+        `You can feel the jury in the air. People are saying less, choosing words more carefully. Everyone's playing for two audiences now.`,
+        `The conversations have a layered quality post-jury — people aren't just talking to each other, they're talking through each other to the people on the bench.`,
+        `Nobody's burning bridges loudly anymore. You can see them counting future jurors in their head as they speak.`,
+      ])});
+    }
+
+    // Late-game resume awareness: small remaining count.
+    const remaining = (state.tribes?.merged || []).length;
+    if (remaining <= 7) {
+      candidates.push({ weight: 3, text: pickFrom([
+        `The conversations got sharper today. Everyone's running the math on who they could beat — and who they couldn't.`,
+        `You felt the room start to look at people for who'd win, not who'd vote with them. The endgame is in the air.`,
+        `Resumes are being weighed today, even if nobody's saying so out loud. The strongest games are starting to feel heavier.`,
+      ])});
+    }
+  }
+
   // v5.18: scramble + pressure self-read. Phase 2 only.
   // Surface (a) tribemates visibly scrambling, (b) the consensus emerging,
   // (c) names that have faded from the conversation. Each is a hedged
@@ -2987,6 +3050,56 @@ function pickAIActionWeighted(state, ai, others) {
   options.push({ action: "tendCamp", weight: Math.max(0.2, tendW), target: null });
 
   if (options.length === 0) return null;
+
+  // ── v5.19: post-merge behavioral tilt ─────────────────────────────────────
+  // After the merge, every player is on their own. Action mix shifts toward
+  // information-gathering and cross-pollination of new partnerships, away
+  // from passive tribe-building. Jury awareness softens hostile actions
+  // once the jury has started forming — burning a future juror is a real
+  // cost. Layered as a multiplier overlay so existing weights still drive
+  // the underlying personality of each AI.
+  if (state.merged) {
+    const POST_MERGE_MULT = {
+      askVote:    1.4,
+      lobby:      1.2,
+      formAlly:   1.4,
+      strengthen: 0.9,   // already-allied reinforcement matters less when
+                         // alliances are fluid; new connections matter more
+      talk:       0.85,
+      tendCamp:   0.5,   // tribe strength irrelevant; nobody is impressed
+      laylow:     1.1,
+      confide:    1.1,
+    };
+    for (const opt of options) {
+      const m = POST_MERGE_MULT[opt.action];
+      if (m !== undefined) opt.weight *= m;
+    }
+
+    // Jury awareness: once the jury has started, soften hostile pitches
+    // against tribemates — players consider that everyone they cross is a
+    // future juror. Reduces lobby weight by 25%; observation/social up.
+    const juryStarted = (state.jury?.length ?? 0) >= 1;
+    if (juryStarted) {
+      for (const opt of options) {
+        if (opt.action === "lobby") opt.weight *= 0.75;
+      }
+    }
+
+    // Late-game resume threat: when only a small group remains, AIs get
+    // more aggressive about working against high-challenge / high-social
+    // tribemates (they're future final-tribal threats). Modeled by scaling
+    // up lobby weight specifically when the action's pre-selected target
+    // is a resume threat.
+    const remaining = (state.tribes?.merged || []).length;
+    if (remaining <= 6) {
+      const lobbyOpt = options.find(o => o.action === "lobby");
+      if (lobbyOpt && lobbyOpt.target) {
+        const t = lobbyOpt.target;
+        const resumeThreat = (t.challenge ?? 5) + (t.social ?? 5);
+        if (resumeThreat >= 14) lobbyOpt.weight *= 1.3;
+      }
+    }
+  }
 
   // ── v5.18: scramble-mode overlay ──────────────────────────────────────────
   // If this AI senses they're in danger (camp phase 2 + high pressure), shift

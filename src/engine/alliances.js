@@ -321,6 +321,17 @@ function updateAlliances(state) {
     if (state.round - lastReinforced >= 2) {
       adjustAllianceStrength(a, -0.5);
     }
+
+    // ── 5. v5.19: post-merge reassessment churn ───────────────────────────
+    // After the merge, alliances aren't anchored by tribe-strength logic
+    // anymore. People reassess value more often. Add a small extra drift
+    // pressure so post-merge alliances are inherently less rigid — 5%
+    // chance per round of an extra ±0.5 wobble, biased by current natural
+    // fit (so a thriving alliance still trends up, just bumpier).
+    if (state.merged && Math.random() < 0.50) {
+      const wobbleDir = avgRel >= 5 ? +0.5 : -0.5;
+      adjustAllianceStrength(a, wobbleDir);
+    }
   }
 }
 
@@ -563,10 +574,18 @@ function aiFormAlliances(state, pool) {
       // Pre-swap, everyone in a tribe shares originalTribe, so this gate is
       // a no-op. Post-swap, cross-tribe pairs need stronger rel/trust AND
       // form at half the rate — old enemies don't lock arms quickly.
-      const sameOrigin = a.originalTribe === b.originalTribe;
-      const minRel     = sameOrigin ? 12 : 14;
-      const minTrust   = sameOrigin ? 6  : 7;
-      let   formChance = sameOrigin ? 0.20 : 0.10;
+      // v5.19: post-merge, old tribe lines still mean SOMETHING (people
+      // remember where they came from) but they're a much softer factor.
+      // Cross-original-tribe pacts post-merge form at lower barriers and
+      // higher rates than during a swap, because the old tribe identity
+      // no longer maps onto a meaningful sub-group.
+      const sameOrigin   = a.originalTribe === b.originalTribe;
+      const postMerge    = !!state.merged;
+      const minRel       = sameOrigin ? 12 : (postMerge ? 12 : 14);
+      const minTrust     = sameOrigin ? 6  : (postMerge ? 5  : 7);
+      let   formChance   = sameOrigin
+        ? (postMerge ? 0.25 : 0.20)
+        : (postMerge ? 0.18 : 0.10);
       // v5.13: archetype tilt on formation. Loyal pairs lock in faster;
       // sneaky pairs hesitate (less interested in committed pacts);
       // paranoid pairs hesitate (don't trust the structure).

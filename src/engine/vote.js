@@ -205,11 +205,28 @@ function scoreVoteTarget(state, voter, c) {
     ? getSocialCapital(state, c.id) : 5;
   const capitalFactor = (capital - 5) * 0.5;
 
+  // v5.19: late-game resume-threat factor. Once the merge has happened AND
+  // the field has narrowed, strategic voters consider who would beat them
+  // at final tribal. Players with strong combined social + challenge stats
+  // and / or strong perceived game read as future-finals threats and gain
+  // additional vote pressure from strategy-minded voters.
+  let resumeFactor = 0;
+  if (state.merged) {
+    const remaining = (state.tribes?.merged || []).length;
+    if (remaining <= 7 && voter.strategy >= 6) {
+      const resumeScore = (c.social ?? 5) + (c.challenge ?? 5);
+      // Map resumeScore (typical range 6–18, mean 10) → −2 to +2 swing on
+      // vote score. Strategic voter sees high-resume = vote them out.
+      resumeFactor = -(resumeScore - 10) * 0.4;
+    }
+  }
+
   return rel + bondProtection + allianceProtection + trustFactor
        - suspicion - socialThreat - challengeThreat
        + idolFactor
        + crossTribeFactor + tribeStrengthFactor
-       + capitalFactor;
+       + capitalFactor
+       + resumeFactor;
 }
 
 // pickVoteTarget — returns the contestant the given voter would vote for
