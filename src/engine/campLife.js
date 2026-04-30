@@ -2074,6 +2074,57 @@ function actionReadRoom(state, player, tribemates) {
     ])});
   }
 
+  // v5.18: scramble + pressure self-read. Phase 2 only.
+  // Surface (a) tribemates visibly scrambling, (b) the consensus emerging,
+  // (c) names that have faded from the conversation. Each is a hedged
+  // social read, not a numeric leak.
+  if (state.campPhase === 2 && typeof getPressureRanking === "function") {
+    const pool = state.merged
+      ? (state.tribes?.merged || [])
+      : (state.tribes?.[player.tribe] || []);
+    const ranked = getPressureRanking(state, pool);
+
+    // Scrambler flavor — name AI tribemates visibly working too hard.
+    const scramblers = pool.filter(c =>
+      c.id !== player.id && typeof isScrambling === "function" && isScrambling(state, c.id)
+    );
+    if (scramblers.length > 0) {
+      const named = scramblers[Math.floor(Math.random() * scramblers.length)];
+      candidates.push({ weight: 5, text: pickFrom([
+        `${named.name} has been working harder than usual today — pulling people aside, talking fast. Whatever they've sensed, they're reacting to it.`,
+        `You watched ${named.name} make the rounds three different ways. They're scrambling. The shape of their day told you their name has been said.`,
+        `${named.name} hasn't slowed down since lunch. Conversation, conversation, conversation. Someone working that hard is usually working from behind.`,
+      ])});
+    }
+
+    // Consensus emerging — top-pressure AI (not the player).
+    const topNonPlayer = ranked.find(r =>
+      r.contestant.id !== player.id && r.pressure >= 6.5
+    );
+    if (topNonPlayer) {
+      candidates.push({ weight: 4, text: pickFrom([
+        `${topNonPlayer.contestant.name}'s name has been in the air all day. The room is tilting their way.`,
+        `If you had to guess where the vote is heading, you'd say ${topNonPlayer.contestant.name} — and you wouldn't be the only one.`,
+        `The conversations you couldn't quite hear seemed to circle ${topNonPlayer.contestant.name}. The consensus is forming.`,
+      ])});
+    }
+
+    // Player-self pressure read.
+    const playerPressure = getPressureScore(state, player.id);
+    if (playerPressure >= 6.5) {
+      candidates.push({ weight: 6, text: pickFrom([
+        `Multiple conversations went quiet when you walked up today. Your name is being said in rooms you aren't in.`,
+        `You felt the difference in how the camp talked to you. Polite, careful, contained. You're in the conversation — as a target, not a partner.`,
+        `The energy around you today wasn't right. Eye contact held a beat too long, then released. You're being measured.`,
+      ])});
+    } else if (playerPressure <= 3.5 && state.tribalTribe) {
+      candidates.push({ weight: 3, text: pickFrom([
+        `Your name doesn't seem to be in the conversation today. You'd say you've drifted off the radar — which, tonight, is exactly where you want to be.`,
+        `The room moved past you. Not coldly — past. Whatever heat is here, it isn't on you. Yet.`,
+      ])});
+    }
+  }
+
   // v5.17: surface a rumor the player has actually picked up. Reads as a
   // hedged "you've been hearing" line — language scales to the player's
   // confidence in the rumor, so a high-confidence whisper sounds like a
@@ -2613,6 +2664,23 @@ function runOneAICampAction(state, ai, pool) {
     choice.action;
   recordCampAction(state, ai.id, historyKey);
 
+  // v5.18: scrambling AIs are visibly desperate. Each strategic action they
+  // take while scrambling adds a small public suspicion bump on themselves —
+  // models the room reading their pacing. Doesn't apply to talk/tendCamp/
+  // laylow since those are calming behaviors. This is the "scramble can
+  // make things worse" mechanic — overdoing it tightens the noose.
+  if (typeof isScrambling === "function" && isScrambling(state, ai.id)) {
+    const SCRAMBLE_VISIBILITY = {
+      lobby:      1,
+      askVote:    1,
+      formAlly:   1,
+      strengthen: 0,    // already-allied conversation reads as normal
+      confide:    0,    // confiding still reads as warmth
+    };
+    const susp = SCRAMBLE_VISIBILITY[choice.action];
+    if (susp) adjustSuspicion(state, ai.id, susp);
+  }
+
   switch (choice.action) {
     case "talk":
       actionTalk(state, ai, choice.target);
@@ -2644,6 +2712,133 @@ function runOneAICampAction(state, ai, pool) {
       actionTendCamp(state, ai, others);
       break;
   }
+}
+
+// ── v5.18: Target pressure + scramble mode ───────────────────────────────────
+//
+// "Target pressure" is how strongly the room is leaning toward voting a
+// given contestant out — averaged from every other voter's negated vote
+// score against them, then normalized to a 0–10 reading. Built directly
+// on top of the existing scoreVoteTarget so any system that already shifts
+// vote scoring (rel, alliance, suspicion, social capital, rumors) feeds
+// directly into pressure.
+//
+// "Scramble mode" is the behavioral state of an AI who senses they're at
+// risk. Triggered only in camp phase 2 (the round actually heading to
+// tribal) when their pressure score is high or they're in the top 3
+// most-targeted. While scrambling, an AI's action weights shift toward
+// strategic survival behavior — lobby-deflection, alliance-checking,
+// vote-asking, defensive confiding — and away from passive options.
+//
+// Player-facing exposure is purely qualitative: scrambling AIs surface
+// in Read the Room with hedged language ("X seems to be working harder
+// than usual"). No numbers, no panels, no debug text.
+
+// Returns a 0–10 normalized pressure score for one contestant.
+// Cached per-call via a tiny memo so repeated AI calls in one phase don't
+// recompute the full pairwise vote pass for every action.
+function getPressureScore(state, contestantId) {
+  const c = (typeof findContestant === "function") ? findContestant(state, contestantId) : null;
+  if (!c) return 0;
+
+  const pool = state.merged
+    ? (state.tribes?.merged || [])
+    : (state.tribes?.[c.tribe] || []);
+  if (pool.length < 2) return 0;
+
+  let pressureSum = 0, voterCount = 0;
+  for (const voter of pool) {
+    if (voter.id === contestantId) continue;
+    pressureSum += -scoreVoteTarget(state, voter, c);
+    voterCount++;
+  }
+  const avg = voterCount > 0 ? pressureSum / voterCount : 0;
+
+  // Normalize: vote-score baselines hover near 0 with a few-point swing in
+  // either direction. Empirically, pressure values run roughly −15 (totally
+  // safe, strong protection layered on) to +15 (universally targeted).
+  // Map to 0–10 with 5 as neutral.
+  return Math.max(0, Math.min(10, 5 + avg * 0.4));
+}
+
+// Returns the top N most-pressured contestants in a pool, with their
+// pressure scores. Distinct from getTopVoteTargets (which uses raw
+// pressure for ranking but not normalization). Used internally by scramble
+// detection and the player-facing Read the Room.
+function getPressureRanking(state, pool) {
+  if (!Array.isArray(pool) || pool.length < 2) return [];
+  const ranked = pool.map(c => ({
+    contestant: c,
+    pressure:   getPressureScore(state, c.id),
+  }));
+  ranked.sort((a, b) => b.pressure - a.pressure);
+  return ranked;
+}
+
+// Predicate: is this contestant currently in scramble mode? Only fires
+// during camp phase 2 — in phase 1 the vote isn't imminent, so even
+// high-pressure contestants don't trigger scramble behavior. Phase-1
+// pressure still feeds normally into vote scoring; it just doesn't drive
+// emergency action-selection.
+//
+// Triggers when ANY of:
+//   • pressure ≥ 6.0
+//   • contestant is in the top 3 of pressure ranking AND pressure ≥ 5.0
+//   • contestant has accumulated suspicion-memory from ≥ 3 distinct observers
+function isScrambling(state, contestantId) {
+  if (state.campPhase !== 2) return false;
+  // Don't scramble if the player isn't going to tribal pre-merge.
+  if (!state.merged) {
+    const c = findContestant(state, contestantId);
+    if (!c) return false;
+    if (state.tribalTribe && c.tribe !== state.tribalTribe) return false;
+  }
+
+  const pressure = getPressureScore(state, contestantId);
+  if (pressure >= 6.0) return true;
+
+  // Top-3 + meaningful pressure check
+  const c = findContestant(state, contestantId);
+  if (c) {
+    const pool = state.merged
+      ? (state.tribes?.merged || [])
+      : (state.tribes?.[c.tribe] || []);
+    const ranked = getPressureRanking(state, pool);
+    const ix = ranked.findIndex(r => r.contestant.id === contestantId);
+    if (ix >= 0 && ix < 3 && pressure >= 5.0) return true;
+  }
+
+  // Multiple-observer suspicion-memory check.
+  let observerCount = 0;
+  for (const obs of Object.keys(state.suspicionMemory ?? {})) {
+    if ((state.suspicionMemory[obs][contestantId] ?? 0) >= 1.5) observerCount++;
+  }
+  if (observerCount >= 3) return true;
+
+  return false;
+}
+
+// Picks a deflection target for a scrambling AI: someone other than the
+// scrambler who can plausibly be redirected at. Prefers the next-most-
+// pressured non-ally non-self. Used by lobby in scramble mode to model
+// "throwing another name out".
+function pickDeflectionTarget(state, scrambler, pool) {
+  const candidates = pool.filter(c =>
+    c.id !== scrambler.id
+    && !isInSameAlliance(state, scrambler.id, c.id)
+  );
+  if (candidates.length === 0) return null;
+
+  // Rank by pressure descending — deflect at someone the room is already
+  // softer on, so the pitch has somewhere to land.
+  const ranked = candidates.map(c => ({
+    c,
+    pressure: getPressureScore(state, c.id),
+    rel:      getRelationship(state, scrambler.id, c.id),
+  }));
+  // Prefer high-pressure candidates the scrambler also doesn't like.
+  ranked.sort((a, b) => (b.pressure - b.rel * 0.3) - (a.pressure - a.rel * 0.3));
+  return ranked[0]?.c ?? null;
 }
 
 // Weighted random selection of an AI's next action.
@@ -2792,6 +2987,47 @@ function pickAIActionWeighted(state, ai, others) {
   options.push({ action: "tendCamp", weight: Math.max(0.2, tendW), target: null });
 
   if (options.length === 0) return null;
+
+  // ── v5.18: scramble-mode overlay ──────────────────────────────────────────
+  // If this AI senses they're in danger (camp phase 2 + high pressure), shift
+  // weights toward survival behavior. Strategy spikes; passive options drop;
+  // lobby gets redirected to a deflection target instead of their natural
+  // grudge target.
+  if (typeof isScrambling === "function" && isScrambling(state, ai.id)) {
+    const SCRAMBLE_MULT = {
+      lobby:        1.8,
+      askVote:      1.6,
+      formAlly:     1.5,
+      strengthen:   1.5,
+      confide:      1.4,
+      talk:         0.6,
+      tendCamp:     0.3,
+      laylow:       0.4,   // laying low when they're already a target is wrong
+    };
+    for (const opt of options) {
+      const m = SCRAMBLE_MULT[opt.action];
+      if (m !== undefined) opt.weight *= m;
+    }
+    // Lobby deflection: in scramble mode, pivot the lobby target away from
+    // the scrambler's natural grudge and toward whoever is also under heat
+    // (so the pitch can plausibly land). Models "throwing another name out".
+    const lobbyOpt = options.find(o => o.action === "lobby");
+    if (lobbyOpt) {
+      const deflection = pickDeflectionTarget(state, ai, others);
+      if (deflection) lobbyOpt.target = deflection;
+    } else {
+      // Even if the AI had no natural enemy, scramble mode adds lobby as
+      // a deflection-only option. They need to throw SOMETHING out there.
+      const deflection = pickDeflectionTarget(state, ai, others);
+      if (deflection) {
+        options.push({
+          action: "lobby",
+          weight: 2.5 + ai.strategy * 0.4,
+          target: deflection,
+        });
+      }
+    }
+  }
 
   // Weighted random pick.
   const totalWeight = options.reduce((s, o) => s + o.weight, 0);
