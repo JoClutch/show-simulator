@@ -199,20 +199,34 @@ function renderCampLifeScreen(container, state) {
   // the goal is a readable social dashboard, not a debug dump.
   //
   // Tier boundaries align with engine landmarks already in use:
-  //   • rel ≥ 15  triggers bondProtection +20 in voting     → "tight bond"
-  //   • rel ≥ 8   triggers bondProtection +8                → folded into
-  //                                                          the "friendly" tier
+  //   • rel ≥ 15  triggers bondProtection +20 in voting     → "Tight"
+  //   • rel ≥ 8   triggers bondProtection +8                → folded into "Good"
   //   • rel ≥ 10  qualifies a pair for AI alliance auto-form
   //   • rel ≤ -3  is the existing "enemy" threshold for AI danger reads
+  //
+  // v5.9: relabeled to a five-tier Survivor-flavored scale —
+  //   Tight / Good / Neutral / Shaky / Bad. Same underlying score, cleaner
+  //   bucket names. The numeric rel and trust values are still shown in
+  //   the tooltip for players who want to dig in.
   //
   // Refreshed live in showActionButtons() so labels move as actions land.
 
   function getRelationshipTier(rel) {
-    if (rel >=  15) return { id: "tight",    label: "tight bond" };
-    if (rel >=   5) return { id: "friendly", label: "friendly"   };
-    if (rel >=  -4) return { id: "neutral",  label: "neutral"    };
-    if (rel >= -14) return { id: "cool",     label: "cool"       };
-    return                  { id: "strained", label: "strained"  };
+    if (rel >=  15) return { id: "tight",   label: "Tight"   };
+    if (rel >=   5) return { id: "good",    label: "Good"    };
+    if (rel >=  -4) return { id: "neutral", label: "Neutral" };
+    if (rel >= -14) return { id: "shaky",   label: "Shaky"   };
+    return                  { id: "bad",     label: "Bad"     };
+  }
+
+  // v5.9: trust is a separate dimension from relationship — it tracks how
+  // much the target would actually back the player up, vs. just liking them.
+  // We surface a small "✦" marker next to names where trust is high so the
+  // player can read at a glance who's a real ally vs. a friendly acquaintance.
+  function getTrustMarker(trust) {
+    if (trust >=  6) return { id: "trusted",   symbol: "✦", title: "Trusts you"           };
+    if (trust <= -3) return { id: "distrusted", symbol: "⚠", title: "Doesn't trust you" };
+    return null;
   }
 
   function buildTribePanelHTML() {
@@ -230,15 +244,26 @@ function renderCampLifeScreen(container, state) {
     `;
 
     const tribemateRows = sorted.map(c => {
-      const rel  = getRelationship(state, player.id, c.id);
-      const tier = getRelationshipTier(rel);
-      // Score in the title tooltip — available for the curious without
-      // cluttering the visible row.
-      const tooltip = `Relationship: ${rel.toFixed(0)}`;
+      const rel    = getRelationship(state, player.id, c.id);
+      const trust  = getTrust(state, player.id, c.id);
+      const tier   = getRelationshipTier(rel);
+      const marker = getTrustMarker(trust);
+
+      // Numeric values stay in the tooltip — readable on hover without
+      // cluttering the panel. Trust line included so the marker isn't
+      // mysterious when present.
+      const tooltipParts = [`Relationship: ${rel.toFixed(0)}`, `Trust: ${trust.toFixed(0)}`];
+      if (marker) tooltipParts.push(marker.title);
+      const tooltip = tooltipParts.join(" · ");
+
+      const markerHTML = marker
+        ? `<span class="camp-tribe-trust-marker" data-trust="${marker.id}" aria-hidden="true">${marker.symbol}</span>`
+        : "";
+
       return `
         <li class="camp-tribe-row" data-tier="${tier.id}" title="${escapeHtmlAttr(tooltip)}">
           <span class="camp-tribe-dot" aria-hidden="true"></span>
-          <span class="camp-tribe-name">${escapeHtml(c.name)}</span>
+          <span class="camp-tribe-name">${escapeHtml(c.name)}${markerHTML}</span>
           <span class="camp-tribe-tier-label">${tier.label}</span>
         </li>
       `;

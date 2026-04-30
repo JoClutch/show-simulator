@@ -704,19 +704,35 @@ button:disabled {
   margin: 0 auto;
 }
 
-.camp-tribe-row[data-tier="tight"]    .camp-tribe-dot { background: #5fa86f; }
-.camp-tribe-row[data-tier="friendly"] .camp-tribe-dot { background: #6a9a7a; }
-.camp-tribe-row[data-tier="neutral"]  .camp-tribe-dot { background: #888;    }
-.camp-tribe-row[data-tier="cool"]     .camp-tribe-dot { background: #b88545; }
-.camp-tribe-row[data-tier="strained"] .camp-tribe-dot { background: #b85060; }
+/* v5.9: tier IDs are now Tight / Good / Neutral / Shaky / Bad. Same color
+   semantics as before — green = good, gray = neutral, amber = drifting,
+   red = trouble. */
+.camp-tribe-row[data-tier="tight"]   .camp-tribe-dot { background: #5fa86f; }
+.camp-tribe-row[data-tier="good"]    .camp-tribe-dot { background: #6a9a7a; }
+.camp-tribe-row[data-tier="neutral"] .camp-tribe-dot { background: #888;    }
+.camp-tribe-row[data-tier="shaky"]   .camp-tribe-dot { background: #b88545; }
+.camp-tribe-row[data-tier="bad"]     .camp-tribe-dot { background: #b85060; }
 
 /* Tier label colors echo the dot — one color per tier, calmer than the
    dot itself so the line stays scannable. */
-.camp-tribe-row[data-tier="tight"]    .camp-tribe-tier-label { color: #5fa86f; }
-.camp-tribe-row[data-tier="friendly"] .camp-tribe-tier-label { color: #7aa088; }
-.camp-tribe-row[data-tier="neutral"]  .camp-tribe-tier-label { color: var(--text-muted); }
-.camp-tribe-row[data-tier="cool"]     .camp-tribe-tier-label { color: #b88545; }
-.camp-tribe-row[data-tier="strained"] .camp-tribe-tier-label { color: #b85060; }
+.camp-tribe-row[data-tier="tight"]   .camp-tribe-tier-label { color: #5fa86f; }
+.camp-tribe-row[data-tier="good"]    .camp-tribe-tier-label { color: #7aa088; }
+.camp-tribe-row[data-tier="neutral"] .camp-tribe-tier-label { color: var(--text-muted); }
+.camp-tribe-row[data-tier="shaky"]   .camp-tribe-tier-label { color: #b88545; }
+.camp-tribe-row[data-tier="bad"]     .camp-tribe-tier-label { color: #b85060; }
+
+/* v5.9: trust marker — small symbol next to the name when trust is notable.
+   ✦ for high trust (a real ally signal), ⚠ for distrust (caution flag).
+   Sized small so it sits like a quiet annotation, not a badge. */
+.camp-tribe-trust-marker {
+  margin-left: 0.35rem;
+  font-size: 0.78rem;
+  letter-spacing: 0;
+  vertical-align: baseline;
+  cursor: help;
+}
+.camp-tribe-trust-marker[data-trust="trusted"]    { color: #7fc28a; }
+.camp-tribe-trust-marker[data-trust="distrusted"] { color: #c98565; }
 
 /* ── Camp Life: unavailable action button ── */
 /* Used for "Search for idol" when the scope idol is already held. */
