@@ -334,7 +334,12 @@ function actionTendCamp(state, player, tribemates) {
   adjustSuspicion(state, player.id, -1);
 
   // v5.5: idol-search support credit. Capped at 2.
-  state.tendCampBonus = Math.min(2, (state.tendCampBonus ?? 0) + 1);
+  // v5.6: only the human player's tends accumulate this credit — AI doesn't
+  // search for idols, so AI tending shouldn't quietly buff the player's
+  // next search. Tribe-wide rel + suspicion drop still apply for everyone.
+  if (state.player && state.player.id === player.id) {
+    state.tendCampBonus = Math.min(2, (state.tendCampBonus ?? 0) + 1);
+  }
 
   return { feedback: pickFrom([
     `You spent the afternoon shoring up the shelter. A few tribemates thanked you. Being seen working has its own quiet value.`,
@@ -1446,36 +1451,231 @@ function clearCampTargets(state) {
   state.campTargets = {};
 }
 
-// ── AI camp action hook (v5 foundation, stub) ────────────────────────────────
+// ── AI camp actions (v5.6) ────────────────────────────────────────────────────
 //
-// Intentionally a no-op in v5.0. Future versions will fill this in to make
-// AI contestants take camp-life actions during their own camp phases —
-// talking, confiding, searching idols, proposing alliances, lobbying.
-// This contributes to a more active camp world without requiring per-feature
-// plumbing changes when behavior arrives.
+// Each non-player contestant in the pool takes ONE camp action per phase,
+// chosen by weighted random across the same engine functions the player
+// uses. AI personality emerges from how the weights interact with stats:
 //
-//   state — the live gameState (engine functions mutate it in place)
-//   pool  — array of contestants attending the camp
-//           (one tribe pre-merge, the merged tribe post-merge)
+//   high social    → talk / confide / strengthen-alliance dominate
+//   high strategy  → lobby / askVote / formAlly dominate
+//   high challenge → small Tend Camp boost (visibly contributing)
+//   high suspicion → Lay low temporarily takes priority
 //
-// Call sites (when v5.x wires behavior):
-//   • main.js onChallengeResolved — AI takes phase 2 actions before tribal
-//   • main.js advanceRound        — AI takes phase 1 actions in the new round
+// Call sites are in main.js at every camp-phase entry (runAICampPhase). The
+// player.id is filtered out so this function is safe to call with the full
+// tribe pool — the human's actions are still driven by the camp screen UI.
 //
-// Each AI's action selection should respect:
-//   • Their stats (high-social → more relationship actions; high-strategy →
-//     more vote-positioning actions)
-//   • Their current intent (campTargets) — actions consistent with their plan
-//   • Existing alliance ties — strengthen with allies before betraying
-//
-// AI camp actions affect state the same way player actions do (via
-// executeAction or direct calls to actionXxx), so the existing engine handles
-// downstream updates (relationships, trust, suspicion, alliance strength).
+// State mutations propagate through the existing engine (rel/trust/suspicion/
+// alliance), so the camp screen's relationship panel and alliance block
+// surface the results on the next render.
 
 function runAICampActions(state, pool) {
-  // v5.0: no-op. Hook reserved for v5.x; call sites will be wired alongside
-  // the actual selection/execution logic so the empty function never runs in
-  // production. See documentation block above for intended behavior.
+  if (!Array.isArray(pool) || pool.length < 2) return;
+
+  for (const ai of pool) {
+    // Skip the human player — their actions come from the camp screen UI.
+    if (state.player && ai.id === state.player.id) continue;
+    runOneAICampAction(state, ai, pool);
+  }
+}
+
+// Picks one weighted action for the AI and dispatches it through the same
+// per-action engine functions the player uses, so AI behavior is mechanically
+// indistinguishable from a human's (besides not being driven by the menu).
+function runOneAICampAction(state, ai, pool) {
+  const others = pool.filter(c => c.id !== ai.id);
+  if (others.length === 0) return;
+
+  const choice = pickAIActionWeighted(state, ai, others);
+  if (!choice) return;
+
+  switch (choice.action) {
+    case "talk":
+      actionTalk(state, ai, choice.target);
+      break;
+    case "confide":
+      actionConfide(state, ai, choice.target);
+      break;
+    case "strengthen":
+      // Mirror actionProposeAlliance's in-alliance "strengthen mode" branch
+      // directly — same effects, no need to route through the dispatcher
+      // which would re-check the in-alliance condition.
+      strengthenSharedAlliances(state, ai.id, choice.target.id, 1);
+      adjustRelationship(state, ai.id, choice.target.id, rand(1, 2));
+      adjustTrust(state, ai.id, choice.target.id, 1);
+      break;
+    case "lobby":
+      actionLobby(state, ai, others, choice.target);
+      break;
+    case "askVote":
+      actionAskVote(state, ai, choice.target, others);
+      break;
+    case "formAlly":
+      actionProposeAlliance(state, ai, choice.target);
+      break;
+    case "laylow":
+      actionLayLow(state, ai, others);
+      break;
+    case "tendCamp":
+      actionTendCamp(state, ai, others);
+      break;
+  }
+}
+
+// Weighted random selection of an AI's next action.
+// Returns { action, target } or null if no action is viable.
+//
+// Each action pushes an option onto a list with a weight. The picker then
+// rolls a uniform random number across the total weight. Stats shape the
+// weights, current state shapes target eligibility (e.g. lobby is only an
+// option if the AI has someone they actually dislike to lobby against).
+function pickAIActionWeighted(state, ai, others) {
+  const options = [];
+
+  // ── TALK ──
+  // Pool: tribemates the AI hasn't already maxed out (rel < 12) and isn't
+  // openly at odds with (rel > -8). Talking with active enemies is awkward;
+  // talking with already-tight allies hits diminishing returns.
+  const talkPool = others.filter(c => {
+    const r = getRelationship(state, ai.id, c.id);
+    return r > -8 && r < 12;
+  });
+  if (talkPool.length > 0) {
+    options.push({
+      action: "talk",
+      weight: 4 + ai.social * 0.4,
+      target: pickFrom(talkPool),
+    });
+  }
+
+  // ── CONFIDE ──
+  // Pool: tribemates with enough rel/trust foundation to make confiding
+  // plausible. Without this floor confiding feels random and rarely
+  // produces real bonds.
+  const confidePool = others.filter(c =>
+    getRelationship(state, ai.id, c.id) >= 5 &&
+    getTrust(state, ai.id, c.id)        >= 4
+  );
+  if (confidePool.length > 0) {
+    options.push({
+      action: "confide",
+      weight: 2 + ai.social * 0.4,
+      target: pickFrom(confidePool),
+    });
+  }
+
+  // ── STRENGTHEN existing alliance ──
+  // Pool: any active-alliance co-member who's currently in the same camp pool.
+  // Allies on the other tribe (post-swap) can't be reinforced via camp
+  // interaction — staleness will hit them naturally.
+  const myAlliances = (typeof getAlliancesForMember === "function")
+    ? getAlliancesForMember(state, ai.id)
+    : [];
+  const allyPool = [];
+  for (const alliance of myAlliances) {
+    for (const memberId of alliance.memberIds) {
+      if (memberId === ai.id) continue;
+      const member = others.find(c => c.id === memberId);
+      if (member && !allyPool.includes(member)) allyPool.push(member);
+    }
+  }
+  if (allyPool.length > 0) {
+    options.push({
+      action: "strengthen",
+      weight: 3 + ai.social * 0.2,
+      target: pickFrom(allyPool),
+    });
+  }
+
+  // ── LOBBY ──
+  // Pool: any tribemate the AI clearly dislikes (rel < -3). The most-
+  // disliked is the natural target — that's who the AI wants gone.
+  const enemyPool = others.filter(c =>
+    getRelationship(state, ai.id, c.id) < -3
+  );
+  if (enemyPool.length > 0) {
+    enemyPool.sort((a, b) =>
+      getRelationship(state, ai.id, a.id) - getRelationship(state, ai.id, b.id)
+    );
+    options.push({
+      action: "lobby",
+      weight: 2 + ai.strategy * 0.6,
+      target: enemyPool[0],
+    });
+  }
+
+  // ── ASK VOTE ──
+  // Pool: tribemates the AI trusts enough to ask candidly (trust ≥ 4).
+  // The truth tier tiers in actionAskVote already gate what comes back;
+  // requiring trust ≥ 4 here just means AI doesn't waste actions asking
+  // distrustful people.
+  const askPool = others.filter(c => getTrust(state, ai.id, c.id) >= 4);
+  if (askPool.length > 0) {
+    options.push({
+      action: "askVote",
+      weight: 1 + ai.strategy * 0.5,
+      target: pickFrom(askPool),
+    });
+  }
+
+  // ── FORM ALLIANCE ──
+  // Pool: high-rel/trust candidates not already in a shared alliance.
+  // Same gate as the engine's aiFormAlliances pass plus a per-pair
+  // attempted-already check. The acceptance roll inside
+  // actionProposeAlliance can still reject, which is fine — that's
+  // texture.
+  const formPool = others.filter(c =>
+    getRelationship(state, ai.id, c.id) >= 10 &&
+    getTrust(state, ai.id, c.id)        >= 5  &&
+    !isInSameAlliance(state, ai.id, c.id)
+  );
+  if (formPool.length > 0) {
+    formPool.sort((a, b) =>
+      (getRelationship(state, ai.id, b.id) + getTrust(state, ai.id, b.id) * 2)
+      - (getRelationship(state, ai.id, a.id) + getTrust(state, ai.id, a.id) * 2)
+    );
+    options.push({
+      action: "formAlly",
+      weight: 1 + ai.strategy * 0.4,
+      target: formPool[0],
+    });
+  }
+
+  // ── LAY LOW ──
+  // Only when the AI has real heat. Otherwise laylow is a wasted action
+  // for them.
+  const ownSusp = ai.suspicion ?? 0;
+  if (ownSusp >= 4) {
+    options.push({
+      action: "laylow",
+      weight: 1 + ownSusp * 0.6,
+      target: null,
+    });
+  }
+
+  // ── TEND CAMP ──
+  // Always a valid baseline option (visible labor is always somewhat
+  // useful). High-challenge AIs prioritize it more — the prompt's
+  // "challenge-focused players may care more about tribe strength."
+  options.push({
+    action: "tendCamp",
+    weight: 1 + (ai.challenge >= 7 ? 1 : 0),
+    target: null,
+  });
+
+  if (options.length === 0) return null;
+
+  // Weighted random pick.
+  const totalWeight = options.reduce((s, o) => s + o.weight, 0);
+  if (totalWeight <= 0) return null;
+
+  let r = Math.random() * totalWeight;
+  for (const opt of options) {
+    r -= opt.weight;
+    if (r <= 0) return opt;
+  }
+  return options[options.length - 1];
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────

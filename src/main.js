@@ -48,7 +48,24 @@ var gameState;
 function onContestantSelected(contestant) {
   gameState.player = contestant;
   initRelationships(gameState);
+
+  // v5.6: AI takes their first camp actions before the player's first camp
+  // screen. The social fabric is already moving when the player walks in.
+  runAICampPhase(gameState);
+
   showScreen("campLife");
+}
+
+// v5.6: dispatches AI camp activity for whichever pool(s) are relevant.
+// Pre-merge: both tribes' AIs act in parallel (each tribe is its own camp).
+// Post-merge: the merged tribe is the single camp.
+function runAICampPhase(state) {
+  if (state.merged) {
+    runAICampActions(state, state.tribes.merged);
+  } else {
+    runAICampActions(state, state.tribes.A);
+    runAICampActions(state, state.tribes.B);
+  }
 }
 
 // Called when the cast editor is dismissed.
@@ -156,6 +173,10 @@ function onChallengeResolved(losingTribeLabel) {
   gameState.immunityWon = losingTribeLabel === "A" ? "B" : "A";
   gameState.tribalTribe = losingTribeLabel;
   gameState.campPhase   = 2;
+
+  // v5.6: AI takes their phase-2 actions before the player's camp screen.
+  runAICampPhase(gameState);
+
   showScreen("campLife");
 }
 
@@ -164,16 +185,24 @@ function onIndividualChallengeResolved(winnerId) {
   gameState.immunityHolder = winnerId;
   gameState.tribalTribe    = "merged";
   gameState.campPhase      = 2;
+
+  // v5.6: AI takes their phase-2 actions before the player's camp screen.
+  runAICampPhase(gameState);
+
   showScreen("campLife");
 }
 
 // Called when the player dismisses the merge screen.
 function onMergeDone() {
+  // v5.6: AI takes their first post-merge camp actions before the camp screen.
+  runAICampPhase(gameState);
   showScreen("campLife");
 }
 
 // Called when the player dismisses the swap screen.
 function onSwapDone() {
+  // v5.6: AI takes their first post-swap camp actions before the camp screen.
+  runAICampPhase(gameState);
   showScreen("campLife");
 }
 
@@ -268,6 +297,11 @@ function advanceRound() {
     showScreen("swap");
     return;
   }
+
+  // v5.6: AI takes their phase-1 camp actions of the new round before the
+  // player's camp screen renders. The merge/swap branches above also wire
+  // this in their own onMergeDone / onSwapDone handlers.
+  runAICampPhase(gameState);
 
   showScreen("campLife");
 }
