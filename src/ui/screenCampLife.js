@@ -344,7 +344,7 @@ function renderCampLifeScreen(container, state) {
           <span class="camp-step-note">${stepNote}</span>
         </div>
         <div class="camp-header-right">
-          <div id="actions-counter" class="actions-counter">
+          <div id="actions-counter" class="actions-counter" data-state="${actionsLeft >= 3 ? 'fresh' : actionsLeft === 2 ? 'mid' : actionsLeft === 1 ? 'low' : 'empty'}">
             ${actionsLeft} of ${maxActions} actions left
           </div>
           <button class="season-log-btn" id="season-log-btn" title="Season Log">📜 Log</button>
@@ -514,6 +514,7 @@ function renderCampLifeScreen(container, state) {
           </span>
         </div>
         <div class="category-card-desc">${category.description}</div>
+        <span class="category-card-arrow" aria-hidden="true">→</span>
       `;
       card.addEventListener("click", () => {
         _currentCategory = category.id;
@@ -669,6 +670,10 @@ function renderCampLifeScreen(container, state) {
     counter.textContent = actionsLeft > 0
       ? `${actionsLeft} of ${maxActions} actions left`
       : "No actions left";
+    counter.dataset.state =
+      actionsLeft >= 3 ? "fresh" :
+      actionsLeft === 2 ? "mid" :
+      actionsLeft === 1 ? "low" : "empty";
     showActionButtons();
   }
 

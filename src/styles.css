@@ -386,6 +386,7 @@ button:disabled {
 }
 
 .category-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -395,6 +396,7 @@ button:disabled {
   border-left: 3px solid var(--gold-dim);
   border-radius: 4px;
   padding: 0.7rem 0.95rem;
+  padding-right: 1.8rem;
   font-family: inherit;
   color: var(--text-primary);
   text-align: left;
@@ -406,6 +408,24 @@ button:disabled {
   background: var(--bg-raised);
   border-color: var(--text-dim);
   border-left-color: var(--gold);
+}
+
+/* v5.8: subtle arrow indicator that brightens on hover. */
+.category-card-arrow {
+  position: absolute;
+  right: 0.85rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1.1rem;
+  color: var(--text-faint);
+  opacity: 0.55;
+  transition: color 150ms ease, opacity 150ms ease, transform 150ms ease;
+  pointer-events: none;
+}
+.category-card:hover .category-card-arrow {
+  color: var(--gold);
+  opacity: 1;
+  transform: translateY(-50%) translateX(2px);
 }
 
 .category-card-row {
@@ -447,11 +467,14 @@ button:disabled {
   cursor: pointer;
   margin-bottom: 0.55rem;
   align-self: flex-start;
+  transition: color 150ms ease, border-color 150ms ease, background 150ms ease, transform 150ms ease;
 }
 
 .action-back-btn:hover {
-  border-color: var(--text-primary);
-  color: var(--text-primary);
+  border-color: var(--gold-dim);
+  color: var(--gold);
+  background: var(--bg-raised);
+  transform: translateX(-2px);
 }
 
 .category-section-title {
@@ -2183,6 +2206,26 @@ button:disabled {
   white-space: nowrap;
   flex-shrink: 0;
   align-self: flex-start;
+  transition: color 180ms ease, border-color 180ms ease, background-color 180ms ease;
+}
+/* v5.8: counter color states tighten as the budget runs out. */
+.actions-counter[data-state="fresh"] {
+  color: #7fd17f;
+  border-color: rgba(127, 209, 127, 0.4);
+}
+.actions-counter[data-state="mid"] {
+  color: #e8c46a;
+  border-color: rgba(232, 196, 106, 0.4);
+}
+.actions-counter[data-state="low"] {
+  color: #e89a4a;
+  border-color: rgba(232, 154, 74, 0.55);
+  background-color: rgba(232, 154, 74, 0.08);
+}
+.actions-counter[data-state="empty"] {
+  color: var(--text-faint);
+  border-color: var(--border-dim);
+  background-color: transparent;
 }
 
 /* Tribemate chip row */

@@ -255,6 +255,8 @@ function actionTalk(state, player, target) {
       `You tried to talk with ${target.name}, but the conversation went nowhere. Awkward.`,
       `${target.name} seemed distracted during your conversation. Something felt off.`,
       `You and ${target.name} couldn't find a rhythm today. The silence stretched too long.`,
+      `You sat next to ${target.name} for a while, but neither of you knew what to say. By the time you got up, it felt worse than before.`,
+      `${target.name} answered your questions, but their eyes never quite met yours. You walked away wishing you hadn't tried.`,
     ]), hint: null };
   }
 
@@ -266,7 +268,8 @@ function actionTalk(state, player, target) {
     rel >=   5 ?  1 :
     rel <   -5 ? -1 :
     0;
-  const delta = Math.max(1, Math.floor(player.social / 3) + rand(1, 3) + momentum);
+  // v5.8: cap delta at 6 so a single conversation can't dominate the relationship curve.
+  const delta = Math.max(1, Math.min(6, Math.floor(player.social / 3) + rand(1, 3) + momentum));
   adjustRelationship(state, player.id, target.id, delta);
 
   if (delta >= 5) {
@@ -293,6 +296,8 @@ function actionTalk(state, player, target) {
       `You and ${target.name} talked for a long time by the fire. It felt like a real connection.`,
       `${target.name} opened up about their life back home. You listened. It seemed to matter.`,
       `The conversation with ${target.name} went deep. You learned something real about them.`,
+      `You and ${target.name} ended up sitting on the beach long after the others had drifted off. Neither of you was in any hurry to leave.`,
+      `${target.name} told you a story about their family that they probably hadn't planned to share. You could tell it landed for both of you.`,
     ]), hint: null };
   }
 
@@ -300,6 +305,8 @@ function actionTalk(state, player, target) {
     `You had a pleasant chat with ${target.name} while gathering water. Easy and comfortable.`,
     `You and ${target.name} talked briefly about camp life. Nothing deep, but friendly.`,
     `You checked in on ${target.name}. Short conversation, but they seemed to appreciate it.`,
+    `You ate next to ${target.name} and traded a few jokes. Nothing remarkable, but the warmth was real.`,
+    `You and ${target.name} swapped small talk while sorting firewood. The kind of moment that quietly adds up.`,
   ]), hint: null };
 }
 
@@ -328,7 +335,18 @@ function actionTalk(state, player, target) {
 // player discovers the idol-search interaction by playing.
 function actionTendCamp(state, player, tribemates) {
   const delta = player.social >= 7 ? 2 : 1;
-  for (const mate of tribemates) {
+
+  // v5.8: 30% of the time the contribution lands "subtle" — only roughly half
+  // the tribe consciously registers it. Not every chore is performative; some
+  // days the work is genuinely invisible. Keeps Tend Camp from being a flat,
+  // optimal tribe-wide rel bump every cycle.
+  const subtle = Math.random() < 0.30;
+  let landed = tribemates;
+  if (subtle && tribemates.length > 1) {
+    const half = Math.max(1, Math.ceil(tribemates.length / 2));
+    landed = [...tribemates].sort(() => Math.random() - 0.5).slice(0, half);
+  }
+  for (const mate of landed) {
     adjustRelationship(state, player.id, mate.id, delta);
   }
   adjustSuspicion(state, player.id, -1);
@@ -339,6 +357,14 @@ function actionTendCamp(state, player, tribemates) {
   // next search. Tribe-wide rel + suspicion drop still apply for everyone.
   if (state.player && state.player.id === player.id) {
     state.tendCampBonus = Math.min(2, (state.tendCampBonus ?? 0) + 1);
+  }
+
+  if (subtle) {
+    return { feedback: pickFrom([
+      `You worked steadily around camp, but the others were spread out and busy. Some of them noticed; some didn't. Quiet contribution.`,
+      `You spent hours on small fixes — nothing flashy. A couple of tribemates thanked you in passing. The rest never looked up.`,
+      `You kept yourself useful all afternoon. Not everyone clocked it, but the people who did seemed to file it away.`,
+    ]), hint: null };
   }
 
   return { feedback: pickFrom([
@@ -627,14 +653,27 @@ function actionAskVote(state, player, target, tribemates) {
 //   relationshipGain = rand(1, 3)
 //   backfire chance = 15% → relationship −rand(1, 2), no trust change
 function actionConfide(state, player, target) {
-  const backfire   = Math.random() < 0.15;
+  // v5.8: backfire chance is rel-gated. Confiding in a near-stranger is risky;
+  // confiding in someone who already likes you almost always lands. Floor 15%,
+  // ceiling 35% when rel is deeply negative.
+  const rel        = getRelationship(state, player.id, target.id);
+  const backfireChance = Math.min(0.35, 0.15 + Math.max(0, (5 - rel)) * 0.02);
+  const backfire   = Math.random() < backfireChance;
   const trustGain  = 2 + Math.floor(player.social / 4);
 
   if (backfire) {
     adjustRelationship(state, player.id, target.id, -rand(1, 2));
-    return { feedback: pickFrom([
+    // Cold confides (low rel) read differently — less "fell flat", more
+    // "you misjudged the room". Pick from a wider pool when rel is low.
+    const coldConfide = rel < 3;
+    return { feedback: pickFrom(coldConfide ? [
+      `You opened up to ${target.name} before you really knew them. They listened politely, but you could tell it was too much, too soon.`,
+      `${target.name} barely knew you. When you started sharing something personal, you watched their face go careful. You'd misjudged the moment.`,
+      `You said more to ${target.name} than you'd meant to. By the time you finished, the silence felt heavy in a way you hadn't planned for.`,
+    ] : [
       `You opened up to ${target.name}, but the moment fell flat. They seemed uncomfortable. It didn't land the way you hoped.`,
       `You shared something personal with ${target.name}. They were polite, but there was an awkward pause after. You wished you hadn't said it.`,
+      `${target.name} smiled in the right places, but their eyes told a different story. You felt the distance between you grow a little.`,
     ]), hint: null };
   }
 
@@ -802,6 +841,8 @@ function actionLayLow(state, player, tribemates) {
     `You stayed visible but quiet — near the fire, helping where needed, not overstepping. You felt the pressure ease.`,
     `You let the others do the talking today. You listened, smiled at the right moments, and faded into the background. Safer here.`,
     `You spent the afternoon just being a normal tribemate. No moves. Sometimes not making a move is the move.`,
+    `You stayed where people could see you, said little, and let the day pass. By evening you could feel the heat coming off you.`,
+    `You napped in the shade, helped with dinner, didn't push. A boring day on purpose — exactly what you needed.`,
   ]), hint: null };
 }
 
@@ -1171,6 +1212,8 @@ function actionObserveCamp(state, player, tribemates) {
         "The afternoon was quiet. People moved around their routines. No one made a move worth noting today.",
         "You took a long look around. Everyone was being civil. Civil isn't always honest, but it isn't loud either.",
         "You spent the afternoon listening more than talking. The camp had no obvious cracks — at least not ones anyone was showing.",
+        "You sat back and watched the rhythms of camp. Everyone was being careful. Too careful, maybe — but no one slipped today.",
+        "The day passed without a clear headline. People held their cards close. You filed away the steadiness as its own kind of warning.",
       ]),
     });
   }
