@@ -227,6 +227,8 @@ const CAMP_ACTIONS = [
 // Returns { feedback: string, hint: string|null }
 // hint carries a name when an action reveals who someone is watching.
 function executeAction(state, actionId, player, tribemates, target) {
+  // v5.14: log every camp action against the actor for camp-role detection.
+  recordCampAction(state, player.id, actionId);
   switch (actionId) {
     case "talk":        return actionTalk(state, player, target);
     case "tendCamp":    return actionTendCamp(state, player, tribemates);
@@ -481,6 +483,18 @@ function pickTruthfulnessBand(state, player, target, ctx) {
     case "socialButterfly":archetypeShift += 0.4; break;
     case "challengeBeast": archetypeShift -= 0.3; break;
     // workhorse is candor-neutral
+  }
+
+  // v5.14: camp-role identity also shifts how others read you. A known
+  // "Social Connector" gets warmer engagement; a known "Schemer" gets
+  // hedged answers; "Provider" reputation buys a small candor cushion.
+  const askerRole = getCampRole(state, player.id);
+  switch (askerRole) {
+    case "socialConnector": archetypeShift += 1.0; break;
+    case "provider":        archetypeShift += 0.5; break;
+    case "schemer":         archetypeShift -= 1.0; break;
+    case "drifter":         archetypeShift -= 0.3; break;
+    // strategist is candor-neutral here; their role shows up via lobby
   }
 
   const candor =
@@ -763,7 +777,14 @@ function actionSearchIdol(state, player, tribemates) {
 
   // v5.12: witness logs an "idol-search" memory against the player. Repeats
   // amplify — first catch is suspicious, third catch is reputation.
-  recordSuspiciousAct(state, witness.id, player.id, "idolSearch", prevSearches >= 2 ? 2 : 1);
+  // v5.14: camp-role identity adjusts the weight. A known Provider has built
+  // up "they're not the type" reputation; a Schemer is read as "of course
+  // they were doing that" and the witness pile-on is heavier.
+  let memoryWeight = prevSearches >= 2 ? 2 : 1;
+  const playerRole = getCampRole(state, player.id);
+  if (playerRole === "provider") memoryWeight = Math.max(0.5, memoryWeight - 0.5);
+  if (playerRole === "schemer")  memoryWeight += 0.5;
+  recordSuspiciousAct(state, witness.id, player.id, "idolSearch", memoryWeight);
 
   // Ambient bleed: from the second repeat onward, other tribemates start
   // noticing the pattern even without seeing the search directly. Each
@@ -1145,10 +1166,18 @@ function actionLobby(state, player, tribemates, target) {
   const listener = pickFrom(topPool);
 
   // Persuade chance — see header comment for the formula.
+  // v5.14: known "Strategist" role gets a small bump; known "Schemer" gets
+  // a small penalty (others are wary of their pitches even when correct).
   const listenerTrust = getTrust(state, listener.id, player.id);
+  const playerRole    = getCampRole(state, player.id);
+  const roleBonus =
+      playerRole === "strategist"      ?  0.05 :
+      playerRole === "socialConnector" ?  0.03 :
+      playerRole === "schemer"         ? -0.05 : 0;
   const persuadeChance = Math.max(0.10, Math.min(0.85,
     0.40 + player.social * 0.04 + player.strategy * 0.02
        + (listenerTrust - 3) * 0.04
+       + roleBonus
   ));
 
   const roll = Math.random();
@@ -2266,6 +2295,102 @@ function clearCampTargets(state) {
 // alliance), so the camp screen's relationship panel and alliance block
 // surface the results on the next render.
 
+// ── v5.14: Camp role identity ────────────────────────────────────────────────
+//
+// Camp role identity emerges from what a contestant repeatedly DOES, not
+// from their stat sheet. Five roles, mapped from action-history fingerprints:
+//
+//   provider         — heavy tendCamp share
+//   strategist       — heavy strategy/askVote/observePair/compareNotes share
+//   schemer          — heavy lobby + searchidol share
+//   socialConnector  — heavy talk/confide/checkIn/smoothOver share
+//   drifter          — heavy laylow/takeWalk/observeCamp/readRoom share
+//
+// A role is only "emerged" once the contestant has taken at least 5 camp
+// actions total (otherwise it's "undefined" — we don't read someone from
+// one round of behavior). The dominant category needs ≥ 35% share to
+// commit; below that, identity stays "undefined" so it doesn't snap on
+// thin evidence.
+//
+// Effects are LIGHT — meant to color how others read the player, not to
+// override active context:
+//   • provider        — witnesses on idol search are slightly slower to bump
+//                       suspicion-memory (reputation cushion)
+//   • strategist      — small flat +5% lobby persuade chance
+//   • schemer         — witnesses bump suspicion-memory faster on shady acts
+//   • socialConnector — small +1 candor shift in conversation context
+//   • drifter         — small natural suspicion drop each round (ambient
+//                       background presence reads as nonthreatening)
+
+const CAMP_ROLE_CATEGORIES = {
+  provider:        ["tendCamp"],
+  strategist:      ["strategy", "askVote", "observePair", "compareNotes"],
+  schemer:         ["lobby", "searchidol"],
+  socialConnector: ["talk", "confide", "checkIn", "smoothOver", "proposeAlliance"],
+  drifter:         ["laylow", "takeWalk", "observeCamp", "readRoom"],
+};
+
+const CAMP_ROLE_LABELS = {
+  provider:        "Provider",
+  strategist:      "Strategist",
+  schemer:         "Schemer",
+  socialConnector: "Social Connector",
+  drifter:         "Drifter",
+};
+
+function recordCampAction(state, contestantId, actionId) {
+  if (!state.actionHistory) state.actionHistory = {};
+  if (!state.actionHistory[contestantId]) state.actionHistory[contestantId] = {};
+  state.actionHistory[contestantId][actionId] =
+    (state.actionHistory[contestantId][actionId] ?? 0) + 1;
+}
+
+function getCampActionTotal(state, contestantId) {
+  const hist = state.actionHistory?.[contestantId];
+  if (!hist) return 0;
+  let total = 0;
+  for (const k of Object.keys(hist)) total += hist[k];
+  return total;
+}
+
+// Computes role shares for a contestant. Returns
+//   { totals: {role: count}, shares: {role: 0..1}, total }
+function computeCampRoleShares(state, contestantId) {
+  const hist = state.actionHistory?.[contestantId] ?? {};
+  const totals = {};
+  let total = 0;
+  for (const [role, actionIds] of Object.entries(CAMP_ROLE_CATEGORIES)) {
+    let count = 0;
+    for (const id of actionIds) count += hist[id] ?? 0;
+    totals[role] = count;
+    total += count;
+  }
+  const shares = {};
+  for (const role of Object.keys(totals)) {
+    shares[role] = total > 0 ? totals[role] / total : 0;
+  }
+  return { totals, shares, total };
+}
+
+// Returns the camp role id, or "undefined" if not enough data yet.
+function getCampRole(state, contestantId) {
+  const { totals, shares, total } = computeCampRoleShares(state, contestantId);
+  if (total < 5) return "undefined";
+
+  // Pick the role with the highest share. Require ≥ 35% share to commit;
+  // otherwise the contestant is doing a little of everything → undefined.
+  let bestRole = null, bestShare = 0;
+  for (const role of Object.keys(shares)) {
+    if (shares[role] > bestShare) { bestShare = shares[role]; bestRole = role; }
+  }
+  if (bestShare < 0.35) return "undefined";
+  return bestRole;
+}
+
+function getCampRoleLabel(roleId) {
+  return CAMP_ROLE_LABELS[roleId] ?? "Finding their place";
+}
+
 function runAICampActions(state, pool) {
   if (!Array.isArray(pool) || pool.length < 2) return;
 
@@ -2285,6 +2410,15 @@ function runOneAICampAction(state, ai, pool) {
 
   const choice = pickAIActionWeighted(state, ai, others);
   if (!choice) return;
+
+  // v5.14: log AI actions against their camp-role history too. Internal
+  // action labels for AI mirror the player ones where reasonable; "strengthen"
+  // is logged as proposeAlliance since it's the same intent.
+  const historyKey =
+    choice.action === "strengthen" ? "proposeAlliance" :
+    choice.action === "formAlly"   ? "proposeAlliance" :
+    choice.action;
+  recordCampAction(state, ai.id, historyKey);
 
   switch (choice.action) {
     case "talk":

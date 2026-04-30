@@ -2421,6 +2421,129 @@ button:disabled {
   border-top: 1px solid var(--border-dim);
 }
 
+/* ── v5.14: three-column camp grid ──────────────────────────────────────────
+   Header above is full-width; footer below is full-width. The grid splits
+   the body into Tribe (left) / Action+Outcome (center) / Alliances+Reads
+   (right). At narrow viewports we collapse to a single column.            */
+.camp-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(420px, 2.4fr) minmax(240px, 1.1fr);
+  gap: 1.1rem;
+  align-items: start;
+  margin: 0.75rem 0 1rem;
+}
+@media (max-width: 1100px) {
+  .camp-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .camp-col-right {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 720px) {
+  .camp-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.camp-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  min-width: 0;     /* allow children to shrink inside the column */
+}
+
+/* v5.14: emerging camp-role identity card. Sits in the right column.
+   Quiet styling — it's information, not a notification.                  */
+.camp-role-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-mid);
+  border-left: 3px solid var(--gold-dim);
+  border-radius: 5px;
+  padding: 0.65rem 0.85rem;
+}
+.camp-role-card[data-role="provider"]        { border-left-color: #6a9a7a; }
+.camp-role-card[data-role="strategist"]      { border-left-color: #7a90c0; }
+.camp-role-card[data-role="schemer"]         { border-left-color: #b85060; }
+.camp-role-card[data-role="socialConnector"] { border-left-color: #c89a4a; }
+.camp-role-card[data-role="drifter"]         { border-left-color: #888;    }
+.camp-role-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  margin-bottom: 0.4rem;
+}
+.camp-role-eyebrow {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+.camp-role-label {
+  font-size: 1rem;
+  font-weight: bold;
+  color: var(--text-primary);
+}
+.camp-role-flavor {
+  font-size: 0.82rem;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+
+/* v5.14: recent strategic notes feed. Pulled from the player-visible event
+   log, last 4 entries that are camp-strategic in category.                */
+.strategic-notes-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-mid);
+  border-radius: 5px;
+  padding: 0.6rem 0.85rem 0.5rem;
+}
+.strategic-notes-header {
+  border-bottom: 1px solid var(--border-dim);
+  padding-bottom: 0.3rem;
+  margin-bottom: 0.4rem;
+}
+.strategic-notes-eyebrow {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  font-weight: bold;
+}
+.strategic-notes-empty {
+  font-size: 0.82rem;
+  color: var(--text-faint);
+  font-style: italic;
+}
+.strategic-notes-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.strategic-notes-item {
+  display: grid;
+  grid-template-columns: 1.6rem 1fr;
+  gap: 0.45rem;
+  align-items: baseline;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+.strategic-notes-round {
+  font-size: 0.65rem;
+  color: var(--text-faint);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-align: right;
+}
+.strategic-notes-text {
+  color: var(--text-dim);
+}
+.strategic-notes-item[data-cat="alliance"] .strategic-notes-text { color: #c89a4a; }
+.strategic-notes-item[data-cat="idol"]     .strategic-notes-text { color: #7aa088; }
+.strategic-notes-item[data-cat="tribal"]   .strategic-notes-text { color: var(--text-primary); }
+
 /* ── Challenge Screen ── */
 .challenge-type-label {
   text-align: center;

@@ -275,6 +275,16 @@ function advanceRound() {
   decaySuspicionMemory(gameState);
   clearRoundEphemera(gameState);
 
+  // v5.14: drifter camp-role identity grants a small natural suspicion drop
+  // each round — the read is "background presence, not a threat". Other
+  // role effects fire situationally (in lobby, search, conversation).
+  for (const c of getAllActive()) {
+    const role = getCampRole(gameState, c.id);
+    if (role === "drifter" && (c.suspicion ?? 0) > 0) {
+      adjustSuspicion(gameState, c.id, -1);
+    }
+  }
+
   gameState.round          += 1;
   gameState.campPhase       = 1;
   gameState.immunityWon     = null;

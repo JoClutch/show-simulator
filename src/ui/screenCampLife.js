@@ -237,6 +237,78 @@ function renderCampLifeScreen(container, state) {
     return null;
   }
 
+  // v5.14: emerging camp-role identity card. Reads state via the engine
+  // helper and only renders once the player has enough action history
+  // (≥ 5 actions and a dominant category share). Otherwise renders a quiet
+  // "still finding your place" card so the slot doesn't visually jump
+  // around mid-game.
+  function buildCampRoleCardHTML() {
+    const role  = (typeof getCampRole === "function")
+      ? getCampRole(state, player.id) : "undefined";
+    const total = (typeof getCampActionTotal === "function")
+      ? getCampActionTotal(state, player.id) : 0;
+    const label = (typeof getCampRoleLabel === "function")
+      ? getCampRoleLabel(role) : "Finding your place";
+
+    const flavor = role === "undefined"
+      ? `It's still early. The tribe doesn't have a fixed read on you yet. (${total} action${total === 1 ? "" : "s"} taken)`
+      : ({
+          provider:        "The tribe sees you as someone who pulls weight. Quiet credit accumulates.",
+          strategist:      "You're being read as a thinker. Pitches you make carry a little extra weight.",
+          schemer:         "You've been visible enough that people are watching. Shady acts amplify.",
+          socialConnector: "People talk to you. Conversations land warmer than the numbers say they should.",
+          drifter:         "You're floating in the background. Suspicion fades a little faster on you each round.",
+        })[role];
+
+    return `
+      <div class="camp-role-card" data-role="${role}">
+        <div class="camp-role-header">
+          <span class="camp-role-eyebrow">Your camp role</span>
+          <span class="camp-role-label">${escapeHtml(label)}</span>
+        </div>
+        <div class="camp-role-flavor">${escapeHtml(flavor)}</div>
+      </div>
+    `;
+  }
+
+  // v5.14: short "recent strategic notes" feed sourced from the player-visible
+  // event log. Filters to camp-relevant categories (alliance / idol / tribal)
+  // so trivial-seeming entries don't crowd the column. Last 4 entries.
+  function buildStrategicNotesHTML() {
+    const log = state.eventLog ?? [];
+    const interesting = log.filter(e =>
+      e.playerVisible && ["alliance", "idol", "tribal", "strategy"].includes(e.category)
+    );
+    const recent = interesting.slice(-4).reverse();
+
+    if (recent.length === 0) {
+      return `
+        <div class="strategic-notes-card">
+          <div class="strategic-notes-header">
+            <span class="strategic-notes-eyebrow">Strategic notes</span>
+          </div>
+          <div class="strategic-notes-empty">Nothing on the board yet.</div>
+        </div>
+      `;
+    }
+
+    const items = recent.map(e => `
+      <li class="strategic-notes-item" data-cat="${e.category}">
+        <span class="strategic-notes-round">R${e.round ?? "?"}</span>
+        <span class="strategic-notes-text">${escapeHtml(e.text ?? "")}</span>
+      </li>
+    `).join("");
+
+    return `
+      <div class="strategic-notes-card">
+        <div class="strategic-notes-header">
+          <span class="strategic-notes-eyebrow">Strategic notes</span>
+        </div>
+        <ul class="strategic-notes-list">${items}</ul>
+      </div>
+    `;
+  }
+
   function buildTribePanelHTML() {
     // Locale-aware alphabetical sort. Handles unicode names cleanly (accented
     // characters, mixed case, etc.). The player is rendered first as a self-
@@ -396,30 +468,43 @@ function renderCampLifeScreen(container, state) {
 
       ${episodeOpener}
 
-      <div id="idol-badge-container">${idolBadgeHTML}</div>
-
-      <div id="alliance-block-container">${allianceBlockHTML}</div>
-
       ${statusBanner}
 
-      <!-- v5.1: tribe relationship panel — populated by buildTribePanelHTML.
-           Replaces the v5.0 placeholder and the old camp-tribemates chip row.
-           Refreshed live in showActionButtons after each camp action so tier
-           labels move as relationships change. -->
-      <div id="camp-relationship-panel" class="camp-relationship-panel">
-        ${buildTribePanelHTML()}
+      <!-- v5.14: three-column camp layout. Left = Your Tribe; Center =
+           action menus + outcome text; Right = alliances, target list,
+           camp-role identity, strategic notes. The header above and the
+           footer below remain full-width. -->
+      <div class="camp-grid">
+
+        <aside class="camp-col camp-col-left">
+          <!-- v5.1: tribe relationship panel — populated by buildTribePanelHTML.
+               Refreshed live in showActionButtons after each camp action so
+               tier labels move as relationships change. -->
+          <div id="camp-relationship-panel" class="camp-relationship-panel">
+            ${buildTribePanelHTML()}
+          </div>
+        </aside>
+
+        <main class="camp-col camp-col-center">
+          <div id="action-area" class="action-area"></div>
+          <div id="feedback-log" class="feedback-log"></div>
+        </main>
+
+        <aside class="camp-col camp-col-right">
+          <div id="idol-badge-container">${idolBadgeHTML}</div>
+          <div id="alliance-block-container">${allianceBlockHTML}</div>
+          <!-- v5.7: end-of-camp target list — visible only during camp phase 2
+               when the player is going to tribal. -->
+          <div id="target-list-container">${targetListHTML}</div>
+          <!-- v5.14: emerging camp-role identity card. Populated only after
+               the player has taken at least 5 actions; otherwise quiet. -->
+          <div id="camp-role-container">${buildCampRoleCardHTML()}</div>
+          <!-- v5.14: recent strategic notes — last few player-visible event
+               log entries relevant to camp strategy. -->
+          <div id="strategic-notes-container">${buildStrategicNotesHTML()}</div>
+        </aside>
+
       </div>
-
-      <!-- v5.7: end-of-camp target list — visible only during camp phase 2
-           when the player is going to tribal. Populated by buildTargetListHTML
-           and refreshed live in showActionButtons so lobby/talk landings
-           shift the picture in real time. Empty (renders nothing) during
-           phase 1 or when the player isn't going to tribal. -->
-      <div id="target-list-container">${targetListHTML}</div>
-
-      <div id="action-area" class="action-area"></div>
-
-      <div id="feedback-log" class="feedback-log"></div>
 
       <div class="camp-footer">
         <button id="continue-btn">${continueLabel}</button>
@@ -499,6 +584,16 @@ function renderCampLifeScreen(container, state) {
     // talk/confide can shift rel/trust; both move the pressure ranking.
     const targetListContainer = container.querySelector("#target-list-container");
     if (targetListContainer) targetListContainer.innerHTML = buildTargetListHTML();
+
+    // v5.14: refresh the camp role card. Action history just changed —
+    // role identity may have crossed a threshold this turn.
+    const roleContainer = container.querySelector("#camp-role-container");
+    if (roleContainer) roleContainer.innerHTML = buildCampRoleCardHTML();
+
+    // v5.14: refresh strategic notes. Some actions push event log entries
+    // (alliance formed, idol found) that should appear immediately.
+    const notesContainer = container.querySelector("#strategic-notes-container");
+    if (notesContainer) notesContainer.innerHTML = buildStrategicNotesHTML();
 
     // Re-read live idol state for the search button — same reason.
     const currentHoldsScope = getHeldIdols(state, player.id)

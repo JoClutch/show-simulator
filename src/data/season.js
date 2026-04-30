@@ -150,6 +150,14 @@ function createSeasonState() {
     // list and AI strategic planning. Empty by default — no behavior change.
     campTargets: {},
 
+    // ── Camp action history (v5.14) ────────────────────────
+    // Per-contestant counts of every camp action taken across the game.
+    // Drives emergent "camp role identity" (provider / strategist / schemer
+    // / social connector / drifter) without arbitrary assignment — the role
+    // is whatever the data says someone keeps doing.
+    //   Structure: { [contestantId]: { [actionId]: count } }
+    actionHistory: {},
+
     // ── Recent interactions (v5.12) ────────────────────────
     // Per-round log of who engaged with whom, used by the passive drift pass
     // at round end. Cleared in advanceRound. Populated automatically by
