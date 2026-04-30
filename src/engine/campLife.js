@@ -107,6 +107,17 @@ const CAMP_ACTIONS = [
     category: "social",
   },
   {
+    // v5.11: broad mood/tempo read. Distinct from "Observe the camp"
+    // which surfaces specific concrete pairs. Read the Room gives an
+    // overall feel for what's happening — campaigning energy, tribe
+    // cohesion, who looks anxious. Always hedged.
+    id: "readRoom",
+    label: "Read the room",
+    detail: "Step back and feel the temperature. You'll get vibes more than facts.",
+    needsTarget: false,
+    category: "social",
+  },
+  {
     id: "strategy",
     label: "Discuss strategy",
     detail: "Float vote ideas. Works best when you think alike.",
@@ -217,6 +228,7 @@ function executeAction(state, actionId, player, tribemates, target) {
     case "smoothOver":      return actionSmoothOver(state, player, target);
     case "observeCamp":     return actionObserveCamp(state, player, tribemates);
     case "observePair":     return actionObservePair(state, player, tribemates, target);
+    case "readRoom":        return actionReadRoom(state, player, tribemates);
     case "compareNotes":    return actionCompareNotes(state, player, tribemates, target);
     default:            return { feedback: "Nothing happened.", hint: null };
   }
@@ -1404,6 +1416,8 @@ function actionObserveCamp(state, player, tribemates) {
   const candidates = [];
 
   // 1. Close pairs — strong mutual rel between two non-player tribemates.
+  // v5.11: also picks up mid-strength pairs as suggestive ("growing close")
+  // so the player has earlier read on forming bonds, not just locked-in ones.
   for (let i = 0; i < tribemates.length; i++) {
     for (let j = i + 1; j < tribemates.length; j++) {
       const a = tribemates[i];
@@ -1418,11 +1432,22 @@ function actionObserveCamp(state, player, tribemates) {
             `Watching the camp, you saw ${a.name} and ${b.name} pull away to talk in private — twice. They're tighter than they're letting on.`,
           ]),
         });
+      } else if (rel >= 6) {
+        // v5.11: hedged mid-tier — player can pick up the early shape of a bond.
+        candidates.push({
+          weight: rel * 0.6,
+          text: pickFrom([
+            `${a.name} and ${b.name} seem to be growing close. Hard to say how serious it is yet.`,
+            `You caught ${a.name} and ${b.name} sharing a quiet laugh by the fire. Something's there — maybe.`,
+            `${a.name} and ${b.name} have been finding excuses to end up next to each other. You'd bet on a bond forming.`,
+          ]),
+        });
       }
     }
   }
 
   // 2. Tense pairs — strong mutual hostility between two non-player tribemates.
+  // v5.11: mid-tier friction is also surfaced, hedged.
   for (let i = 0; i < tribemates.length; i++) {
     for (let j = i + 1; j < tribemates.length; j++) {
       const a = tribemates[i];
@@ -1437,7 +1462,42 @@ function actionObserveCamp(state, player, tribemates) {
             `${a.name} and ${b.name} have a problem with each other. It's not loud, but it's there.`,
           ]),
         });
+      } else if (rel <= -5) {
+        candidates.push({
+          weight: Math.abs(rel) * 0.6,
+          text: pickFrom([
+            `${a.name} and ${b.name} seemed a little off with each other today. Not loud — just cool.`,
+            `You picked up a small chill between ${a.name} and ${b.name}. Maybe nothing, maybe something.`,
+            `${a.name} kept finding ways to not be where ${b.name} was. Could be coincidence; probably isn't.`,
+          ]),
+        });
       }
+    }
+  }
+
+  // v5.11 (new): quiet campaigners — tribemates who've been lobbying or
+  // planting suggestions. Modeled as suspicion ≥ 3 AND at least one hostile
+  // read against another tribemate. Hedged — the player isn't catching them
+  // mid-pitch, just sensing the campaign's shape.
+  for (const c of tribemates) {
+    const susp = c.suspicion ?? 0;
+    if (susp < 3 || susp >= 5) continue;   // ≥5 handled below as "on edge"
+    // Look for a target this person has cooled on — that's who they're whispering about.
+    const otherTribemates = tribemates.filter(o => o.id !== c.id);
+    let coldest = null, coldestRel = Infinity;
+    for (const o of otherTribemates) {
+      const r = getRelationship(state, c.id, o.id);
+      if (r < coldestRel) { coldestRel = r; coldest = o; }
+    }
+    if (coldest && coldestRel <= -3) {
+      candidates.push({
+        weight: 3 + susp,
+        text: pickFrom([
+          `${c.name} has been pulling people aside more than usual. You'd guess they're working an angle on ${coldest.name}.`,
+          `Something about ${c.name}'s pacing today felt deliberate. You think they might be quietly campaigning — ${coldest.name} would be the read.`,
+          `${c.name} kept their voice low whenever ${coldest.name} was around. They may be planting seeds.`,
+        ]),
+      });
     }
   }
 
@@ -1505,6 +1565,191 @@ function actionObserveCamp(state, player, tribemates) {
   };
 }
 
+// READ THE ROOM — broad camp mood and tempo read (v5.11, new).
+//
+// Distinct from "Observe the camp" — that action surfaces concrete pair
+// dynamics (X and Y are close, A and B are tense). This action surfaces the
+// FEEL of the camp at a higher altitude: how cohesive things are, how much
+// scheming energy is in the air, who's been campaigning quietly, who looks
+// anxious.
+//
+// Outputs are intentionally hedged ("seems", "appears", "you'd guess") and
+// quality scales with three signals:
+//
+//   • player.social — clearer reads (more lines, less noise) at higher social
+//   • chaos level   — average tribe suspicion + presence of strained alliances;
+//                     higher chaos noisier (player picks up the wrong thing more
+//                     often, lines lean less specific)
+//   • how obvious   — strong dynamics dominate weak ones; subtle ones can
+//                     remain unread even at high social
+//
+// Doesn't mutate game state — pure information.
+function actionReadRoom(state, player, tribemates) {
+  if (tribemates.length === 0) {
+    return { feedback: "There was no one around camp to get a read on.", hint: null };
+  }
+
+  // ── Compute camp-level signals ────────────────────────────────────────────
+  // Average pairwise relationship across non-player tribemates → cohesion.
+  let pairCount = 0;
+  let relSum    = 0;
+  let strongBonds = 0;
+  let strongRifts = 0;
+  for (let i = 0; i < tribemates.length; i++) {
+    for (let j = i + 1; j < tribemates.length; j++) {
+      const r = getRelationship(state, tribemates[i].id, tribemates[j].id);
+      relSum += r;
+      pairCount++;
+      if (r >=  10) strongBonds++;
+      if (r <=  -7) strongRifts++;
+    }
+  }
+  const avgRel = pairCount > 0 ? relSum / pairCount : 0;
+
+  // Chaos: average suspicion plus a kicker for strained alliances. The more
+  // chaotic the camp, the noisier the reads — high social can compensate.
+  const avgSusp = tribemates.reduce((s, c) => s + (c.suspicion ?? 0), 0)
+                / Math.max(1, tribemates.length);
+  const fracturedAlliances = (state.alliances || [])
+    .filter(a => !a.dissolved && (a.strength ?? 5) < 4).length;
+  const chaos = avgSusp + fracturedAlliances * 0.5;
+
+  // Active campaigner — the loudest individual scheme energy in the camp.
+  let topCampaigner = null, topCampaignSusp = 0;
+  for (const c of tribemates) {
+    const s = c.suspicion ?? 0;
+    if (s > topCampaignSusp) { topCampaignSusp = s; topCampaigner = c; }
+  }
+
+  // Most isolated — single-person isolation read at the camp level.
+  let mostIsolated = null, isolationScore = -Infinity;
+  for (const c of tribemates) {
+    const others = tribemates.filter(o => o.id !== c.id);
+    if (others.length === 0) continue;
+    let total = 0;
+    for (const o of others) total += getRelationship(state, c.id, o.id);
+    const avg = total / others.length;
+    const isoScore = -avg;
+    if (isoScore > isolationScore) { isolationScore = isoScore; mostIsolated = c; }
+  }
+
+  // ── Build hedged candidate lines ──────────────────────────────────────────
+  const candidates = [];
+
+  // 1. Tribe-cohesion vibe.
+  if (avgRel >= 5) {
+    candidates.push({ weight: 3 + avgRel * 0.2, text: pickFrom([
+      `Camp felt warm today. People are getting along — maybe more than they should be.`,
+      `The mood around camp seems easy. Everyone's on speaking terms. That itself is information — nobody's playing hard yet.`,
+      `There's a kind of comfort in the air. The tribe is bonding. The cracks haven't shown up yet.`,
+    ])});
+  } else if (avgRel <= -3) {
+    candidates.push({ weight: 3 + Math.abs(avgRel) * 0.3, text: pickFrom([
+      `The whole camp feels off today. People are short with each other. Something is going to break soon.`,
+      `You could feel the tension in the air — small silences, half-finished sentences. The tribe is fraying.`,
+      `Nobody's quite trusting anyone today. The camp has gone quiet in a way that isn't peaceful.`,
+    ])});
+  } else {
+    candidates.push({ weight: 2, text: pickFrom([
+      `The camp feels neutral. Not warm, not cold. Everyone is being careful.`,
+      `It's a held-breath kind of day. People are reading each other and waiting.`,
+      `You couldn't quite get a temperature on the camp. Maybe that's the temperature.`,
+    ])});
+  }
+
+  // 2. Scheming energy.
+  if (avgSusp >= 4) {
+    candidates.push({ weight: 4 + avgSusp, text: pickFrom([
+      `There's a lot of scheming energy in the air. People are pulling each other aside. Something is being built — or unbuilt.`,
+      `The camp feels like it's mid-conversation with itself. Lots of small whispered exchanges, lots of glances.`,
+      `You can feel the gears turning. Multiple people seem to be working on multiple things.`,
+    ])});
+  } else if (avgSusp <= 1.5) {
+    candidates.push({ weight: 2, text: pickFrom([
+      `Things feel calm — almost suspiciously so. Either nobody is making a move, or somebody's hiding it well.`,
+      `Today felt like a rest day for the game. Nobody was visibly working.`,
+    ])});
+  }
+
+  // 3. Quiet campaigner (hedged).
+  if (topCampaigner && topCampaignSusp >= 3) {
+    candidates.push({ weight: 3 + topCampaignSusp, text: pickFrom([
+      `${topCampaigner.name} appears to be campaigning quietly. You can't tell who their target is — but they're working.`,
+      `You'd guess ${topCampaigner.name} has been pitching something. They've been visible in pairs more than groups.`,
+      `${topCampaigner.name}'s movement around camp looks deliberate. Probably planting seeds. Probably.`,
+    ])});
+  }
+
+  // 4. Isolated player.
+  if (mostIsolated && isolationScore >= 3) {
+    candidates.push({ weight: 2 + isolationScore * 0.4, text: pickFrom([
+      `${mostIsolated.name} seems isolated today. The conversations don't quite include them.`,
+      `You'd say ${mostIsolated.name} is on the outside of every circle right now — at least the visible ones.`,
+      `${mostIsolated.name} has been on the edges of camp life. Whether by choice or by drift, they're alone in the crowd.`,
+    ])});
+  }
+
+  // 5. Forming-bonds count signal — how much pair-energy is locking in.
+  if (strongBonds >= 2) {
+    candidates.push({ weight: 3 + strongBonds, text: pickFrom([
+      `It looks like a few real bonds have formed already. The pre-aligned have started to find each other.`,
+      `You'd say at least a couple of pairs are locked in. The shape of the early game is settling.`,
+    ])});
+  }
+  if (strongRifts >= 2) {
+    candidates.push({ weight: 3 + strongRifts, text: pickFrom([
+      `There are multiple grudges simmering at once. Whoever can ride the right one will own the next vote.`,
+      `The camp has more than one open feud beneath the surface. You can feel the lines being drawn.`,
+    ])});
+  }
+
+  // ── Quality and noise ────────────────────────────────────────────────────
+  // Player social shapes how many reads they get and how clean they are.
+  // Chaos shapes how often a "noise" line replaces a real read.
+  const social = player.social ?? 5;
+
+  // Base count: 2 reads, +1 if social ≥ 7, −1 if social ≤ 3 but never below 1.
+  let count = 2;
+  if (social >= 7) count++;
+  if (social <= 3) count = Math.max(1, count - 1);
+
+  // Chaos noise: each picked line has a chance of being downgraded to a
+  // generic "you couldn't quite parse" hedge. Higher chaos and lower social
+  // both raise this chance.
+  const noiseChance = Math.min(0.5, Math.max(0, (chaos - 2) * 0.10) + (5 - social) * 0.03);
+
+  // Pick lines: weighted-random without replacement so we don't repeat.
+  const pool = [...candidates];
+  const lines = [];
+  for (let i = 0; i < count && pool.length > 0; i++) {
+    const total = pool.reduce((s, c) => s + c.weight, 0);
+    let roll = Math.random() * total;
+    let chosenIdx = 0;
+    for (let k = 0; k < pool.length; k++) {
+      if ((roll -= pool[k].weight) <= 0) { chosenIdx = k; break; }
+    }
+    let text = pool[chosenIdx].text;
+    if (Math.random() < noiseChance) {
+      text = pickFrom([
+        `Something was happening today, but you couldn't quite parse it. Too much movement at once.`,
+        `You felt a shift in the room and couldn't put your finger on it. The signal was buried under the noise.`,
+        `There was a current under everything today. Whatever it was, you didn't catch it cleanly.`,
+      ]);
+    }
+    lines.push(text);
+    pool.splice(chosenIdx, 1);
+  }
+
+  if (lines.length === 0) {
+    return { feedback: pickFrom([
+      `You took a long beat to read the room. It read back as nothing in particular — which is itself a finding.`,
+      `Nothing jumped out today. The camp was the camp. File it away.`,
+    ]), hint: null };
+  }
+
+  return { feedback: lines.join(" "), hint: null };
+}
+
 // OBSERVE A PLAYER — targeted observation of one tribemate's social position
 // (v5.4, new).
 //
@@ -1552,6 +1797,16 @@ function actionObservePair(state, player, tribemates, target) {
         `${target.name} lights up around ${topAlly.name}. It's not subtle once you're looking for it.`,
       ]),
     });
+  } else if (topAlly && topRel >= 4) {
+    // v5.11: hedged mid-tier read — a bond may be forming. Lower confidence.
+    observations.push({
+      magnitude: topRel,
+      text: pickFrom([
+        `${target.name} and ${topAlly.name} seem to enjoy each other's company. You can't tell if it's strategy or just chemistry.`,
+        `You'd guess ${target.name} likes ${topAlly.name} more than the others — but it's a soft read, not a certainty.`,
+        `${target.name} has been a little more relaxed when ${topAlly.name} is around. Could be the start of something.`,
+      ]),
+    });
   }
 
   if (worstFoe && worstRel <= -5) {
@@ -1561,6 +1816,16 @@ function actionObservePair(state, player, tribemates, target) {
         `${target.name} has been keeping their distance from ${worstFoe.name}. Whatever happened between them, it's not over.`,
         `You watched ${target.name} go out of their way to avoid ${worstFoe.name}. The body language said it all.`,
         `${target.name} and ${worstFoe.name} have a problem. Neither will say it out loud, but they don't pretend to like each other either.`,
+      ]),
+    });
+  } else if (worstFoe && worstRel <= -2) {
+    // v5.11: hedged mid-tier — small friction the player picks up on.
+    observations.push({
+      magnitude: Math.abs(worstRel),
+      text: pickFrom([
+        `${target.name} seemed a little cooler around ${worstFoe.name} than the rest. Hard to say how deep it goes.`,
+        `You noticed a small distance between ${target.name} and ${worstFoe.name}. Not hostility — just not warmth.`,
+        `${target.name} doesn't quite click with ${worstFoe.name}. It's faint, but it's there.`,
       ]),
     });
   }
