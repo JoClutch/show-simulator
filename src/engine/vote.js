@@ -83,149 +83,147 @@ function collectAiVotes(state, tribe, playerVoteTarget, player, candidates) {
 //   socialThreat     : high-social players targeted by strategic voters
 //   challengeThreat  : high-challenge players targeted by strategic voters
 //   noise            : small random element, narrower for high-strategy voters
+// Returns the deterministic vote-target score for a single (voter, candidate)
+// pair — same formula pickVoteTarget uses, minus the noise term. Pure: same
+// inputs always produce the same number, so it's safe to call from analytics
+// surfaces (target list, dev panel) without affecting future random rolls.
+//
+// Lower score = more likely to be voted out by this voter.
+//
+// All factors are documented inline. Modifying scoring rules here updates
+// pickVoteTarget, the dev panel's predicted-target table, and the v5.7
+// end-of-camp target list at once — no drift between analytics and reality.
+function scoreVoteTarget(state, voter, c) {
+  // Relationship: most important factor.
+  const rel = getRelationship(state, voter.id, c.id);
+
+  // Bond protection: strong allies are shielded.
+  const bondProtection = rel >= 15 ? 20 : rel >= 8 ? 8 : 0;
+
+  // Alliance protection: members of a shared alliance protect each other.
+  // Layered ON TOP of bondProtection — alliances and friendships compound.
+  // Uses the STRONGEST shared alliance (max, not sum) to avoid double-count
+  // when overlapping memberships exist.
+  //   loose alliance (str 4) → +6
+  //   solid alliance (str 7) → +10.5
+  //   tight alliance (str 10)→ +15
+  //
+  // Modulated by the voter's "loyalty factor" (v3.5):
+  //   loyalty = 1 + (social − 5) × 0.05 − (strategy − 5) × 0.07
+  //   clamped to [0.3, 2.0]
+  //
+  // High-social, low-strategy players are rocks — alliance protection
+  // boosted up to ~×1.6. High-strategy, low-social players are flippers —
+  // alliance protection halved to ~×0.5. Balanced 5/5 voters are neutral.
+  const sharedAlliance = getStrongestSharedAlliance(state, voter.id, c.id);
+  const baseAllianceProtection = sharedAlliance ? sharedAlliance.strength * 1.5 : 0;
+  const loyalty = Math.max(0.3, Math.min(2.0,
+    1 + (voter.social - 5) * 0.05 - (voter.strategy - 5) * 0.07
+  ));
+  const allianceProtection = baseAllianceProtection * loyalty;
+
+  // Trust: shifted so trust 3 (baseline) = 0, trust 0 = −4.5, trust 10 = +10.5.
+  const trust       = getTrust(state, voter.id, c.id);
+  const trustFactor = (trust - 3) * 1.5;
+
+  // Suspicion: each point adds −2. Easy target even if relationships are decent.
+  const suspicion = (c.suspicion ?? 0) * 2;
+
+  // Threat: split into social and challenge components.
+  // Strategic voters weigh both more heavily.
+  const socialThreat    = c.social    * (voter.strategy / 15);
+  const challengeThreat = c.challenge * (voter.strategy / 25);
+
+  // v3.7: post-swap, pre-merge cross-tribe dynamics — only fire after a swap
+  // and before merge. Pre-swap they're tautologically zero (everyone on a
+  // tribe shares originalTribe) and post-merge they're not the right model.
+  let crossTribeFactor    = 0;
+  let tribeStrengthFactor = 0;
+
+  if (state.swapped && !state.merged) {
+    const myTribe = state.tribes[voter.tribe] ?? [];
+    const sameOrigCount = myTribe.filter(m =>
+      m.originalTribe === voter.originalTribe
+    ).length;
+    const inMajority = sameOrigCount > myTribe.length / 2;
+    const sameOrigin = voter.originalTribe === c.originalTribe;
+
+    if (sameOrigin) {
+      // Loyalty bonus — protective.
+      let bonus = 5
+                + (voter.social   - 5) * 0.5
+                - (voter.strategy - 5) * 0.5;
+      if (!inMajority) bonus *= 0.5;
+      crossTribeFactor = Math.max(0, bonus);
+    } else {
+      // Outsider penalty — easier target.
+      let penalty = 4
+                  + (voter.strategy - 5) * 0.4
+                  - (voter.social   - 5) * 0.3;
+      if (!inMajority) penalty *= 0.3;
+      crossTribeFactor = -Math.max(0, penalty);
+    }
+
+    // Tribe-strength preservation. Strategic voters (≥6) on a weaker tribe
+    // protect strong members and target weak ones, regardless of original
+    // tribe lines. Avg challenge stat compared to the OTHER tribe.
+    if (voter.strategy >= 6) {
+      const otherLabel = voter.tribe === "A" ? "B" : "A";
+      const otherTribe = state.tribes[otherLabel] ?? [];
+      if (myTribe.length > 0 && otherTribe.length > 0) {
+        const myAvg    = myTribe.reduce((s, m) => s + m.challenge, 0) / myTribe.length;
+        const otherAvg = otherTribe.reduce((s, m) => s + m.challenge, 0) / otherTribe.length;
+        if (myAvg < otherAvg - 0.5) {
+          // We're noticeably weaker. Map c.challenge (1–10, mean 5) to a
+          // ±2.5 swing — high-challenge candidates protected, low targeted.
+          tribeStrengthFactor = (c.challenge - 5) * 0.5;
+        }
+      }
+    }
+  }
+
+  // Idol suspicion: how strongly THIS voter believes c is holding an idol.
+  // Strategic voters (strategy ≥ 6) lean into a flush — a suspected idol
+  // holder is MORE attractive to vote (lower score). Less strategic voters
+  // avoid wasting a vote on someone who'll likely play it (higher score).
+  //   suspicion 0–2 (unaware)   : no effect
+  //   suspicion 3–6 (suspect)   : strategic ±2 swing
+  //   suspicion 7–10 (confident): strategic flush −4, non-strategic avoid +6
+  const idolSusp = getIdolSuspicion(state, voter.id, c.id);
+  let idolFactor = 0;
+  if (idolSusp >= 7) {
+    idolFactor = voter.strategy >= 6 ? -4 : +6;
+  } else if (idolSusp >= 3) {
+    idolFactor = voter.strategy >= 6 ? -2 : +3;
+  }
+
+  return rel + bondProtection + allianceProtection + trustFactor
+       - suspicion - socialThreat - challengeThreat
+       + idolFactor
+       + crossTribeFactor + tribeStrengthFactor;
+}
+
+// pickVoteTarget — returns the contestant the given voter would vote for
+// at tribal council. Calls scoreVoteTarget for the deterministic component,
+// then layers strategy-scaled noise so high-strategy voters are more
+// predictable than low-strategy ones.
 function pickVoteTarget(state, voter, tribe) {
   const others = tribe.filter(c => c.id !== voter.id);
 
   const scored = others.map(c => {
-    // Relationship: most important factor.
-    const rel = getRelationship(state, voter.id, c.id);
+    const baseScore = scoreVoteTarget(state, voter, c);
 
-    // Bond protection: strong allies are shielded.
-    const bondProtection = rel >= 15 ? 20 : rel >= 8 ? 8 : 0;
-
-    // Alliance protection: members of a shared alliance protect each other.
-    // Layered ON TOP of bondProtection — alliances and friendships compound.
-    // Uses the STRONGEST shared alliance (max, not sum) to avoid double-count
-    // when overlapping memberships exist.
-    //   loose alliance (str 4) → +6
-    //   solid alliance (str 7) → +10.5
-    //   tight alliance (str 10)→ +15
-    //
-    // Modulated by the voter's "loyalty factor" (v3.5):
-    //   loyalty = 1 + (social − 5) × 0.05 − (strategy − 5) × 0.07
-    //   clamped to [0.3, 2.0]
-    //
-    // High-social, low-strategy players are rocks — alliance protection
-    // boosted up to ~×1.6. High-strategy, low-social players are flippers —
-    // alliance protection halved to ~×0.5. Balanced 5/5 voters are neutral.
-    const sharedAlliance = getStrongestSharedAlliance(state, voter.id, c.id);
-    const baseAllianceProtection = sharedAlliance ? sharedAlliance.strength * 1.5 : 0;
-    const loyalty = Math.max(0.3, Math.min(2.0,
-      1 + (voter.social - 5) * 0.05 - (voter.strategy - 5) * 0.07
-    ));
-    const allianceProtection = baseAllianceProtection * loyalty;
-
-    // Trust: shifted so trust 3 (baseline) = 0, trust 0 = −4.5, trust 10 = +10.5.
-    const trust       = getTrust(state, voter.id, c.id);
-    const trustFactor = (trust - 3) * 1.5;
-
-    // Suspicion: each point adds −2. Easy target even if relationships are decent.
-    const suspicion = (c.suspicion ?? 0) * 2;
-
-    // Threat: split into social and challenge components.
-    // Strategic voters weigh both more heavily.
-    const socialThreat    = c.social    * (voter.strategy / 15);
-    const challengeThreat = c.challenge * (voter.strategy / 25);
-
-    // ── v3.7: post-swap, pre-merge cross-tribe dynamics ───────────────────
-    // Two factors only matter after a tribe swap and before the merge.
-    // Pre-swap they're tautologically zero (everyone on a tribe shares
-    // originalTribe) and post-merge they're not the right model.
-    let crossTribeFactor   = 0;
-    let tribeStrengthFactor = 0;
-
-    if (state.swapped && !state.merged) {
-      // Cross-tribe loyalty / outsider-targeting factor.
-      // Voters protect contestants from their original tribe and find members
-      // of the OTHER original tribe slightly easier targets — modulated by
-      // social/strategy stats and whether the voter is in the new-tribe
-      // majority of their original tribe.
-      const myTribe = state.tribes[voter.tribe] ?? [];
-      const sameOrigCount = myTribe.filter(m =>
-        m.originalTribe === voter.originalTribe
-      ).length;
-      const inMajority = sameOrigCount > myTribe.length / 2;
-      const sameOrigin = voter.originalTribe === c.originalTribe;
-
-      if (sameOrigin) {
-        // Loyalty bonus — protective.
-        //   base 5
-        //   +0.5 per social point above 5  (loyal social rocks)
-        //   −0.5 per strategy point above 5 (strategic flippers care less)
-        //   ×0.5 if outnumbered on the new tribe (less leverage to defend)
-        let bonus = 5
-                  + (voter.social   - 5) * 0.5
-                  - (voter.strategy - 5) * 0.5;
-        if (!inMajority) bonus *= 0.5;
-        crossTribeFactor = Math.max(0, bonus);
-      } else {
-        // Outsider penalty — easier target.
-        //   base 4
-        //   +0.4 per strategy point above 5 (strategic targeting)
-        //   −0.3 per social point above 5   (social = less harsh)
-        //   ×0.3 if outnumbered (can't push the agenda when you don't have numbers)
-        let penalty = 4
-                    + (voter.strategy - 5) * 0.4
-                    - (voter.social   - 5) * 0.3;
-        if (!inMajority) penalty *= 0.3;
-        crossTribeFactor = -Math.max(0, penalty);
-      }
-
-      // Tribe-strength preservation. Strategic voters (≥6) on a weaker tribe
-      // protect strong members and target weak ones, regardless of original
-      // tribe lines. Avg challenge stat compared to the OTHER tribe.
-      if (voter.strategy >= 6) {
-        const otherLabel = voter.tribe === "A" ? "B" : "A";
-        const otherTribe = state.tribes[otherLabel] ?? [];
-        if (myTribe.length > 0 && otherTribe.length > 0) {
-          const myAvg    = myTribe.reduce((s, m) => s + m.challenge, 0) / myTribe.length;
-          const otherAvg = otherTribe.reduce((s, m) => s + m.challenge, 0) / otherTribe.length;
-          if (myAvg < otherAvg - 0.5) {
-            // We're noticeably weaker. Map c.challenge (1–10, mean 5) to a
-            // ±2.5 swing — high-challenge candidates protected, low targeted.
-            tribeStrengthFactor = (c.challenge - 5) * 0.5;
-          }
-        }
-      }
-    }
-
-    // Idol suspicion: how strongly THIS voter believes c is holding an idol.
-    // Strategic voters (strategy ≥ 6) lean into a flush — a suspected idol
-    // holder is MORE attractive to vote (lower score). Less strategic voters
-    // avoid wasting a vote on someone who'll likely play it (higher score).
-    //
-    //   suspicion 0–2 (unaware)  : no effect
-    //   suspicion 3–6 (suspect)  : strategic ±2 swing
-    //   suspicion 7–10 (confident): strategic flush −4, non-strategic avoid +6
-    const idolSusp = getIdolSuspicion(state, voter.id, c.id);
-    let idolFactor = 0;
-    if (idolSusp >= 7) {
-      idolFactor = voter.strategy >= 6 ? -4 : +6;
-    } else if (idolSusp >= 3) {
-      idolFactor = voter.strategy >= 6 ? -2 : +3;
-    }
-
-    // Noise: scaled inversely by strategy, then multiplied by DEV_CONFIG override.
-    // Strategy 10 → ±1.5; strategy 1 → ±7.5. Set voteNoiseMultiplier=0 for
-    // fully deterministic votes (useful for tuning AI behaviour).
+    // Noise — strategy 10 → ±1.5; strategy 1 → ±7.5. Set voteNoiseMultiplier=0
+    // for fully deterministic votes (useful for tuning AI behaviour).
     const noiseRange = Math.max(3, (11 - voter.strategy) * 1.5)
                      * (window.DEV_CONFIG?.voteNoiseMultiplier ?? 1);
-    const noise      = (Math.random() - 0.5) * noiseRange;
-
-    const score = rel + bondProtection + allianceProtection + trustFactor
-                - suspicion - socialThreat - challengeThreat
-                + idolFactor
-                + crossTribeFactor + tribeStrengthFactor
-                + noise;
+    const noise = (Math.random() - 0.5) * noiseRange;
+    const score = baseScore + noise;
 
     if (VOTE_DEBUG) {
       console.log(
         `  [SCORE] ${voter.name} → ${c.name}: ` +
-        `rel=${rel.toFixed(1)} bond=+${bondProtection} ally=+${allianceProtection.toFixed(1)} ` +
-        `trust=${trustFactor.toFixed(1)} susp=${(-suspicion).toFixed(1)} ` +
-        `soc=${(-socialThreat).toFixed(1)} chal=${(-challengeThreat).toFixed(1)} ` +
-        `idol=${idolFactor.toFixed(1)} cross=${crossTribeFactor.toFixed(1)} ` +
-        `tribe=${tribeStrengthFactor.toFixed(1)} noise=${noise.toFixed(1)} = ${score.toFixed(1)}`
+        `base=${baseScore.toFixed(1)} noise=${noise.toFixed(1)} = ${score.toFixed(1)}`
       );
     }
 
@@ -239,6 +237,47 @@ function pickVoteTarget(state, voter, tribe) {
   }
 
   return scored[0].contestant;
+}
+
+// ── Top vote targets (v5.7) ─────────────────────────────────────────────────
+//
+// Returns the top N candidates ranked by aggregate vote pressure across all
+// attendees. "Pressure" = average -score from every voter (lower vote-score
+// means more attractive as a target, so negating gives a positive pressure
+// reading where bigger = more in danger).
+//
+// Filters out the immunity holder post-merge — they can't be voted out.
+// Pre-merge there's no immunity holder, so all attendees are valid candidates.
+//
+// Stable: same state always produces the same ranking. The end-of-camp target
+// list relies on this so the player gets a consistent read; if pressure
+// flickered between renders, the list wouldn't feel like a strategic read.
+function getTopVoteTargets(state, attendees, count = 3) {
+  if (!Array.isArray(attendees) || attendees.length < 2) return [];
+
+  const candidates = state.merged
+    ? attendees.filter(c => c.id !== state.immunityHolder)
+    : attendees;
+
+  if (candidates.length === 0) return [];
+
+  const ranked = candidates.map(candidate => {
+    let pressureSum = 0;
+    let voterCount  = 0;
+    for (const voter of attendees) {
+      if (voter.id === candidate.id) continue;
+      pressureSum += -scoreVoteTarget(state, voter, candidate);
+      voterCount++;
+    }
+    return {
+      contestant: candidate,
+      pressure:   voterCount > 0 ? pressureSum / voterCount : 0,
+    };
+  });
+
+  // Sort descending by pressure; take top N.
+  ranked.sort((a, b) => b.pressure - a.pressure);
+  return ranked.slice(0, count);
 }
 
 // ── Tallying ──────────────────────────────────────────────────────────────────

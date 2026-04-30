@@ -477,6 +477,107 @@ button:disabled {
   color: var(--text-dim);
 }
 
+/* ── Camp Life: end-of-camp target list (v5.7) ──────────────────── */
+/* Visible during camp phase 2 when the player is going to tribal. Lists */
+/* the top 3 most-targeted players in alphabetical order. The panel takes */
+/* a warning treatment when the player is among the three. */
+.target-list-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border-mid);
+  border-left: 3px solid #b88545;        /* default — amber edge */
+  border-radius: 5px;
+  padding: 0.7rem 0.95rem 0.6rem;
+  margin-bottom: 0.85rem;
+}
+
+.target-list-panel-danger {
+  border-left-color: var(--red-text);
+  box-shadow: inset 0 0 0 1px rgba(192, 112, 128, 0.12);
+}
+
+.target-list-header {
+  display: flex;
+  align-items: baseline;
+  border-bottom: 1px solid var(--border-dim);
+  padding-bottom: 0.3rem;
+  margin-bottom: 0.4rem;
+}
+
+.target-list-title {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #b88545;                         /* amber title */
+  font-weight: bold;
+}
+
+.target-list-panel-danger .target-list-title {
+  color: var(--red-text);
+}
+
+.target-list-subtitle {
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  font-style: italic;
+  margin-bottom: 0.45rem;
+  line-height: 1.4;
+}
+
+.target-list-panel-danger .target-list-subtitle {
+  color: var(--red-text);
+  font-style: normal;
+  font-weight: bold;
+}
+
+.target-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+  margin-bottom: 0.5rem;
+}
+
+.target-row {
+  display: grid;
+  grid-template-columns: 0.8rem 1fr;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.25rem 0.15rem;
+  font-size: 0.85rem;
+}
+
+.target-row + .target-row {
+  border-top: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.target-row-dot {
+  color: #b88545;
+  font-size: 0.65rem;
+  text-align: center;
+}
+
+.target-list-panel-danger .target-row-dot {
+  color: var(--red-text);
+}
+
+.target-row-name {
+  color: var(--text-primary);
+}
+
+.target-row-you .target-row-name {
+  color: var(--red-text);
+  font-weight: bold;
+}
+
+.target-list-footer {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-style: italic;
+  letter-spacing: 0.02em;
+}
+
 /* ── Camp Life: tribe relationship panel (v5.1) ─────────────────── */
 /* Replaces the old camp-tribemates chip row. Lists tribemates in       */
 /* alphabetical order with a colored tier dot, name, and short label.   */

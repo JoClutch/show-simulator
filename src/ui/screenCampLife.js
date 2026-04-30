@@ -262,6 +262,75 @@ function renderCampLifeScreen(container, state) {
     return escapeHtml(s);
   }
 
+  // ── End-of-camp target list (v5.7) ───────────────────────────────────────
+  //
+  // Renders only during camp phase 2 when the player is going to tribal:
+  //   • Pre-merge: their tribe must be the losing tribe (the one voting tonight)
+  //   • Post-merge: always (every player attends every tribal)
+  //
+  // Top 3 ranked by aggregate vote pressure (getTopVoteTargets), then sorted
+  // alphabetically for display so the ranking determines WHO is on the list
+  // but not who's #1 — keeping it a read, not a spoiler.
+  //
+  // The immunity holder is filtered out by getTopVoteTargets directly, so
+  // post-merge with a winning challenge result the panel shows the three
+  // most-targeted vulnerable players.
+  //
+  // Refreshed inside showActionButtons so the picture updates live as the
+  // player takes camp actions (lobby/talk/etc.) that shift the dynamics.
+  function buildTargetListHTML() {
+    if (state.campPhase !== 2) return "";
+
+    // Pre-merge: only show when the player is heading to tribal.
+    if (!state.merged && getPlayerTribeLabel() !== state.tribalTribe) return "";
+
+    const attendees = state.merged
+      ? state.tribes.merged
+      : state.tribes[state.tribalTribe];
+    if (!attendees || attendees.length < 2) return "";
+
+    const top = getTopVoteTargets(state, attendees, 3);
+    if (top.length === 0) return "";
+
+    // Sort the displayed list alphabetically — the RANK determines membership,
+    // alphabetical order doesn't reveal who's most in danger.
+    const sorted = [...top].sort((a, b) =>
+      a.contestant.name.localeCompare(b.contestant.name)
+    );
+
+    const playerInDanger = sorted.some(t => t.contestant.id === player.id);
+
+    const rows = sorted.map(t => {
+      const c = t.contestant;
+      const isYou = c.id === player.id;
+      return `
+        <li class="target-row${isYou ? " target-row-you" : ""}">
+          <span class="target-row-dot" aria-hidden="true">●</span>
+          <span class="target-row-name">${escapeHtml(c.name)}${isYou ? " (you)" : ""}</span>
+        </li>
+      `;
+    }).join("");
+
+    const headline = playerInDanger
+      ? "You're on the list. Tonight could be the night."
+      : "These three are drawing the most heat.";
+
+    return `
+      <div class="target-list-panel${playerInDanger ? " target-list-panel-danger" : ""}">
+        <div class="target-list-header">
+          <span class="target-list-title">Going Into Tribal</span>
+        </div>
+        <div class="target-list-subtitle">${escapeHtml(headline)}</div>
+        <ul class="target-list">${rows}</ul>
+        <div class="target-list-footer">
+          A read on tribe pressure. Not a guarantee — votes can shift before they're cast.
+        </div>
+      </div>
+    `;
+  }
+
+  const targetListHTML = buildTargetListHTML();
+
   // ── Shell ─────────────────────────────────────────────────────────────────
 
   container.innerHTML = `
@@ -307,6 +376,13 @@ function renderCampLifeScreen(container, state) {
       <div id="camp-relationship-panel" class="camp-relationship-panel">
         ${buildTribePanelHTML()}
       </div>
+
+      <!-- v5.7: end-of-camp target list — visible only during camp phase 2
+           when the player is going to tribal. Populated by buildTargetListHTML
+           and refreshed live in showActionButtons so lobby/talk landings
+           shift the picture in real time. Empty (renders nothing) during
+           phase 1 or when the player isn't going to tribal. -->
+      <div id="target-list-container">${targetListHTML}</div>
 
       <div id="action-area" class="action-area"></div>
 
@@ -385,6 +461,11 @@ function renderCampLifeScreen(container, state) {
     // adjust relationships, so the tier labels need to follow.
     const tribePanel = container.querySelector("#camp-relationship-panel");
     if (tribePanel) tribePanel.innerHTML = buildTribePanelHTML();
+
+    // v5.7: refresh the target list. Lobby/Push-a-vote can shift suspicion;
+    // talk/confide can shift rel/trust; both move the pressure ranking.
+    const targetListContainer = container.querySelector("#target-list-container");
+    if (targetListContainer) targetListContainer.innerHTML = buildTargetListHTML();
 
     // Re-read live idol state for the search button — same reason.
     const currentHoldsScope = getHeldIdols(state, player.id)
