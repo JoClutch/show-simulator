@@ -222,6 +222,222 @@ function executeAction(state, actionId, player, tribemates, target) {
   }
 }
 
+// ── v5.10: Conversation mood + truthfulness model ────────────────────────────
+//
+// Two layered helpers shared by every strategic conversation action. The
+// first picks the FEEL of the exchange (mood); the second picks the QUALITY
+// of any information shared (truthfulness band). They draw on overlapping
+// signals but resolve independently — a "warm" exchange can still produce
+// misleading info, and a "tense" exchange can produce a frustrated truth.
+//
+// Inputs both helpers consider:
+//
+//   • relationship (rel)       — does the target like the player?
+//   • trust                    — does the target rely on the player's word?
+//   • alliance ties            — bound partners share more than acquaintances
+//   • current vote alignment   — if both want the same person out, candor rises
+//   • target.suspicion         — visible-scheming heat the target is feeling
+//   • target's idol-suspicion of the player — paranoia about the player
+//                                              specifically
+//   • player.strategy          — smoother players coax more out of others
+//   • target.strategy          — strategic NPCs hedge more, deceive better
+//   • personality archetype    — light hooks via stat profile (high social =
+//                                more warm/awkward, high strategy = more
+//                                evasive/misleading under pressure)
+//
+// Crucially: candor never produces a deterministic verdict. Even at very high
+// candor scores there's a small chance of deception (long-game players who
+// lie smiling at their closest allies); even at very low candor there's a
+// small chance of an unexpected truth (frustration, slip-ups, oversharing).
+// This is intentional — it's what makes strategic information feel human.
+
+// Computes the shared candor context once per conversation. All callers pass
+// the same shape into pickConversationMood and pickTruthfulnessBand so the
+// two outputs share consistent inputs.
+function buildConversationContext(state, player, target) {
+  const rel       = getRelationship(state, player.id, target.id);
+  const trust     = getTrust(state, player.id, target.id);
+  const ally      = isInSameAlliance(state, player.id, target.id);
+  const idolSusp  = state.idolSuspicion?.[target.id]?.[player.id] ?? 0;
+  const targetSusp= target.suspicion ?? 0;
+  const playerSusp= player.suspicion ?? 0;
+
+  // Vote alignment — if the target's current camp target matches who the
+  // player has been pressuring (or vice versa), candor rises sharply.
+  // We approximate "who the player wants out" via state.campTargets[player.id]
+  // since players can set vote intent during camp; otherwise fallback to 0.
+  const playerIntent = getCampTargetForContestant(state, player.id);
+  const targetIntent = getCampTargetForContestant(state, target.id);
+  let voteAlignment = 0;
+  if (playerIntent && targetIntent) {
+    if (playerIntent.targetId === targetIntent.targetId) voteAlignment = 3;
+    else                                                  voteAlignment = -1;
+  }
+
+  return {
+    rel, trust, ally, idolSusp, targetSusp, playerSusp,
+    voteAlignment,
+    playerStrategy: player.strategy ?? 5,
+    playerSocial:   player.social   ?? 5,
+    targetStrategy: target.strategy ?? 5,
+    targetSocial:   target.social   ?? 5,
+  };
+}
+
+// Picks the conversation mood. Returns one of:
+//   "productive" | "warm" | "awkward" | "tense" | "suspicious" | "evasive"
+//
+// Weighted-random over signals. No hard thresholds — every mood is at least
+// faintly possible in any conversation, so the player can't fully predict
+// how a given attempt will land.
+function pickConversationMood(state, player, target, ctx) {
+  ctx = ctx || buildConversationContext(state, player, target);
+  const { rel, trust, ally, targetSusp, idolSusp,
+          playerSocial, targetStrategy, voteAlignment } = ctx;
+
+  // Each weight starts with a baseline floor so every mood is reachable.
+  const weights = {
+    productive: 1,
+    warm:       1,
+    awkward:    1,
+    tense:      1,
+    suspicious: 1,
+    evasive:    1,
+  };
+
+  // Positive standing pushes productive/warm.
+  weights.productive += Math.max(0, trust * 0.6) + Math.max(0, rel * 0.15)
+                       + (ally ? 3 : 0) + Math.max(0, voteAlignment);
+  weights.warm       += Math.max(0, rel * 0.25) + (playerSocial * 0.15)
+                       + (ally ? 1.5 : 0);
+
+  // Mid-low rapport without hostility leans awkward.
+  weights.awkward    += Math.max(0, 4 - Math.abs(rel) * 0.3)
+                       + (trust < 2 ? 1.5 : 0);
+
+  // Active hostility leans tense.
+  weights.tense      += Math.max(0, -rel * 0.25) + Math.max(0, -trust * 0.4);
+
+  // Heat on the target → suspicious mood. The target reads the conversation
+  // as part of a wider campaign against them.
+  weights.suspicious += Math.max(0, targetSusp * 0.35) + Math.max(0, idolSusp * 0.25)
+                       + (targetStrategy * 0.05);
+
+  // Strategic targets who don't trust the player pivot to evasive.
+  weights.evasive    += Math.max(0, (targetStrategy - 4) * 0.25)
+                       + Math.max(0, (4 - trust) * 0.35)
+                       + Math.max(0, idolSusp * 0.15);
+
+  // Smooth players (high social) shave a bit off awkward/tense — they keep
+  // the exchange afloat even when the underlying signal is bad.
+  weights.awkward = Math.max(0.2, weights.awkward - playerSocial * 0.08);
+  weights.tense   = Math.max(0.2, weights.tense   - playerSocial * 0.06);
+
+  // Weighted pick.
+  const total = Object.values(weights).reduce((a, b) => a + b, 0);
+  let roll = Math.random() * total;
+  for (const [mood, w] of Object.entries(weights)) {
+    if ((roll -= w) <= 0) return mood;
+  }
+  return "awkward";
+}
+
+// Applies relationship/trust/suspicion side effects from a conversation
+// mood. Strategic actions call this once per resolution. The deltas are
+// small and additive — they layer on top of whatever the action's primary
+// effect was (e.g. the rel bump for being consulted in actionAskVote).
+function applyMoodEffects(state, player, target, mood) {
+  switch (mood) {
+    case "productive":
+      adjustRelationship(state, player.id, target.id, +1);
+      adjustTrust(state, player.id, target.id, +1);
+      break;
+    case "warm":
+      adjustRelationship(state, player.id, target.id, +2);
+      break;
+    case "awkward":
+      // No mechanical effect; the conversation just doesn't go anywhere.
+      break;
+    case "tense":
+      adjustRelationship(state, player.id, target.id, -rand(1, 2));
+      break;
+    case "suspicious":
+      // The target reads the conversation as scheming. Their picture of the
+      // player tightens, not the relationship itself.
+      adjustIdolSuspicion(state, target.id, player.id, +1);
+      adjustSuspicion(state, player.id, +1);
+      break;
+    case "evasive":
+      // Brief social cost — the deflection is read as "they didn't want to
+      // be in this conversation with me", which stings a little.
+      adjustRelationship(state, player.id, target.id, -1);
+      break;
+  }
+}
+
+// Picks a truthfulness band for an information request. Returns one of:
+//   "truthful" | "mostly" | "incomplete" | "vague" | "evasive" |
+//   "misleading" | "false"
+//
+// Computes a candor score from the same context, then maps it to a band
+// with deliberate noise — even high candor can deceive (~12% chance);
+// even low candor occasionally tells the truth (~12% chance).
+function pickTruthfulnessBand(state, player, target, ctx) {
+  ctx = ctx || buildConversationContext(state, player, target);
+  const { rel, trust, ally, idolSusp, targetSusp, playerSusp,
+          voteAlignment, playerStrategy, targetStrategy } = ctx;
+
+  const candor =
+      trust * 1.0
+    + rel  * 0.25
+    + (ally ? 4 : 0)
+    + voteAlignment
+    + playerStrategy * 0.15
+    - targetStrategy * 0.20
+    - idolSusp        * 0.50
+    - targetSusp      * 0.20
+    - playerSusp      * 0.20;
+
+  // Add small jitter so equivalent inputs don't always return the same band.
+  const jitter = (Math.random() - 0.5) * 2;
+  const score  = candor + jitter;
+
+  // Long-game deception flip: ~12% chance the target lies even at high candor.
+  // Models a tribemate who's been close to the player but is privately
+  // lining up a betrayal. Tunable.
+  if (score >= 6 && Math.random() < 0.12) {
+    return Math.random() < 0.5 ? "misleading" : "incomplete";
+  }
+  // Frustrated-truth flip: ~12% chance of an unexpected real disclosure
+  // even at low candor. Slipped tongues, venting, oversharing.
+  if (score < 2 && Math.random() < 0.12) {
+    return Math.random() < 0.5 ? "mostly" : "incomplete";
+  }
+
+  if (score >= 8)  return "truthful";
+  if (score >= 5)  return "mostly";
+  if (score >= 3)  return "incomplete";
+  if (score >= 1)  return "vague";
+  if (score >= -1) return "evasive";
+  if (score >= -3) return "misleading";
+  return "false";
+}
+
+// Short adverb fragment to colour a feedback line based on mood.
+// Caller composes it into the larger feedback string. Keep these short —
+// they prefix or suffix the truth-band line, not replace it.
+function moodFlavor(mood, target) {
+  switch (mood) {
+    case "productive": return `${target.name} leaned in, focused.`;
+    case "warm":       return `${target.name} smiled — the exchange felt easy.`;
+    case "awkward":    return `${target.name} shifted, glanced past you.`;
+    case "tense":      return `${target.name}'s tone went flat.`;
+    case "suspicious": return `${target.name}'s eyes narrowed.`;
+    case "evasive":    return `${target.name} kept finding reasons to look away.`;
+    default:           return "";
+  }
+}
+
 // ── Action implementations ────────────────────────────────────────────────────
 
 // TALK / "Spend time with someone" — relationship builder.
@@ -502,54 +718,103 @@ function actionSearchIdol(state, player, tribemates) {
 //   gap > 5 (divergent) → delta = −rand(1, 3),    −1 extra if lowTrust
 //   trust +1 if delta ≥ 3
 function actionStrategy(state, player, target) {
-  const gap     = Math.abs(player.strategy - target.strategy);
-  const lowTrust = getTrust(state, player.id, target.id) < 3;
+  // v5.10: routes through the shared mood/truth model. Strategy stat gap
+  // still matters — it shapes the underlying relationship change — but the
+  // CONVERSATION TONE comes from the mood model, and any read on how the
+  // target actually sees the game comes from the truth band.
+  const gap = Math.abs((player.strategy ?? 5) - (target.strategy ?? 5));
+
+  const ctx  = buildConversationContext(state, player, target);
+  const mood = pickConversationMood(state, player, target, ctx);
+  const band = pickTruthfulnessBand(state, player, target, ctx);
+
+  // Base relationship delta from strategic alignment. Mood effects layer on
+  // top via applyMoodEffects.
   let delta;
-
-  if (gap <= 2) {
-    delta = rand(2, 5) + (lowTrust ? -1 : 0);
-  } else if (gap <= 5) {
-    delta = rand(0, 2) + (lowTrust ? -1 : 0);
-  } else {
-    delta = -rand(1, 3) + (lowTrust ? -1 : 0);
-  }
-
+  if (gap <= 2)      delta = rand(2, 4);
+  else if (gap <= 5) delta = rand(0, 2);
+  else               delta = -rand(1, 3);
   adjustRelationship(state, player.id, target.id, delta);
-  if (delta >= 3) adjustTrust(state, player.id, target.id, 1);
+  applyMoodEffects(state, player, target, mood);
 
   // Aligned strategy talk among allies tightens the pact;
-  // a sharp disagreement between allies erodes it.
+  // sharp disagreement between allies erodes it.
   if (delta >= 3)      strengthenSharedAlliances(state, player.id, target.id, 0.5);
   else if (delta < 0)  strengthenSharedAlliances(state, player.id, target.id, -0.5);
 
-  if (lowTrust && delta < 1) {
-    return { feedback: pickFrom([
-      `${target.name} listened to your pitch, but their arms were crossed the whole time. Something is off between you two.`,
-      `You tried to open up about the vote with ${target.name}. They nodded along, but it felt guarded. You're not there yet.`,
-    ]), hint: null };
+  const flavor = moodFlavor(mood, target);
+
+  // The "what they shared" half of the line is determined by the truth band.
+  // Strategy talk tends to surface feelings about another player, so we
+  // pick a real person they have a strong feeling about (positive or negative)
+  // and let the band decide how candidly they describe that feeling.
+  const others = (state.tribes?.[target.tribe] || [])
+    .filter(c => c.id !== target.id && c.id !== player.id);
+  let warmest = null, coldest = null, warmRel = -Infinity, coldRel = Infinity;
+  for (const c of others) {
+    const r = getRelationship(state, target.id, c.id);
+    if (r > warmRel) { warmRel = r; warmest = c; }
+    if (r < coldRel) { coldRel = r; coldest = c; }
   }
 
-  if (delta >= 3) {
-    return { feedback: pickFrom([
-      `${target.name} nodded as you talked through the vote. You seem to be on the same page.`,
-      `Your read matched ${target.name}'s exactly. They leaned in. This could be the start of something.`,
-      `${target.name} lit up when you shared your thinking. They'd been waiting for someone to say it.`,
-    ]), hint: null };
-  }
+  // Disclosure picks: real signal, or a decoy for misleading/false.
+  const realPick =
+      coldest && coldRel <= -3 ? { person: coldest, kind: "concern" } :
+      warmest && warmRel >=  5 ? { person: warmest, kind: "ally"    } :
+      null;
+  const decoyPick = warmest && coldest
+    ? { person: pickFrom([warmest, coldest]), kind: "concern" }
+    : null;
 
-  if (delta >= 0) {
-    return { feedback: pickFrom([
-      `${target.name} listened to your pitch but stayed noncommittal. Hard to read.`,
-      `The strategy talk with ${target.name} was polite but vague. They didn't bite.`,
-      `${target.name} nodded along. You couldn't tell if they agreed or were just being polite.`,
-    ]), hint: null };
-  }
+  switch (band) {
+    case "truthful":
+      if (realPick) {
+        const verb = realPick.kind === "concern"
+          ? `wary of ${realPick.person.name}`
+          : `tight with ${realPick.person.name}`;
+        return { feedback: `${flavor} "Look, I'll just say it — I'm ${verb}. That's where my head is."`,
+                 hint: realPick.person.name };
+      }
+      return { feedback: `${flavor} "Nothing's clicking yet. I'm reading the room and waiting for someone to make a move."`,
+               hint: null };
 
-  return { feedback: pickFrom([
-    `${target.name} didn't seem to like your read. They changed the subject quickly.`,
-    `You pitched your plan to ${target.name}. They smiled and said nothing. That's a bad sign.`,
-    `${target.name} pushed back. You see the game differently. That gap might matter later.`,
-  ]), hint: null };
+    case "mostly":
+      if (realPick) {
+        return { feedback: `${flavor} "${realPick.person.name} is on my mind. I won't say more than that, but you can read between the lines."`,
+                 hint: realPick.person.name };
+      }
+      return { feedback: `${flavor} "I've got reads. I'm just not ready to share all of them."`,
+               hint: null };
+
+    case "incomplete":
+      return { feedback: `${flavor} "There's people I'm watching. I'd rather hear yours first, honestly."`,
+               hint: null };
+
+    case "vague":
+      return { feedback: `${flavor} "I think we're all just feeling it out, right? It's still early."`,
+               hint: null };
+
+    case "evasive":
+      return { feedback: `${flavor} ${target.name} steered the conversation toward camp logistics within thirty seconds.`,
+               hint: null };
+
+    case "misleading":
+      if (decoyPick) {
+        return { feedback: `${flavor} "Honestly, I'm worried about ${decoyPick.person.name}." It came out a little too clean.`,
+                 hint: decoyPick.person.name };
+      }
+      return { feedback: `${flavor} "Honestly? I think we're solid." You weren't sure that was the read you'd been getting from them.`,
+               hint: null };
+
+    case "false":
+    default:
+      if (decoyPick) {
+        return { feedback: `${flavor} "${decoyPick.person.name}. They've been working an angle." Their face gave away absolutely nothing.`,
+                 hint: decoyPick.person.name };
+      }
+      return { feedback: `${flavor} "I think the tribe is in a great place," they said. The smile didn't reach their eyes.`,
+               hint: null };
+  }
 }
 
 // ASK WHO THEY WANT OUT — intel action gated on trust.
@@ -567,12 +832,9 @@ function actionStrategy(state, player, target) {
 // Formula (finding target's real preference): compare getRelationship scores
 //   among all other tribemates; the person with the lowest score is their target.
 function actionAskVote(state, player, target, tribemates) {
-  // Effective trust gets a +2 bump if the player and target share an alliance.
-  // Allies don't keep secrets from each other; the same question that lands
-  // as a guarded answer with a stranger becomes candid with a partner.
-  const baseTrust  = getTrust(state, player.id, target.id);
-  const allianceUp = isInSameAlliance(state, player.id, target.id) ? 2 : 0;
-  const trust      = Math.min(10, baseTrust + allianceUp);
+  // v5.10: every conversation now resolves through a shared mood + truth-
+  // band model rather than fixed trust thresholds. The player can ASK anyone
+  // anything; the answer's quality and tone is what varies, never access.
 
   // Everyone gets a small boost for being consulted.
   adjustRelationship(state, player.id, target.id, rand(1, 2));
@@ -591,55 +853,66 @@ function actionAskVote(state, player, target, tribemates) {
     }
   }
 
+  // Pick mood and truthfulness band off the same context.
+  const ctx   = buildConversationContext(state, player, target);
+  const mood  = pickConversationMood(state, player, target, ctx);
+  const band  = pickTruthfulnessBand(state, player, target, ctx);
+  applyMoodEffects(state, player, target, mood);
+
+  // Pick a decoy for misleading/false bands.
+  const decoyPool = others.filter(o => !realTarget || o.id !== realTarget.id);
+  const decoy     = decoyPool.length > 0 ? pickFrom(decoyPool) : null;
+
+  const flavor = moodFlavor(mood, target);
+
+  // No real target available? Fall through to a vague non-answer regardless
+  // of band — there's literally nothing to disclose.
   if (!realTarget) {
     return {
-      feedback: `${target.name} shrugged. "I'm keeping my options open," they said.`,
+      feedback: `${flavor} "I'm keeping my options open," ${target.name} said. "Too early to commit."`,
       hint: null,
     };
   }
 
-  // Trust 0–2: distrustful — may mislead.
-  if (trust <= 2) {
-    const mislead = Math.random() < 0.50;
-    if (mislead) {
-      // Pick a random decoy that isn't the real target or the player.
-      const decoys = others.filter(o => o.id !== realTarget.id);
-      const decoy  = decoys.length > 0 ? pickFrom(decoys) : realTarget;
-      return {
-        feedback: pickFrom([
-          `${target.name} paused, then said, "Honestly? I've been thinking about ${decoy.name}." Something in their tone felt off.`,
-          `"${decoy.name} is the one I'm worried about," ${target.name} said flatly. But their eyes didn't quite match their words.`,
-        ]),
-        hint: decoy.name,
-      };
-    }
-    return {
-      feedback: `${target.name} gave you a long look. "I haven't really decided yet," they said. You're not sure you believe them.`,
-      hint: null,
-    };
-  }
+  // Compose answer based on truth band.
+  switch (band) {
+    case "truthful":
+      return { feedback: `${flavor} "${realTarget.name}. I've already talked to a couple people. Same page."`,
+               hint: realTarget.name };
 
-  // Trust 3–5: guarded — honest but hedged.
-  if (trust <= 5) {
-    return {
-      feedback: pickFrom([
-        `${target.name} glanced around camp, then said, "I've been thinking about ${realTarget.name} — but I'm not locked in yet."`,
-        `"Honestly?" ${target.name} said. "I've got my eye on ${realTarget.name}. Something feels off." They left it there.`,
-        `${target.name} paused before answering. "I just don't fully trust ${realTarget.name}," they said quietly.`,
-      ]),
-      hint: realTarget.name,
-    };
-  }
+    case "mostly":
+      return { feedback: `${flavor} "Probably ${realTarget.name}. I've got reasons, but I want to keep it loose for now."`,
+               hint: realTarget.name };
 
-  // Trust 6+: open — direct and candid.
-  return {
-    feedback: pickFrom([
-      `${target.name} leaned in and spoke plainly. "${realTarget.name}. I've already talked to a couple people. We're on the same page."`,
-      `"You want the truth?" ${target.name} said. "It's ${realTarget.name}. No question." They meant it.`,
-      `${target.name} didn't hesitate. "${realTarget.name} is the one. I'll fill you in on everything later."`,
-    ]),
-    hint: realTarget.name,
-  };
+    case "incomplete":
+      return { feedback: `${flavor} "I've got someone in mind, but I'd rather not put a name on it yet — not until I know where you're at."`,
+               hint: null };
+
+    case "vague":
+      return { feedback: `${flavor} "Honestly? I'm watching a few people. Nobody locked in."`,
+               hint: null };
+
+    case "evasive":
+      return { feedback: `${flavor} ${target.name} changed the subject before you could finish the question.`,
+               hint: null };
+
+    case "misleading":
+      if (decoy) {
+        return { feedback: `${flavor} "I'm leaning ${decoy.name}, if I'm being honest." There was a beat of silence afterward that felt rehearsed.`,
+                 hint: decoy.name };
+      }
+      return { feedback: `${flavor} "I really haven't decided," they said. You weren't sure you believed them.`,
+               hint: null };
+
+    case "false":
+    default:
+      if (decoy) {
+        return { feedback: `${flavor} "${decoy.name}. No question." They held your gaze a second too long.`,
+                 hint: decoy.name };
+      }
+      return { feedback: `${flavor} "I haven't decided yet," they said, flat as a closed door.`,
+               hint: null };
+  }
 }
 
 // CONFIDE — deep trust builder.
@@ -1354,109 +1627,90 @@ function actionCompareNotes(state, player, tribemates, partner) {
     };
   }
 
-  const trust = getTrust(state, player.id, partner.id);
-
-  // Mutual trust + rel bump for collaborating, regardless of intel quality.
+  // v5.10: routes through the shared mood/truth model. Mutual trust + rel
+  // bump for collaborating still applies regardless of intel quality.
   adjustTrust(state, player.id, partner.id, 1);
   adjustRelationship(state, player.id, partner.id, 1);
 
-  // ── Trust 0–2: mislead or dodge ──────────────────────────────────────
-  if (trust <= 2) {
-    if (Math.random() < 0.5) {
-      // Misleading info — claim a connection that's actually false. We pick
-      // two real tribemates whose actual rel is mediocre or negative; the
-      // partner asserts they're "tight." The player can't tell it's wrong.
-      const subject = pickFrom(others);
-      const subjectOthers = others.filter(c => c.id !== subject.id);
-      if (subjectOthers.length === 0) {
-        return {
-          feedback: `${partner.name} kept their cards close. "I don't really know much," they said. You weren't sure if they meant it.`,
-          hint: null,
-        };
-      }
-      // Prefer a target whose actual rel with subject is LOW (so the lie is
-      // genuinely misleading rather than coincidentally true).
-      const sortedByLowRel = [...subjectOthers].sort((a, b) =>
-        getRelationship(state, subject.id, a.id) - getRelationship(state, subject.id, b.id)
-      );
-      const supposedAlly = sortedByLowRel[0];
-      return { feedback: pickFrom([
-        `${partner.name} told you ${subject.name} has been working with ${supposedAlly.name}. You wondered if they actually believed it — or wanted you to.`,
-        `"Watch ${subject.name}," ${partner.name} said. "They're tighter with ${supposedAlly.name} than people think." Their delivery felt rehearsed.`,
-        `${partner.name} dropped a name. "${subject.name} and ${supposedAlly.name} — that's a thing." You couldn't tell if it was a real read or a planted seed.`,
-      ]), hint: null };
-    }
-    return {
-      feedback: pickFrom([
-        `${partner.name} hedged on everything. "I haven't really been paying attention," they said. You doubted that, but pressing felt risky.`,
-        `${partner.name} kept their answers vague — "I don't know, they all seem fine." You didn't believe them. They didn't seem to mind.`,
-      ]),
-      hint: null,
-    };
-  }
+  const ctx  = buildConversationContext(state, player, partner);
+  const mood = pickConversationMood(state, player, partner, ctx);
+  const band = pickTruthfulnessBand(state, player, partner, ctx);
+  applyMoodEffects(state, player, partner, mood);
 
-  // ── Trust 3–5: vague but honest ─────────────────────────────────────
-  if (trust <= 5) {
-    // Pick someone real and surface a real (but understated) signal.
-    const subject = pickFrom(others);
-    const subjectOthers = others.filter(c => c.id !== subject.id);
-    let topAlly = null, topRel = -Infinity;
-    for (const c of subjectOthers) {
-      const rel = getRelationship(state, subject.id, c.id);
-      if (rel > topRel) { topRel = rel; topAlly = c; }
-    }
-    if (!topAlly || topRel < 5) {
-      return {
-        feedback: `${partner.name} shrugged. "Honestly? Nobody's clicking that hard yet. It's still early days." Probably true.`,
-        hint: null,
-      };
-    }
-    return { feedback: pickFrom([
-      `${partner.name} mentioned that ${subject.name} and ${topAlly.name} seem to be getting along. "I don't know how serious it is," they said.`,
-      `"Honestly?" ${partner.name} said. "${subject.name} and ${topAlly.name} are tighter than most people realize." They left it there.`,
-      `${partner.name} hedged a little but gave you something: "${subject.name} and ${topAlly.name} talk more than they let on."`,
-    ]), hint: null };
-  }
+  const flavor = moodFlavor(mood, partner);
 
-  // ── Trust 6+: candid, specific ──────────────────────────────────────
-  // Find the most useful real observation among others' relationships.
-  // Prefer revealing a strong bond (rel ≥ 8); fall back to a strong grudge
-  // (rel ≤ −5); fall back to a generic candid take.
+  // Pick a subject and find the strongest real signal about them
+  // (top ally OR worst foe, whichever is more pronounced).
   const subject = pickFrom(others);
   const subjectOthers = others.filter(c => c.id !== subject.id);
-  let topAlly = null,   topRel   = -Infinity;
-  let worstFoe = null,  worstRel =  Infinity;
+  let topAlly = null, topRel = -Infinity, worstFoe = null, worstRel = Infinity;
   for (const c of subjectOthers) {
-    const rel = getRelationship(state, subject.id, c.id);
-    if (rel > topRel)   { topRel   = rel; topAlly  = c; }
-    if (rel < worstRel) { worstRel = rel; worstFoe = c; }
+    const r = getRelationship(state, subject.id, c.id);
+    if (r > topRel)   { topRel   = r; topAlly  = c; }
+    if (r < worstRel) { worstRel = r; worstFoe = c; }
+  }
+  const realBond  = topAlly  && topRel   >=  5 ? topAlly  : null;
+  const realGrudge= worstFoe && worstRel <= -5 ? worstFoe : null;
+  const realPick  = realBond || realGrudge;
+  // Decoy: someone the subject is actually middling with.
+  let decoyPick = null;
+  if (subjectOthers.length > 0) {
+    const middling = subjectOthers
+      .map(c => ({ c, r: getRelationship(state, subject.id, c.id) }))
+      .sort((a, b) => Math.abs(a.r) - Math.abs(b.r));
+    if (middling.length > 0) decoyPick = middling[0].c;
   }
 
-  if (topAlly && topRel >= 8) {
-    return {
-      feedback: pickFrom([
-        `${partner.name} confirmed it: "${subject.name} and ${topAlly.name} are running together. They've been talking nonstop." Direct and unhedged.`,
-        `"You probably already know this," ${partner.name} said, "but ${subject.name} and ${topAlly.name} are the real pair to watch."`,
-      ]),
-      hint: null,
-    };
+  switch (band) {
+    case "truthful":
+      if (realBond) {
+        return { feedback: `${flavor} "${subject.name} and ${realBond.name} are running together. Watch them."`,
+                 hint: null };
+      }
+      if (realGrudge) {
+        return { feedback: `${flavor} "${subject.name} can't stand ${realGrudge.name}. There's a vote brewing there."`,
+                 hint: null };
+      }
+      return { feedback: `${flavor} "${subject.name} hasn't shown me anything yet. That itself is data."`,
+               hint: null };
+
+    case "mostly":
+      if (realPick) {
+        return { feedback: `${flavor} "${subject.name} and ${realPick.name} — there's something there. I won't go further than that."`,
+                 hint: null };
+      }
+      return { feedback: `${flavor} "${subject.name} is being careful. Real careful."`,
+               hint: null };
+
+    case "incomplete":
+      return { feedback: `${flavor} "I've got reads on ${subject.name}, but I'd rather not put it all on the table yet."`,
+               hint: null };
+
+    case "vague":
+      return { feedback: `${flavor} "${subject.name}? I haven't been paying close attention to be honest."`,
+               hint: null };
+
+    case "evasive":
+      return { feedback: `${flavor} ${partner.name} pivoted to small talk. The window closed.`,
+               hint: null };
+
+    case "misleading":
+      if (decoyPick) {
+        return { feedback: `${flavor} "${subject.name} and ${decoyPick.name} are tighter than people think." It sounded plausible. You filed it without certainty.`,
+                 hint: null };
+      }
+      return { feedback: `${flavor} "Honestly, I think ${subject.name} is locked in with the majority." You weren't sure they meant it.`,
+               hint: null };
+
+    case "false":
+    default:
+      if (decoyPick) {
+        return { feedback: `${flavor} "${subject.name} told me they're targeting ${decoyPick.name}. Take that for what it's worth." Their delivery was rehearsed.`,
+                 hint: null };
+      }
+      return { feedback: `${flavor} "${subject.name} is the most loyal person here," they said. It landed wrong.`,
+               hint: null };
   }
-  if (worstFoe && worstRel <= -5) {
-    return {
-      feedback: pickFrom([
-        `${partner.name} was direct: "${subject.name} and ${worstFoe.name} can't stand each other. There's a vote brewing there."`,
-        `"Watch ${subject.name} around ${worstFoe.name}," ${partner.name} said. "Something's coming — they're not hiding it well."`,
-      ]),
-      hint: null,
-    };
-  }
-  return {
-    feedback: pickFrom([
-      `${partner.name} shared what they'd seen, candid as ever. "${subject.name} is being careful — neutral with everyone, real with no one. That itself is data."`,
-      `"Honestly?" ${partner.name} said. "${subject.name} hasn't shown me anything. That's either great gameplay or they're lost." Useful in its own way.`,
-    ]),
-    hint: null,
-  };
 }
 
 // ── Camp intent / target tracking (v5 foundation) ────────────────────────────
