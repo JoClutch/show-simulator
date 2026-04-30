@@ -474,6 +474,266 @@ function getSocialCapital(state, contestantId) {
   return Math.max(0, Math.min(10, capital));
 }
 
+// ── v5.17: Rumors / information spread ───────────────────────────────────────
+//
+// Camp life is socially loud. People talk about each other when no one is in
+// the room. This system models that — imperfect information moving through
+// the tribe via close ties, picking up distortion as it goes, occasionally
+// being slanted on purpose.
+//
+// ── Rumor kinds ───────────────────────────────────────────────────────────
+//   targeting   — subject is gunning for object
+//   suspicious  — subject is acting shady (idol search, scrambling)
+//   alliance    — subject and object may have a pact
+//   closeness   — subject and object seem close
+//
+// ── Lifecycle ─────────────────────────────────────────────────────────────
+// 1. Origin events (lobby, idol search, alliance formation, strong bond)
+//    seed rumors via seedRumor(). The seeder is added to knownBy with high
+//    confidence and zero distortion.
+// 2. Each round, spreadRumors() walks every rumor and every knower; close
+//    contacts of the knower may pick it up at degraded confidence and
+//    increased distortion.
+// 3. A holder's knowledge can be slanted at spread-time if they're sneaky
+//    or schemer-leaning — the rumor's object gets swapped to a different
+//    tribemate so the listener walks away with a strategically warped read.
+// 4. applyRumorRoundEffects() applies small per-round behavioral consequences
+//    based on what each contestant currently believes (extra suspicion
+//    memory, light rel drift toward a perceived antagonist, etc.).
+//
+// Doesn't replace any existing system — relationships, alliances, suspicion
+// memory, idol suspicion all keep their own logic. Rumors layer on top as
+// the social conversation that flows between everything else.
+
+let _rumorIdCounter = 1;
+
+function _nextRumorId() {
+  return "rmr-" + (_rumorIdCounter++);
+}
+
+// Find or create a rumor matching kind+subject+object so origin events
+// don't pile duplicate rumors when an action repeats.
+function _findRumor(state, kind, subjectId, objectId) {
+  for (const r of state.rumors ?? []) {
+    if (r.kind === kind && r.subjectId === subjectId && (r.objectId ?? null) === (objectId ?? null)) {
+      return r;
+    }
+  }
+  return null;
+}
+
+function seedRumor(state, kind, subjectId, objectId, originatorId, accuracy = 1.0) {
+  if (!state.rumors) state.rumors = [];
+  let rumor = _findRumor(state, kind, subjectId, objectId);
+  if (!rumor) {
+    rumor = {
+      id:            _nextRumorId(),
+      kind,
+      subjectId,
+      objectId:      objectId ?? null,
+      createdRound:  state.round ?? 0,
+      originatorId,
+      accuracy,
+      knownBy:       {},
+    };
+    state.rumors.push(rumor);
+  }
+  // Add originator to knownBy at full confidence, no distortion.
+  if (!rumor.knownBy[originatorId]) {
+    rumor.knownBy[originatorId] = {
+      confidence:      1.0,
+      distortion:      0,
+      fromId:          null,
+      learnedRound:    state.round ?? 0,
+      slantedObjectId: null,
+    };
+  }
+  return rumor;
+}
+
+// Returns all rumors known by a contestant, with their per-knower entry.
+function getRumorsKnownBy(state, contestantId) {
+  const out = [];
+  for (const r of state.rumors ?? []) {
+    const k = r.knownBy?.[contestantId];
+    if (k) out.push({ rumor: r, knowledge: k });
+  }
+  return out;
+}
+
+// Walks every rumor, every knower, and may transmit to close contacts.
+// Called once per camp phase from main.js (post-AI, pre-tribal) so the
+// social conversation has time to move overnight.
+//
+// Spread chance per (knower → listener) pair:
+//   base    : 0.18
+//   social  : +0.02 × knower.social
+//   alliance: +0.10 × tier weight (core 1.0, loose 0.6, weakened 0.3)
+//   archetype: +0.06 if knower is socialButterfly; -0.04 if paranoid
+//   close-rel/trust gate: rel ≥ 5 AND trust ≥ 4 OR shared alliance
+function spreadRumors(state, pool) {
+  if (!state.rumors || state.rumors.length === 0) return;
+  if (!Array.isArray(pool) || pool.length < 2) return;
+
+  // Snapshot — we mutate knownBy during iteration but only with NEW entries.
+  // Iterate the list of rumors as captured at the start of the pass.
+  const rumors = [...state.rumors];
+
+  for (const rumor of rumors) {
+    if (rumor.dissolved) continue;
+    // Snapshot current knowers to avoid chain-spreading within one pass.
+    const knowerEntries = Object.entries(rumor.knownBy);
+    for (const [knowerId, knowerKnowledge] of knowerEntries) {
+      const knower = pool.find(c => c.id === knowerId);
+      if (!knower) continue;
+
+      for (const listener of pool) {
+        if (listener.id === knower.id) continue;
+        if (rumor.knownBy[listener.id]) continue;   // already knows
+        // Don't spread the rumor TO its subject (they wouldn't be told
+        // their own scheme is being whispered about) unless they're the
+        // object — see below.
+        if (rumor.kind === "suspicious" && listener.id === rumor.subjectId) continue;
+
+        const rel   = getRelationship(state, knower.id, listener.id);
+        const trust = getTrust(state, knower.id, listener.id);
+        const allyTier = (typeof getSharedAllianceTier === "function")
+          ? getSharedAllianceTier(state, knower.id, listener.id)
+          : null;
+        const closeFriend = rel >= 5 && trust >= 4;
+        if (!allyTier && !closeFriend) continue;
+
+        // Compose spread chance.
+        let chance = 0.18 + (knower.social ?? 5) * 0.02;
+        const allyBonus = allyTier === "core" ? 0.10 : allyTier === "loose" ? 0.06 : allyTier === "weakened" ? 0.03 : 0;
+        chance += allyBonus;
+        if (knower.archetype === "socialButterfly") chance += 0.06;
+        if (knower.archetype === "paranoid")        chance -= 0.04;
+        chance = Math.max(0.05, Math.min(0.55, chance));
+
+        if (Math.random() >= chance) continue;
+
+        // Compute the listener's version of the rumor.
+        // Confidence degrades on each hop: knower's confidence × (0.7 to 1.0)
+        // depending on trust. Trusted source = less degradation.
+        const trustQ      = Math.max(0, Math.min(1, trust / 10));
+        const confDecay   = 0.7 + 0.25 * trustQ;
+        let newConfidence = knowerKnowledge.confidence * confDecay;
+        // Distortion grows; sneaky knowers add extra warp.
+        let newDistortion = Math.min(1, knowerKnowledge.distortion + 0.05 + (1 - trustQ) * 0.06);
+        if (knower.archetype === "sneaky")   newDistortion = Math.min(1, newDistortion + 0.10);
+        if (knower.archetype === "paranoid") newDistortion = Math.min(1, newDistortion + 0.05);
+        if (knower.archetype === "loyal")    newDistortion = Math.max(0, newDistortion - 0.04);
+
+        // Slant chance: knower with high distortion + sneaky/schemer-ish
+        // tendency may swap the object to a third party. Only applies to
+        // rumors that have a meaningful object (targeting / alliance /
+        // closeness — not solo "suspicious").
+        let slantedObjectId = knowerKnowledge.slantedObjectId ?? null;
+        const role = (typeof getCampRole === "function") ? getCampRole(state, knower.id) : "undefined";
+        const slantInclined =
+            knower.archetype === "sneaky"
+         || role === "schemer" || role === "leaning:schemer";
+        if (rumor.kind !== "suspicious" && slantInclined && newDistortion >= 0.40 && Math.random() < 0.30) {
+          // Pick a random other tribemate as the slanted object.
+          const candidates = pool.filter(c =>
+            c.id !== rumor.subjectId
+            && c.id !== rumor.objectId
+            && c.id !== knower.id
+            && c.id !== listener.id
+          );
+          if (candidates.length > 0) {
+            slantedObjectId = candidates[Math.floor(Math.random() * candidates.length)].id;
+            // Slanted versions are believed but more confidently wrong.
+            newConfidence = Math.min(1, newConfidence + 0.10);
+            newDistortion = Math.min(1, newDistortion + 0.15);
+          }
+        }
+
+        // Floor: don't spread genuinely useless versions (confidence < 0.15).
+        if (newConfidence < 0.15) continue;
+
+        rumor.knownBy[listener.id] = {
+          confidence:      newConfidence,
+          distortion:      newDistortion,
+          fromId:          knower.id,
+          learnedRound:    state.round ?? 0,
+          slantedObjectId,
+        };
+      }
+    }
+  }
+}
+
+// Per-round behavioral consequences of belief. Walks each rumor each holder,
+// applies small effects ONCE per learned-round (so a stale rumor doesn't
+// keep biting). Tunable; tries to stay under the threshold of "noticeable
+// flavor" per round.
+function applyRumorRoundEffects(state) {
+  if (!state.rumors) return;
+  const round = state.round ?? 0;
+  for (const rumor of state.rumors) {
+    if (rumor.dissolved) continue;
+    for (const holderId of Object.keys(rumor.knownBy)) {
+      const k = rumor.knownBy[holderId];
+      // Only apply on the round it's learned — avoids stacking each round.
+      if (k.learnedRound !== round) continue;
+      if (k.confidence < 0.25) continue;
+
+      const effectiveObjectId = k.slantedObjectId ?? rumor.objectId;
+      const weight = k.confidence;
+
+      switch (rumor.kind) {
+        case "targeting": {
+          // Holder learns subject is targeting (probably) effectiveObjectId.
+          // If the holder IS the (perceived) target → small rel drop toward subject,
+          // small idol/suspicion memory bump.
+          if (holderId === effectiveObjectId) {
+            adjustRelationship(state, holderId, rumor.subjectId, -Math.round(weight));
+            if (typeof recordSuspiciousAct === "function") {
+              recordSuspiciousAct(state, holderId, rumor.subjectId, "rumored-targeting", weight * 0.6);
+            }
+          } else {
+            // Bystander: small bump in suspicion memory of the subject.
+            if (typeof adjustSuspicionMemory === "function") {
+              adjustSuspicionMemory(state, holderId, rumor.subjectId, weight * 0.3);
+            }
+          }
+          break;
+        }
+        case "suspicious": {
+          // Holder hears subject is acting shady → suspicion memory bump.
+          if (typeof adjustSuspicionMemory === "function") {
+            adjustSuspicionMemory(state, holderId, rumor.subjectId, weight * 0.4);
+          }
+          break;
+        }
+        case "alliance": {
+          // Holder hears subject + object are pacting up → idol/suspicion
+          // of both rises slightly (they look like a coordinated threat).
+          if (holderId !== rumor.subjectId && holderId !== effectiveObjectId) {
+            if (typeof adjustSuspicionMemory === "function") {
+              adjustSuspicionMemory(state, holderId, rumor.subjectId,        weight * 0.2);
+              adjustSuspicionMemory(state, holderId, effectiveObjectId,      weight * 0.2);
+            }
+          }
+          break;
+        }
+        case "closeness": {
+          // Mild — just increases the holder's idol suspicion of the pair.
+          if (holderId !== rumor.subjectId && holderId !== effectiveObjectId) {
+            if (typeof adjustIdolSuspicion === "function") {
+              adjustIdolSuspicion(state, holderId, rumor.subjectId,    1);
+              adjustIdolSuspicion(state, holderId, effectiveObjectId,  1);
+            }
+          }
+          break;
+        }
+      }
+    }
+  }
+}
+
 // ── v5.12: Conflict / repair accessors ──────────────────────────────────────
 //
 // "Has there been recent friction with this person?" — used by Check In

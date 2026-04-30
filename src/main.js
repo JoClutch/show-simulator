@@ -151,19 +151,30 @@ function onCampLifeDone() {
   // Pre-merge: alliances form in BOTH tribes (they're both at camp), but
   // gossip only matters for the tribe actually voting tonight.
   // Post-merge: everything happens in the merged tribe.
+  // v5.17: rumor spread + effects also runs overnight, before tribal.
+  // Allies and close contacts trade what they've heard. New knowers get
+  // small behavioral nudges via applyRumorRoundEffects.
   if (gameState.merged) {
     aiFormAlliances(gameState, gameState.tribes.merged);
     spreadIdolSuspicion(gameState, gameState.tribes.merged);
+    spreadRumors(gameState, gameState.tribes.merged);
+    applyRumorRoundEffects(gameState);
     showScreen("tribal");
   } else if (getPlayerTribeLabel() === gameState.tribalTribe) {
     aiFormAlliances(gameState, gameState.tribes.A);
     aiFormAlliances(gameState, gameState.tribes.B);
     spreadIdolSuspicion(gameState, gameState.tribes[gameState.tribalTribe]);
+    spreadRumors(gameState, gameState.tribes.A);
+    spreadRumors(gameState, gameState.tribes.B);
+    applyRumorRoundEffects(gameState);
     showScreen("tribal");
   } else {
     aiFormAlliances(gameState, gameState.tribes.A);
     aiFormAlliances(gameState, gameState.tribes.B);
     spreadIdolSuspicion(gameState, gameState.tribes[gameState.tribalTribe]);
+    spreadRumors(gameState, gameState.tribes.A);
+    spreadRumors(gameState, gameState.tribes.B);
+    applyRumorRoundEffects(gameState);
     advanceRound();
   }
 }

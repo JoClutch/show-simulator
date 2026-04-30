@@ -150,6 +150,21 @@ function createSeasonState() {
     // list and AI strategic planning. Empty by default — no behavior change.
     campTargets: {},
 
+    // ── Rumor pool (v5.17) ─────────────────────────────────
+    // Each rumor: {
+    //   id, kind, subjectId, objectId, createdRound, originatorId, accuracy,
+    //   knownBy: { [contestantId]: {
+    //     confidence,    // 0..1 — how strongly this knower believes it
+    //     distortion,    // 0..1 — how warped their version is
+    //     fromId,        // who they heard it from (null for originator)
+    //     learnedRound,  // when they learned it
+    //     slantedObjectId // if non-null, this knower's version points at a different object
+    //   } }
+    // }
+    // Kinds: "targeting" | "suspicious" | "alliance" | "closeness"
+    // Spread happens via spreadRumors() at end of each camp phase.
+    rumors: [],
+
     // ── Camp action history (v5.14) ────────────────────────
     // Per-contestant counts of every camp action taken across the game.
     // Drives emergent "camp role identity" (provider / strategist / schemer

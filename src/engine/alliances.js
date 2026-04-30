@@ -91,6 +91,21 @@ function createAlliance(state, members, founderId, initialStrength = 5) {
   };
   state.alliances.push(alliance);
 
+  // v5.17: alliance formation seeds an "alliance" rumor. Members start as
+  // knowers (they obviously know about their own pact); the rumor will
+  // leak to close contacts via spread. Only seed for 2-member pacts —
+  // larger alliances are noisier and will get picked up via observation.
+  if (typeof seedRumor === "function" && members.length === 2) {
+    const [m0, m1] = members;
+    const r = seedRumor(state, "alliance", m0.id, m1.id, m0.id, 1.0);
+    if (!r.knownBy[m1.id]) {
+      r.knownBy[m1.id] = {
+        confidence: 1.0, distortion: 0, fromId: m0.id,
+        learnedRound: state.round ?? 0, slantedObjectId: null,
+      };
+    }
+  }
+
   // Event log: surface to the player only if they're a member; AI-only
   // alliances are recorded for dev visibility but not the Season Log.
   const playerInvolved = state.player && members.some(m => m.id === state.player.id);

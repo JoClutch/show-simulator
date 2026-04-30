@@ -816,6 +816,13 @@ function actionSearchIdol(state, player, tribemates) {
   if (_searchRoleCore === "schemer")  memoryWeight += 0.5 * _searchRoleScale;
   recordSuspiciousAct(state, witness.id, player.id, "idolSearch", memoryWeight);
 
+  // v5.17: witnessed idol search seeds a "suspicious" rumor. The witness
+  // is the originator (their belief is highest); spread will carry it to
+  // their close contacts at degraded confidence.
+  if (typeof seedRumor === "function") {
+    seedRumor(state, "suspicious", player.id, null, witness.id, 0.9);
+  }
+
   // Ambient bleed: from the second repeat onward, other tribemates start
   // noticing the pattern even without seeing the search directly. Each
   // non-witness tribemate has a 40% chance to gain +1 idol suspicion.
@@ -1237,6 +1244,19 @@ function actionLobby(state, player, tribemates, target) {
     // Sharing a confidence builds rapport between you and the listener.
     adjustTrust(state, player.id, listener.id, 1);
     adjustRelationship(state, player.id, listener.id, 1);
+
+    // v5.17: persuaded pitches plant a "targeting" rumor with both the
+    // pitcher and the listener as initial knowers. The rumor will spread
+    // through their close contacts in the round-end pass.
+    if (typeof seedRumor === "function") {
+      const r = seedRumor(state, "targeting", player.id, target.id, player.id, 1.0);
+      if (!r.knownBy[listener.id]) {
+        r.knownBy[listener.id] = {
+          confidence: 0.85, distortion: 0.05, fromId: player.id,
+          learnedRound: state.round ?? 0, slantedObjectId: null,
+        };
+      }
+    }
 
     return { feedback: pickFrom([
       `You pulled ${listener.name} aside and made the case against ${target.name}. They listened — really listened — and by the end, they were nodding. The seed is planted.`,
@@ -1892,6 +1912,49 @@ function actionObserveCamp(state, player, tribemates) {
 //                     remain unread even at high social
 //
 // Doesn't mutate game state — pure information.
+// v5.17: render a rumor as a player-facing read line. Confidence shapes the
+// hedging: high → "you've heard"; mid → "people have been suggesting"; low
+// → "there's been a whisper, half-formed". Distortion warps the language
+// further. Doesn't expose raw numbers — purely flavor.
+function _buildRumorReadLine(state, player, heard) {
+  const r = heard.rumor;
+  const k = heard.knowledge;
+  const conf = k.confidence;
+  const dist = k.distortion;
+
+  const subject = (typeof findContestant === "function") ? findContestant(state, r.subjectId) : null;
+  if (!subject) return null;
+  const objectId = k.slantedObjectId ?? r.objectId;
+  const object   = objectId ? findContestant(state, objectId) : null;
+
+  // Don't surface rumors where the player is the subject — that would read
+  // as "you've heard you are scheming about X", which is incoherent.
+  if (subject.id === player.id) return null;
+
+  const hedge =
+      conf >= 0.7 ? "You've been hearing"
+    : conf >= 0.4 ? "There's been talk that"
+    :               "Someone whispered, half-believed, that";
+
+  const tail = dist >= 0.5 ? " — though the version you heard felt secondhand at best." : "";
+
+  switch (r.kind) {
+    case "targeting":
+      if (!object) return null;
+      return `${hedge} ${subject.name} has been working an angle against ${object.name}.${tail}`;
+    case "suspicious":
+      return `${hedge} ${subject.name} has been moving around camp in ways that don't quite add up.${tail}`;
+    case "alliance":
+      if (!object) return null;
+      return `${hedge} ${subject.name} and ${object.name} may have something locked in between them.${tail}`;
+    case "closeness":
+      if (!object) return null;
+      return `${hedge} ${subject.name} and ${object.name} have been a lot tighter than they're letting on.${tail}`;
+    default:
+      return null;
+  }
+}
+
 function actionReadRoom(state, player, tribemates) {
   if (tribemates.length === 0) {
     return { feedback: "There was no one around camp to get a read on.", hint: null };
@@ -2009,6 +2072,23 @@ function actionReadRoom(state, player, tribemates) {
       `There are multiple grudges simmering at once. Whoever can ride the right one will own the next vote.`,
       `The camp has more than one open feud beneath the surface. You can feel the lines being drawn.`,
     ])});
+  }
+
+  // v5.17: surface a rumor the player has actually picked up. Reads as a
+  // hedged "you've been hearing" line — language scales to the player's
+  // confidence in the rumor, so a high-confidence whisper sounds like a
+  // real read while a low-confidence whisper sounds like noise. Only one
+  // rumor surfaces per Read-the-Room invocation; the candidate is added
+  // to the weighted pool and may or may not be selected.
+  if (typeof getRumorsKnownBy === "function") {
+    const heard = getRumorsKnownBy(state, player.id);
+    if (heard.length > 0) {
+      const pickedHeard = heard[Math.floor(Math.random() * heard.length)];
+      const line = _buildRumorReadLine(state, player, pickedHeard);
+      if (line) {
+        candidates.push({ weight: 4 + heard.length * 0.5, text: line });
+      }
+    }
   }
 
   // v5.16: hedged self-read on the player's own social capital. Only
@@ -2236,6 +2316,40 @@ function actionCompareNotes(state, player, tribemates, partner) {
   applyMoodEffects(state, player, partner, mood);
 
   const flavor = moodFlavor(mood, partner);
+
+  // v5.17: chance the partner shares a rumor they know with the player.
+  // The transfer further degrades confidence and adds a small distortion
+  // step — same model the round-end spread uses, but inline. Only fires
+  // on warm-mood, non-evasive bands. Adds the rumor to the player's
+  // knownBy if successful.
+  if ((band === "truthful" || band === "mostly" || band === "incomplete")
+      && (mood === "productive" || mood === "warm")
+      && typeof getRumorsKnownBy === "function") {
+    const partnerHeard = getRumorsKnownBy(state, partner.id)
+      .filter(h => !h.rumor.knownBy[player.id]);
+    if (partnerHeard.length > 0) {
+      const pick = partnerHeard[Math.floor(Math.random() * partnerHeard.length)];
+      const trustQ      = Math.max(0, Math.min(1, getTrust(state, partner.id, player.id) / 10));
+      const newConf     = pick.knowledge.confidence * (0.7 + 0.25 * trustQ);
+      const newDistort  = Math.min(1, pick.knowledge.distortion + 0.06);
+      if (newConf >= 0.20) {
+        pick.rumor.knownBy[player.id] = {
+          confidence:      newConf,
+          distortion:      newDistort,
+          fromId:          partner.id,
+          learnedRound:    state.round ?? 0,
+          slantedObjectId: pick.knowledge.slantedObjectId ?? null,
+        };
+        const line = _buildRumorReadLine(state, player, {
+          rumor: pick.rumor,
+          knowledge: pick.rumor.knownBy[player.id],
+        });
+        if (line) {
+          return { feedback: `${flavor} ${line}`, hint: null };
+        }
+      }
+    }
+  }
 
   // Pick a subject and find the strongest real signal about them
   // (top ally OR worst foe, whichever is more pronounced).
