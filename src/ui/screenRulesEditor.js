@@ -25,6 +25,17 @@
 //
 // Conditional rows (swap trigger when swap on; jury custom count when "custom")
 // toggle visibility via a single helper that re-runs after every input change.
+//
+// ── Scope isolation ──────────────────────────────────────────────────────────
+// Wrapped in an IIFE so helpers (drawShell, populateInputs, wireInputs,
+// wireFooter, refreshConditionalRows, refreshPreview, handleSave, showErrors,
+// clearErrors, clampInt, escapeHtmlAttr) stay private. Other setup-screen
+// files declare the same names; without scoping, late-loaded files would
+// overwrite early-loaded ones, breaking every screen except the latest.
+// _workingTemplate persists across calls because the IIFE closure is held
+// alive by window.renderRulesEditorScreen.
+
+(function () {
 
 let _workingTemplate = null;
 
@@ -438,3 +449,8 @@ function clampInt(value, min, max) {
 function escapeHtmlAttr(s) {
   return escapeHtml(s);
 }
+
+// Expose only the entry point.
+window.renderRulesEditorScreen = renderRulesEditorScreen;
+
+})();

@@ -17,6 +17,15 @@
 //       at load time and corruption isn't possible.
 //
 // Delete: confirm() → deleteSetup() → re-render list. No template/state effects.
+//
+// ── Scope isolation ──────────────────────────────────────────────────────────
+// Wrapped in an IIFE so helpers (drawShell, drawList, wireFooter, handleLoad,
+// handleDelete, etc.) stay private. Multiple setup-screen files declare those
+// same helper names; without scoping, the last-loaded file would silently
+// overwrite the others' versions. Only renderSavedSetupsScreen is attached
+// to window for main.js to call.
+
+(function () {
 
 function renderSavedSetupsScreen(container, state) {
   drawShell(container);
@@ -241,3 +250,8 @@ function handleImport(container) {
     alert(`Imported "${stored.setup.setupName}" — find it in the list to load.`);
   });
 }
+
+// Expose only the entry point.
+window.renderSavedSetupsScreen = renderSavedSetupsScreen;
+
+})();

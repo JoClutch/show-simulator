@@ -29,6 +29,17 @@
 //   • all contestants assigned (and per-tribe counts match tribe sizes), OR
 //   • all contestants unassigned (the engine will randomize at game start).
 // Mixed states are rejected by validateSeasonTemplate.
+//
+// ── Scope isolation ──────────────────────────────────────────────────────────
+// Wrapped in an IIFE so helpers (drawShell, drawCastBody, wireFooter,
+// wireRowButtons, handleSave, showErrors, clearErrors, clampInt,
+// escapeHtmlAttr, openModal, etc.) stay private. Other setup-screen files
+// declare the same helper names; without scoping, late-loaded files would
+// overwrite earlier ones — clicking Edit Cast would actually run a different
+// screen's drawShell. _workingCast persists across calls because the IIFE
+// closure is held alive by window.renderCastEditorScreen.
+
+(function () {
 
 let _workingCast         = null;
 let _editingContestantId = null;
@@ -430,3 +441,8 @@ function clampInt(value) {
 function escapeHtmlAttr(s) {
   return escapeHtml(s);
 }
+
+// Expose only the entry point.
+window.renderCastEditorScreen = renderCastEditorScreen;
+
+})();

@@ -20,6 +20,18 @@
 // A confirmation prompt fires before applying (matches the load-from-saves
 // flow). This protects users who clicked through to the picker but didn't
 // realize their current customization would be replaced.
+//
+// ── Scope isolation ──────────────────────────────────────────────────────────
+//
+// The whole file lives inside an IIFE so helpers like drawShell, drawList,
+// wireFooter stay private. Without this wrapper, every setup screen file
+// (cast editor, rules editor, saved setups, templates) declares the SAME
+// helper names at global scope — function declarations from the last-loaded
+// file overwrite earlier ones, so e.g. clicking "Edit Cast" would call
+// templates' drawShell against a cast-editor render, breaking everything.
+// Only renderTemplatesScreen is attached to window so main.js can route to it.
+
+(function () {
 
 function renderTemplatesScreen(container, state) {
   drawShell(container);
@@ -128,3 +140,9 @@ function handleUse(templateId) {
 
   onTemplatesDone(true);
 }
+
+// Expose only the entry point. Helpers stay private to this IIFE so they
+// can't collide with same-named helpers in other setup-screen files.
+window.renderTemplatesScreen = renderTemplatesScreen;
+
+})();
