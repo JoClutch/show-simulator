@@ -79,13 +79,9 @@ const CAMP_ACTIONS = [
     needsTarget: true,
     category: "social",
   },
-  {
-    id: "improvecamp",
-    label: "Improve camp",
-    detail: "Pull your weight. The whole tribe notices.",
-    needsTarget: false,
-    category: "social",
-  },
+  // v5.5: "Improve camp" was relabeled to "Tend camp" and moved from Social
+  // to Island. Same engine effect (tribe-wide rel + suspicion drop) plus a
+  // tend-camp credit that boosts the next idol search.
   {
     id: "confide",
     label: "Open up to someone",
@@ -165,9 +161,19 @@ const CAMP_ACTIONS = [
     category: "strategy",
   },
   {
+    // v5.5: renamed from "improvecamp" / "Improve camp" (was Social).
+    // Tribe-wide goodwill + suspicion drop, plus a tend-camp credit
+    // that quietly boosts your next idol search.
+    id: "tendCamp",
+    label: "Tend camp",
+    detail: "Pull your weight around camp. The tribe sees it — and being visible buys you a little cover.",
+    needsTarget: false,
+    category: "island",
+  },
+  {
     id: "searchidol",
     label: "Search for an idol",
-    detail: "Slip away into the jungle. Being seen raises suspicion.",
+    detail: "Slip away into the jungle. Being seen raises suspicion — but tending camp first softens the blow.",
     needsTarget: false,
     category: "island",
   },
@@ -175,6 +181,17 @@ const CAMP_ACTIONS = [
     id: "laylow",
     label: "Keep a low profile",
     detail: "Stay quiet and unthreatening. Eases suspicion when you're in the crosshairs.",
+    needsTarget: false,
+    category: "island",
+  },
+  {
+    // v5.5: solo reflection — small suspicion drop + a self-observation
+    // about the player's current standing. Distinct from "Observe a
+    // player" (which observes others) and "Lay low" (which manages
+    // visibility, not insight).
+    id: "takeWalk",
+    label: "Take a walk",
+    detail: "Step away from the noise. Get a read on your own game.",
     needsTarget: false,
     category: "island",
   },
@@ -188,8 +205,9 @@ const CAMP_ACTIONS = [
 function executeAction(state, actionId, player, tribemates, target) {
   switch (actionId) {
     case "talk":        return actionTalk(state, player, target);
-    case "improvecamp": return actionImprovecamp(state, player, tribemates);
+    case "tendCamp":    return actionTendCamp(state, player, tribemates);
     case "searchidol":  return actionSearchIdol(state, player, tribemates);
+    case "takeWalk":    return actionTakeWalk(state, player, tribemates);
     case "strategy":    return actionStrategy(state, player, target);
     case "askVote":     return actionAskVote(state, player, target, tribemates);
     case "confide":     return actionConfide(state, player, target);
@@ -285,28 +303,45 @@ function actionTalk(state, player, target) {
   ]), hint: null };
 }
 
-// IMPROVE CAMP — tribe-wide relationship builder and suspicion reducer.
+// TEND CAMP — tribe-wide goodwill, suspicion drop, idol-search support.
 //
-// High-social players earn more goodwill (tribe sees them as warm contributors,
-// not just performing). Anyone actively working also dispels suspicion — a player
-// clearly pulling their weight isn't plotting.
+// v5.5: renamed from actionImprovecamp and moved from Social to Island. The
+// reframing matches what the action actually represents on the island —
+// physical labor at the camp itself, not interpersonal interaction. Every
+// tribemate notices the contribution; the tribe-wide rel bump scales with
+// social skill (warm contributors earn more goodwill than transactional ones).
 //
-// Formula:
-//   delta = 2 if social ≥ 7, else 1
-//   all tribemates get that relationship delta
-//   player's own suspicion −1 (clamped at 0)
-function actionImprovecamp(state, player, tribemates) {
+// ── Effects ──────────────────────────────────────────────────────────────────
+//
+//   • All tribemates: rel + delta
+//       delta = 2 if player.social ≥ 7, else 1
+//
+//   • Player suspicion −1 (visibly working = visibly not scheming)
+//
+//   • v5.5: tendCampBonus += 1 (capped at 2). Each credit gives the next
+//     idol search +5% find chance. Consumed on use. Mechanically links Tend
+//     Camp to Search for Idol — being seen at camp gives you cover for
+//     slipping away briefly. Caps at 2 so you can't farm credits indefinitely
+//     by tending all three camp slots.
+//
+// Tend Camp doesn't actively reveal the synergy in feedback text — the
+// player discovers the idol-search interaction by playing.
+function actionTendCamp(state, player, tribemates) {
   const delta = player.social >= 7 ? 2 : 1;
   for (const mate of tribemates) {
     adjustRelationship(state, player.id, mate.id, delta);
   }
   adjustSuspicion(state, player.id, -1);
 
+  // v5.5: idol-search support credit. Capped at 2.
+  state.tendCampBonus = Math.min(2, (state.tendCampBonus ?? 0) + 1);
+
   return { feedback: pickFrom([
-    `You spent the afternoon shoring up the shelter. A few tribemates thanked you.`,
-    `You collected firewood and kept the fire going all night. The tribe noticed.`,
-    `You reorganized the food supply and cleaned up camp. Nobody said much, but they saw.`,
-    `You hauled water for hours without being asked. Small thing, but it was remembered.`,
+    `You spent the afternoon shoring up the shelter. A few tribemates thanked you. Being seen working has its own quiet value.`,
+    `You collected firewood and kept the fire going all night. The tribe noticed — you were visible, helpful, not lurking.`,
+    `You reorganized the food supply and cleaned up camp. Nobody said much, but they saw. You spent the day exactly where you should be.`,
+    `You hauled water for hours without being asked. Small thing, but it was remembered. The kind of work that earns you the benefit of the doubt later.`,
+    `You patched the roof of the shelter while the others sat around. By dinner everyone knew it was you. Small wins.`,
   ]), hint: null };
 }
 
@@ -763,6 +798,118 @@ function actionLayLow(state, player, tribemates) {
     `You let the others do the talking today. You listened, smiled at the right moments, and faded into the background. Safer here.`,
     `You spent the afternoon just being a normal tribemate. No moves. Sometimes not making a move is the move.`,
   ]), hint: null };
+}
+
+// TAKE A WALK — solo reflection (v5.5, new).
+//
+// Solo Island action with no tribemate target. Steps the player away from
+// the camp briefly:
+//
+//   • Player suspicion −1 (a quiet beat, briefly off the radar)
+//   • Surfaces ONE self-observation about the player's standing — sourced
+//     from real game state (rel ranks, suspicion level, alliance health).
+//
+// Distinct from neighboring Island actions:
+//   • Tend Camp builds tribe-wide rel and grants idol-search support.
+//   • Search for Idol pursues advantages at suspicion cost.
+//   • Lay Low manages the player's visibility (bigger suspicion drop).
+//   • Take a Walk offers INSIGHT — what the player should be paying
+//     attention to in their own game.
+//
+// Distinct from Strategy → Observe a Player (which observes others' bonds)
+// and Social → Observe the Camp (which surfaces general dynamics). Take a
+// Walk is the player's own status read.
+//
+// No state mutation beyond the small suspicion drop. The point is that the
+// observation itself is the value.
+function actionTakeWalk(state, player, tribemates) {
+  // Quiet self-care beat — mild suspicion drop, smaller than Lay Low's
+  // intentional invisibility act.
+  adjustSuspicion(state, player.id, -1);
+
+  // Build a list of candidate self-observations sourced from current state.
+  const observations = [];
+
+  // Strongest ally and worst enemy by player rel.
+  let topAlly = null,    topRel    = -Infinity;
+  let worstFoe = null,   worstRel  =  Infinity;
+  for (const c of tribemates) {
+    const rel = getRelationship(state, player.id, c.id);
+    if (rel > topRel)   { topRel   = rel; topAlly  = c; }
+    if (rel < worstRel) { worstRel = rel; worstFoe = c; }
+  }
+
+  if (topAlly && topRel >= 10) {
+    observations.push(pickFrom([
+      `Your bond with ${topAlly.name} feels real. If you can keep that solid, you have someone in your corner.`,
+      `${topAlly.name} keeps coming up in your head. They're the ally you didn't expect to have — and the one you can't afford to lose.`,
+    ]));
+  }
+  if (worstFoe && worstRel <= -8) {
+    observations.push(pickFrom([
+      `You're not on good terms with ${worstFoe.name}. That's information you can use — or work to change.`,
+      `${worstFoe.name} is going to be a problem if you don't get ahead of it. The longer it festers, the worse it gets.`,
+    ]));
+  }
+
+  // Suspicion read.
+  const susp = player.suspicion ?? 0;
+  if (susp >= 5) {
+    observations.push(pickFrom([
+      "You can feel the tribe watching you. The next move you make has to be careful.",
+      "You're on the radar. Whatever you do today, it'll be noted. Move accordingly.",
+    ]));
+  } else if (susp <= 1) {
+    observations.push(pickFrom([
+      "No one's been paying you much attention. That's a kind of safety, for now.",
+      "You're flying under the radar. Useful — until it isn't.",
+    ]));
+  }
+
+  // Alliance health.
+  const myAlliances = (typeof getAlliancesForMember === "function")
+    ? getAlliancesForMember(state, player.id)
+    : [];
+  if (myAlliances.length > 0) {
+    // Rank by strength to surface the most relevant.
+    const sorted = [...myAlliances].sort((a, b) => b.strength - a.strength);
+    const strongest = sorted[0];
+    if (strongest.strength >= 7) {
+      observations.push(pickFrom([
+        `Your alliance "${strongest.name}" feels solid. That's something to lean on.`,
+        `"${strongest.name}" is in good shape. Don't take it for granted, but use it.`,
+      ]));
+    } else if (strongest.strength <= 3) {
+      observations.push(pickFrom([
+        `Your alliance "${strongest.name}" feels shaky. You'll need to invest in it — soon.`,
+        `"${strongest.name}" is on thin ice. If you don't tend to it, it won't hold.`,
+      ]));
+    }
+  }
+
+  // Generic fallback when nothing in particular stood out.
+  if (observations.length === 0) {
+    observations.push(pickFrom([
+      "You watched the waves for a while. The days were blurring together. You weren't sure where you stood — but the not-knowing was its own answer.",
+      "You walked the beach alone. There was no big revelation, just the steady push of the water. Sometimes that's all you can ask for.",
+      "You took a long breath of salt air and let it out. The game would be there when you got back.",
+      "You wandered far enough that the camp went quiet. For a while, you weren't a player. You were just someone on a beach.",
+    ]));
+  }
+
+  // Pick one observation to share; the action surfaces a single thought
+  // rather than an info dump, in line with the prompt's "limited info".
+  const observation = pickFrom(observations);
+
+  return {
+    feedback: pickFrom([
+      `You walked the beach alone, thinking. ${observation}`,
+      `You took a moment to step away from the noise. ${observation}`,
+      `You wandered off for a while and let your mind wander with you. ${observation}`,
+      `You stepped away from camp and let the quiet do its work. ${observation}`,
+    ]),
+    hint: null,
+  };
 }
 
 // PROPOSE ALLIANCE — explicit pact-making.

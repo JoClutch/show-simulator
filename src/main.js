@@ -233,6 +233,11 @@ function advanceRound() {
   // persist for the round they formed in (visible in dev panel until reset).
   gameState.votingBlocs = [];
 
+  // v5.5: reset tend-camp credits on round boundary. Normally consumed when
+  // an idol search fires; reset here as a safety net if the player ends a
+  // round without searching.
+  gameState.tendCampBonus = 0;
+
   gameState.round          += 1;
   gameState.campPhase       = 1;
   gameState.immunityWon     = null;

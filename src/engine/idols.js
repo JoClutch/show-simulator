@@ -239,10 +239,19 @@ function idolSearch(player, state) {
   state.idolSearches[scope] = prevSearches + 1;
 
   // ── Roll ──────────────────────────────────────────────────────────────────
+  // v5.5: tend-camp credits boost find chance by +5% per credit (cap 2 → +10%
+  // max). The credit is consumed by this search regardless of outcome — one
+  // shot at the boost, then it's spent. Tend Camp is the supply; idol
+  // searching is the demand. Mechanically links the two Island actions.
   const baseChance   = 0.20;
-  const stratBonus   = player.strategy * 0.025;   // strategy 10 → +25%
-  const persistBonus = prevSearches    * 0.08;    // 3rd search    → +16%
-  const findChance   = Math.min(baseChance + stratBonus + persistBonus, 0.65);
+  const stratBonus   = player.strategy * 0.025;     // strategy 10 → +25%
+  const persistBonus = prevSearches    * 0.08;      // 3rd search    → +16%
+  const tendBonus    = (state.tendCampBonus ?? 0) * 0.05;   // up to +10%
+  const findChance   = Math.min(0.70, baseChance + stratBonus + persistBonus + tendBonus);
+
+  // Consume tend-camp credits regardless of outcome — they represent "cover"
+  // spent on this search, not a reusable buff.
+  state.tendCampBonus = 0;
 
   if (Math.random() >= findChance) {
     return { found: false, idol: null };

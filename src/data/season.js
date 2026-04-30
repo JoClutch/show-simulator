@@ -150,6 +150,13 @@ function createSeasonState() {
     // list and AI strategic planning. Empty by default — no behavior change.
     campTargets: {},
 
+    // ── Tend-camp bonus (v5.5) ─────────────────────────────
+    // Counts unconsumed "I've been visible at camp today" credits. Each
+    // Tend Camp action grants +1 (cap 2). The next idol search reads this
+    // as a small +5%/credit find-chance bonus, then resets to 0.
+    // Reset to 0 each round in advanceRound() for safety.
+    tendCampBonus: 0,
+
     // ── Event log ──────────────────────────────────────────
     // Unified chronological record of season milestones (idols, alliances,
     // swap, merge, eliminations). Each entry: { round, day, category, type,
