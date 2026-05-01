@@ -237,6 +237,246 @@ function removeMemberFromAlliances(state, contestantId) {
   }
 }
 
+// ── v5.26: Membership management ────────────────────────────────────────────
+//
+// Three player-driven membership changes: invite, boot, leave. Each is
+// gated on existing social state (rel/trust/alliance tier) and produces
+// believable consequences via the existing relationship + suspicion +
+// alliance-strength systems. Returns { feedback, accepted } so the UI can
+// surface the outcome through the standard feedback log path.
+
+// Compute average member-vs-candidate rel + trust. Used by both invite
+// (does this candidate fit?) and boot (do members back the booter?).
+function _allianceMemberAverages(state, alliance, candidateId) {
+  let relSum = 0, trustSum = 0, count = 0;
+  for (const mid of alliance.memberIds) {
+    if (mid === candidateId) continue;
+    relSum   += getRelationship(state, mid, candidateId);
+    trustSum += getTrust(state, mid, candidateId);
+    count++;
+  }
+  return {
+    avgRel:   count > 0 ? relSum   / count : 0,
+    avgTrust: count > 0 ? trustSum / count : 3,
+    count,
+  };
+}
+
+// INVITE — adds a new member to an existing alliance if accepted.
+//   accept chance = 0.25
+//                 + avgRel × 0.02
+//                 + (avgTrust − 3) × 0.04
+//                 + inviter.social × 0.02
+//                 − invitee.suspicion × 0.03
+//                 clamped [0.05, 0.85]
+//
+// On accept:  invitee added; alliance.strength +0.5; rel +1 between the
+//             invitee and each existing member.
+// On reject:  inviter's trust with invitee −1; inviter's contestant.suspicion
+//             +1 (asking too early reads as scrambling).
+function inviteToAlliance(state, allianceId, inviterId, inviteeId) {
+  const alliance = (state.alliances ?? []).find(a => a.id === allianceId);
+  if (!alliance || alliance.status === "dissolved") {
+    return { feedback: "That alliance is no longer in play.", accepted: false };
+  }
+  if (!alliance.memberIds.includes(inviterId)) {
+    return { feedback: "You aren't part of that pact.", accepted: false };
+  }
+  if (alliance.memberIds.includes(inviteeId)) {
+    return { feedback: "They're already in.", accepted: false };
+  }
+
+  const inviter = findContestant(state, inviterId);
+  const invitee = findContestant(state, inviteeId);
+  if (!inviter || !invitee) {
+    return { feedback: "There was no one available to bring in.", accepted: false };
+  }
+
+  const { avgRel, avgTrust } = _allianceMemberAverages(state, alliance, inviteeId);
+  const acceptChance = Math.max(0.05, Math.min(0.85,
+    0.25
+    + avgRel * 0.02
+    + (avgTrust - 3) * 0.04
+    + (inviter.social ?? 5) * 0.02
+    - (invitee.suspicion ?? 0) * 0.03
+  ));
+
+  if (Math.random() < acceptChance) {
+    alliance.memberIds.push(inviteeId);
+    adjustAllianceStrength(alliance, +0.5);
+    alliance.lastReinforcedRound = state.round ?? 0;
+
+    // Bond glue between invitee and existing members.
+    for (const mid of alliance.memberIds) {
+      if (mid === inviteeId) continue;
+      adjustRelationship(state, inviteeId, mid, 1);
+    }
+
+    logEvent(state, {
+      category:      "alliance",
+      type:          "member-added",
+      text: state.player && state.player.id === inviterId
+        ? `You brought ${invitee.name} into "${alliance.name}".`
+        : `${inviter.name} brought ${invitee.name} into "${alliance.name}".`,
+      playerVisible: state.player && (
+        state.player.id === inviterId ||
+        state.player.id === inviteeId ||
+        alliance.memberIds.includes(state.player.id)
+      ),
+      meta: { allianceId, inviterId, inviteeId },
+    });
+
+    return {
+      feedback: `${invitee.name} accepted. They're now part of "${alliance.name}".`,
+      accepted: true,
+    };
+  }
+
+  adjustTrust(state, inviterId, inviteeId, -1);
+  adjustSuspicion(state, inviterId, +1);
+  return {
+    feedback: `${invitee.name} thanked you for the offer but said they weren't ready to commit. The ask landed wrong — you'll feel it for a beat.`,
+    accepted: false,
+  };
+}
+
+// BOOT — votes (in-alliance) to remove another member. The booter doesn't
+// get to act unilaterally; the OTHER members effectively decide based on
+// who they're closer to.
+//
+//   support[booter] = 1                    // counts the booter themselves
+//   support[target] = 1                    // counts the target themselves
+//   for each other member m:
+//     if rel(m, booter) > rel(m, target) + 2 → +1 booter
+//     elif rel(m, target) > rel(m, booter) + 2 → +1 target
+//     else 50/50 random
+//
+// Booter wins:  target removed, alliance.strength −1, target's rel toward
+//               booter −5, trust −3. If alliance drops below 2 members,
+//               it dissolves.
+// Booter loses: alliance.strength −2; booter's rel with each remaining
+//               member −2; booter's contestant.suspicion +2 (reads as
+//               trying to dismantle the pact).
+function bootFromAlliance(state, allianceId, booterId, targetId) {
+  const alliance = (state.alliances ?? []).find(a => a.id === allianceId);
+  if (!alliance || alliance.status === "dissolved") {
+    return { feedback: "That alliance is no longer in play.", accepted: false };
+  }
+  if (!alliance.memberIds.includes(booterId)) {
+    return { feedback: "You aren't part of that pact.", accepted: false };
+  }
+  if (!alliance.memberIds.includes(targetId)) {
+    return { feedback: "They're not in this alliance.", accepted: false };
+  }
+  if (booterId === targetId) {
+    return { feedback: "You can't push yourself out — leave instead.", accepted: false };
+  }
+
+  const target = findContestant(state, targetId);
+  const booter = findContestant(state, booterId);
+  if (!target || !booter) {
+    return { feedback: "There was no one to push out.", accepted: false };
+  }
+
+  let booterSupport = 1, targetSupport = 1;
+  for (const mid of alliance.memberIds) {
+    if (mid === booterId || mid === targetId) continue;
+    const relB = getRelationship(state, mid, booterId);
+    const relT = getRelationship(state, mid, targetId);
+    if (relB > relT + 2)      booterSupport++;
+    else if (relT > relB + 2) targetSupport++;
+    else if (Math.random() < 0.5) booterSupport++;
+    else                          targetSupport++;
+  }
+
+  if (booterSupport > targetSupport) {
+    alliance.memberIds = alliance.memberIds.filter(id => id !== targetId);
+    adjustAllianceStrength(alliance, -1);
+    adjustRelationship(state, booterId, targetId, -5);
+    adjustTrust(state, booterId, targetId, -3);
+    if (alliance.memberIds.length < 2) {
+      alliance.status = "dissolved";
+      alliance.strength = 0;
+    }
+    logEvent(state, {
+      category:      "alliance",
+      type:          "member-removed",
+      text: state.player && state.player.id === booterId
+        ? `You pushed ${target.name} out of "${alliance.name}".`
+        : `${booter.name} pushed ${target.name} out of "${alliance.name}".`,
+      playerVisible: state.player && (
+        state.player.id === booterId ||
+        state.player.id === targetId ||
+        alliance.memberIds.includes(state.player.id)
+      ),
+      meta: { allianceId, booterId, removedId: targetId },
+    });
+    return {
+      feedback: `The room moved with you. ${target.name} is out of "${alliance.name}". They're not going to forget this.`,
+      accepted: true,
+    };
+  }
+
+  // Boot fails.
+  adjustAllianceStrength(alliance, -2);
+  for (const mid of alliance.memberIds) {
+    if (mid === booterId) continue;
+    adjustRelationship(state, booterId, mid, -2);
+  }
+  adjustSuspicion(state, booterId, +2);
+  return {
+    feedback: `${target.name} stays. The pitch went over the room's head — and the room read you as the problem.`,
+    accepted: false,
+  };
+}
+
+// LEAVE — voluntarily remove yourself from an alliance. No vote check;
+// you can always leave. Consequences: rel −1 + trust −2 with each remaining
+// member, alliance.strength −2, your own suspicion +1 (reads as flaky).
+// If alliance drops below 2, it dissolves.
+function leaveAlliance(state, allianceId, leaverId) {
+  const alliance = (state.alliances ?? []).find(a => a.id === allianceId);
+  if (!alliance || alliance.status === "dissolved") {
+    return { feedback: "That alliance is no longer in play.", accepted: false };
+  }
+  if (!alliance.memberIds.includes(leaverId)) {
+    return { feedback: "You aren't part of that pact.", accepted: false };
+  }
+
+  const leaver = findContestant(state, leaverId);
+
+  alliance.memberIds = alliance.memberIds.filter(id => id !== leaverId);
+  for (const mid of alliance.memberIds) {
+    adjustRelationship(state, leaverId, mid, -1);
+    adjustTrust(state, leaverId, mid, -2);
+  }
+  adjustAllianceStrength(alliance, -2);
+  adjustSuspicion(state, leaverId, +1);
+
+  if (alliance.memberIds.length < 2) {
+    alliance.status = "dissolved";
+    alliance.strength = 0;
+  }
+
+  logEvent(state, {
+    category:      "alliance",
+    type:          "member-left",
+    text: state.player && state.player.id === leaverId
+      ? `You stepped away from "${alliance.name}".`
+      : `${leaver?.name ?? "Someone"} left "${alliance.name}".`,
+    playerVisible: state.player && (
+      state.player.id === leaverId ||
+      alliance.memberIds.includes(state.player.id)
+    ),
+    meta: { allianceId, leaverId },
+  });
+
+  return {
+    feedback: `You walked out of "${alliance.name}". Word travels fast in a small camp.`,
+    accepted: true,
+  };
+}
+
 // ── Round-end drift ───────────────────────────────────────────────────────────
 //
 // Once per round, each active alliance's strength drifts based on five

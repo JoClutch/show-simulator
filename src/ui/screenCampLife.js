@@ -98,6 +98,15 @@ function renderCampLifeScreen(container, state) {
   // can immediately pick another, matching the "spend N actions" budget.
   let _currentCategory = null;
 
+  // v5.26: alliance inspector state. When non-null while _currentCategory
+  // is "alliances", the inspector view renders for that specific alliance
+  // instead of the generic Alliances overview. Cleared on category back.
+  let _currentAllianceId = null;
+  // v5.26: the inspector's pending sub-flow — when the player clicks
+  // "Bring someone in" or "Push someone out", we render an inline target
+  // picker before resolving. null = no sub-flow active.
+  let _allianceSubAction = null;   // "invite" | "boot" | null
+
   // ── Idol state for this screen ────────────────────────────────────────────
   //
   // idolScope: the scope the player can search at their current camp.
@@ -903,14 +912,26 @@ function renderCampLifeScreen(container, state) {
     `;
     actionArea.appendChild(title);
 
-    // v5.25: Alliances category renders a management-area shell — overview
-    // of the player's current alliances, then the action grid, then a
-    // forward-looking footer for the deeper management hooks coming next.
+    // v5.25: Alliances category renders a management-area shell.
+    // v5.26: when an alliance is selected via _currentAllianceId, render
+    // the inspector view instead of the overview + action grid.
+    if (categoryId === "alliances" && _currentAllianceId) {
+      renderAllianceInspector(_currentAllianceId);
+      return;
+    }
+
     if (categoryId === "alliances") {
       const shell = document.createElement("div");
       shell.className = "alliance-shell";
       shell.innerHTML = buildAllianceShellHTML();
       actionArea.appendChild(shell);
+      // v5.26: wire row clicks → inspector entry.
+      for (const row of shell.querySelectorAll(".alliance-shell-row[data-alliance-id]")) {
+        row.addEventListener("click", () => {
+          _currentAllianceId = row.getAttribute("data-alliance-id");
+          showActionButtons();
+        });
+      }
     }
 
     // Action grid for this category.
@@ -922,17 +943,299 @@ function renderCampLifeScreen(container, state) {
     }
     actionArea.appendChild(grid);
 
-    // v5.25: forward-looking footer for the Alliances category. Lists the
-    // management capabilities planned for future phases as a placeholder
-    // structure so the section feels like a management area rather than
-    // a single-action category. Each row is intentionally non-interactive
-    // and visually subdued so it can't be confused with a real action.
+    // v5.25: forward-looking footer for the Alliances category.
+    // v5.26: planned-tools section now narrowed to vote planning + preference
+    // reads only — overview and membership management have moved into the
+    // inspector flow, so we no longer placeholder them.
     if (categoryId === "alliances") {
       const planned = document.createElement("div");
       planned.className = "alliance-planned-section";
       planned.innerHTML = buildAllianceShellPlannedHTML();
       actionArea.appendChild(planned);
     }
+  }
+
+  // ── v5.26: Alliance inspector ─────────────────────────────────────────────
+  //
+  // Renders an alliance-specific management view inside the Alliances
+  // category. The inspector shows the alliance name, tier, members with
+  // their per-pair rel/trust read, an aggregate stability headline, and
+  // three management actions: Bring someone in, Push someone out, Step
+  // away. Each action consumes one of the player's daily action slots
+  // through the standard resolveAction-style flow (decrements actionsLeft,
+  // appends a feedback line, refreshes panels). When an action requires
+  // selecting a target (invite / boot), an inline picker renders inside
+  // the inspector rather than navigating away.
+
+  function renderAllianceInspector(allianceId) {
+    const alliance = (state.alliances ?? []).find(a => a.id === allianceId);
+
+    // Defensive: if the alliance dissolved (e.g. last leave dropped it
+    // below 2 members), fall back to the overview.
+    if (!alliance || alliance.status === "dissolved") {
+      _currentAllianceId = null;
+      _allianceSubAction = null;
+      showActionButtons();
+      return;
+    }
+
+    // Inspector back link → returns to alliance overview.
+    const back = document.createElement("button");
+    back.className = "action-back-btn";
+    back.textContent = "← Back to alliances";
+    back.addEventListener("click", () => {
+      _currentAllianceId = null;
+      _allianceSubAction = null;
+      showActionButtons();
+    });
+    actionArea.appendChild(back);
+
+    // Header: alliance name + tier + stability headline.
+    const tier = alliance.tier ?? (alliance.strength >= 7 ? "core" : alliance.strength >= 4 ? "loose" : "weakened");
+    const tierLabel =
+      tier === "core"     ? "Core"     :
+      tier === "loose"    ? "Loose"    :
+      "Weakened";
+    const stability = buildAllianceStabilityHeadline(alliance);
+
+    const header = document.createElement("div");
+    header.className = "alliance-inspector-header";
+    header.innerHTML = `
+      <span class="alliance-inspector-eyebrow">Inspecting alliance</span>
+      <span class="alliance-inspector-name">${escapeHtml(alliance.name)}</span>
+      <span class="alliance-inspector-meta">
+        <span class="alliance-inspector-tier" data-tier="${tier}">${tierLabel}</span>
+        <span class="alliance-inspector-strength">${Math.round(alliance.strength ?? 0)}/10</span>
+      </span>
+      <span class="alliance-inspector-stability">${escapeHtml(stability)}</span>
+    `;
+    actionArea.appendChild(header);
+
+    // Member list: each member's name + per-pair rel/trust read with the player.
+    const memberList = document.createElement("ul");
+    memberList.className = "alliance-inspector-members";
+    for (const id of alliance.memberIds) {
+      const c = findContestant(state, id);
+      if (!c) continue;
+      const isYou = id === player.id;
+      const rel   = isYou ? null : getRelationship(state, player.id, id);
+      const trust = isYou ? null : getTrust(state, player.id, id);
+      const subline = isYou
+        ? "(you)"
+        : `${getRelationshipTier(rel).label.toLowerCase()} · trust ${trust.toFixed(0)}/10`;
+      memberList.innerHTML += `
+        <li class="alliance-inspector-member${isYou ? " alliance-inspector-member-self" : ""}">
+          <span class="alliance-inspector-member-name">${escapeHtml(c.name)}</span>
+          <span class="alliance-inspector-member-sub">${escapeHtml(subline)}</span>
+        </li>
+      `;
+    }
+    actionArea.appendChild(memberList);
+
+    // ── Sub-flow: target picker for invite / boot ────────────────────────
+    if (_allianceSubAction === "invite" || _allianceSubAction === "boot") {
+      renderAllianceTargetPicker(alliance);
+      return;
+    }
+
+    // ── Action buttons ───────────────────────────────────────────────────
+    const grid = document.createElement("div");
+    grid.className = "alliance-inspector-actions";
+
+    // Invite — only enabled if there are non-members in the active pool.
+    const tribePool = state.merged
+      ? (state.tribes?.merged || [])
+      : (state.tribes?.[player.tribe] || []);
+    const inviteCandidates = tribePool.filter(c =>
+      c.id !== player.id && !alliance.memberIds.includes(c.id)
+    );
+    grid.appendChild(buildAllianceActionButton({
+      label: "Bring someone new in",
+      detail: "Invite a tribemate. They may decline if the trust isn't there yet.",
+      disabled: inviteCandidates.length === 0,
+      onClick: () => { _allianceSubAction = "invite"; showActionButtons(); },
+    }));
+
+    // Boot — only enabled if there's another member to push out.
+    const bootCandidates = alliance.memberIds.filter(id => id !== player.id);
+    grid.appendChild(buildAllianceActionButton({
+      label: "Push someone out",
+      detail: "Move to remove a member. The other members decide whether it lands.",
+      disabled: bootCandidates.length === 0,
+      onClick: () => { _allianceSubAction = "boot"; showActionButtons(); },
+    }));
+
+    // Leave — always enabled (the player can always walk away).
+    grid.appendChild(buildAllianceActionButton({
+      label: "Step away from this pact",
+      detail: "Walk out. Members will not take it well — and the camp will read you flaky.",
+      disabled: false,
+      onClick: () => resolveAllianceAction("leave", alliance, null),
+    }));
+
+    actionArea.appendChild(grid);
+  }
+
+  // Inline target picker for invite / boot sub-flows. Renders a list of
+  // valid candidates with rel/trust hints; clicking resolves the action.
+  function renderAllianceTargetPicker(alliance) {
+    const cancel = document.createElement("button");
+    cancel.className = "action-back-btn";
+    cancel.textContent = "← Cancel";
+    cancel.addEventListener("click", () => {
+      _allianceSubAction = null;
+      showActionButtons();
+    });
+    actionArea.appendChild(cancel);
+
+    const heading = document.createElement("div");
+    heading.className = "alliance-inspector-subheading";
+    heading.textContent = _allianceSubAction === "invite"
+      ? "Who do you want to bring in?"
+      : "Who do you want to push out?";
+    actionArea.appendChild(heading);
+
+    const tribePool = state.merged
+      ? (state.tribes?.merged || [])
+      : (state.tribes?.[player.tribe] || []);
+
+    let candidates = [];
+    if (_allianceSubAction === "invite") {
+      candidates = tribePool.filter(c =>
+        c.id !== player.id && !alliance.memberIds.includes(c.id)
+      );
+    } else {
+      candidates = alliance.memberIds
+        .filter(id => id !== player.id)
+        .map(id => findContestant(state, id))
+        .filter(Boolean);
+    }
+
+    if (candidates.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "muted";
+      empty.textContent = _allianceSubAction === "invite"
+        ? "There's no one available to bring in right now."
+        : "There's no one to push out.";
+      actionArea.appendChild(empty);
+      return;
+    }
+
+    const list = document.createElement("div");
+    list.className = "target-chip-row";
+    for (const c of candidates) {
+      const rel   = getRelationship(state, player.id, c.id);
+      const trust = getTrust(state, player.id, c.id);
+      const tier  = getRelationshipTier(rel);
+      const chip = document.createElement("button");
+      chip.className = "target-chip";
+      chip.innerHTML = `
+        <span>${escapeHtml(c.name)}</span>
+        <span class="target-chip-sub">${tier.label.toLowerCase()} · trust ${trust.toFixed(0)}</span>
+      `;
+      chip.addEventListener("click", () => {
+        const sub = _allianceSubAction;
+        _allianceSubAction = null;
+        resolveAllianceAction(sub, alliance, c);
+      });
+      list.appendChild(chip);
+    }
+    actionArea.appendChild(list);
+  }
+
+  // Resolves a membership action through the engine helper, decrements the
+  // action budget, appends a feedback line, and refreshes the inspector.
+  function resolveAllianceAction(kind, alliance, target) {
+    let result;
+    if (kind === "invite") {
+      result = inviteToAlliance(state, alliance.id, player.id, target.id);
+    } else if (kind === "boot") {
+      result = bootFromAlliance(state, alliance.id, player.id, target.id);
+    } else if (kind === "leave") {
+      result = leaveAlliance(state, alliance.id, player.id);
+    } else {
+      return;
+    }
+
+    // Action cost — these are real camp moves and consume an action slot.
+    actionsLeft--;
+    counter.textContent = actionsLeft > 0
+      ? `${actionsLeft} of ${maxActions} actions left`
+      : "No actions left";
+    counter.dataset.state =
+      actionsLeft >= 3 ? "fresh" :
+      actionsLeft === 2 ? "mid" :
+      actionsLeft === 1 ? "low" : "empty";
+
+    // Feedback log line — uses the same path as other actions.
+    const labelText =
+      kind === "invite" ? `Bring in · ${escapeHtml(target.name)}` :
+      kind === "boot"   ? `Push out · ${escapeHtml(target.name)}` :
+      "Step away from alliance";
+    const entry = document.createElement("div");
+    entry.className = "feedback-entry";
+    entry.innerHTML = `
+      <span class="feedback-action-tag">${labelText}</span>
+      <span class="feedback-text">${escapeHtml(result.feedback ?? "")}</span>
+    `;
+    feedbackLog.prepend(entry);
+
+    // If leaving dissolved the player's perspective on this alliance, drop
+    // the inspector back to the overview. Otherwise re-render inspector.
+    const stillIn = (state.alliances ?? []).some(a =>
+      a.id === alliance.id && a.status !== "dissolved" && a.memberIds.includes(player.id)
+    );
+    if (!stillIn) _currentAllianceId = null;
+
+    showActionButtons();
+  }
+
+  // Aggregates a one-line stability read from current alliance state.
+  // Hedged language only; no numeric leak. Used at the top of the
+  // inspector so the player has a high-level read without parsing the
+  // raw strength bar.
+  function buildAllianceStabilityHeadline(alliance) {
+    const strength = alliance.strength ?? 0;
+    let pairCount = 0, relSum = 0, trustSum = 0;
+    for (let i = 0; i < alliance.memberIds.length; i++) {
+      for (let j = i + 1; j < alliance.memberIds.length; j++) {
+        relSum   += getRelationship(state, alliance.memberIds[i], alliance.memberIds[j]);
+        trustSum += getTrust(state, alliance.memberIds[i], alliance.memberIds[j]);
+        pairCount++;
+      }
+    }
+    const avgRel   = pairCount > 0 ? relSum / pairCount : 0;
+    const avgTrust = pairCount > 0 ? trustSum / pairCount : 3;
+
+    if (strength >= 8 && avgRel >= 8 && avgTrust >= 6) {
+      return "This pact feels solid. Members aren't looking for the door.";
+    }
+    if (strength >= 6 && avgTrust >= 5) {
+      return "Functional. Not yet ride-or-die, but steady.";
+    }
+    if (strength <= 3) {
+      return "Hanging by a thread. One bad round could end this.";
+    }
+    if (avgTrust < 4) {
+      return "The math works on paper. The trust under it doesn't.";
+    }
+    return "Workable, but uneven. Different members feel different things.";
+  }
+
+  // Tiny helper: builds an inspector-style action button with a label,
+  // detail line, and click handler. Disabled buttons are visually muted
+  // and click-inert.
+  function buildAllianceActionButton({ label, detail, disabled, onClick }) {
+    const btn = document.createElement("button");
+    btn.className = "action-btn alliance-inspector-action-btn"
+      + (disabled ? " action-btn-unavail" : "");
+    btn.disabled = !!disabled;
+    btn.innerHTML = `
+      <span class="action-btn-label">${label}</span>
+      <span class="action-btn-detail">${detail}</span>
+    `;
+    if (!disabled) btn.addEventListener("click", onClick);
+    return btn;
   }
 
   // v5.25: builds the alliance overview block shown at the top of the
@@ -978,7 +1281,10 @@ function renderCampLifeScreen(container, state) {
       const strengthInt = Math.round(a.strength ?? 0);
       const widthPct    = Math.max(5, strengthInt * 10);
       return `
-        <div class="alliance-shell-row" data-tier="${tier}">
+        <div class="alliance-shell-row alliance-shell-row-clickable"
+             data-tier="${tier}"
+             data-alliance-id="${escapeHtml(a.id)}"
+             title="Click to inspect and manage">
           <div class="alliance-shell-row-top">
             <span class="alliance-shell-name">${escapeHtml(a.name)}</span>
             <span class="alliance-shell-tier">${tierLabel}</span>
@@ -988,6 +1294,7 @@ function renderCampLifeScreen(container, state) {
             <span class="alliance-shell-bar"><span class="alliance-shell-bar-fill" style="width:${widthPct}%"></span></span>
             <span class="alliance-shell-strength-num">${strengthInt}/10</span>
           </div>
+          <span class="alliance-shell-arrow" aria-hidden="true">→</span>
         </div>
       `;
     }).join("");
@@ -1000,10 +1307,11 @@ function renderCampLifeScreen(container, state) {
   // tools will land here, without any clickable behavior yet. Marked with
   // a "coming soon" pill so the player isn't confused about availability.
   function buildAllianceShellPlannedHTML() {
+    // v5.26: membership management moved into the inspector flow above and
+    // is no longer a placeholder. Two planned-tools rows remain.
     const items = [
-      { label: "Membership management", desc: "Invite a third member or step away from a pact." },
-      { label: "Vote planning",         desc: "Lock in a name with your alliance heading into tribal." },
-      { label: "Preference reads",      desc: "See where each ally's head is at on the next vote." },
+      { label: "Vote planning",    desc: "Lock in a name with your alliance heading into tribal." },
+      { label: "Preference reads", desc: "See where each ally's head is at on the next vote." },
     ];
     const rows = items.map(it => `
       <li class="alliance-planned-row">

@@ -2364,6 +2364,16 @@ button:disabled {
   background-color: var(--bg-raised);
 }
 
+/* v5.26: optional sub-line on a target chip (rel tier + trust read).
+   Used inside the alliance inspector's invite/boot pickers. */
+.target-chip-sub {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.7rem;
+  color: var(--text-faint);
+  letter-spacing: 0.04em;
+}
+
 .cancel-btn {
   background-color: transparent;
   border: 1px solid #333;
@@ -2724,6 +2734,138 @@ button:disabled {
   letter-spacing: 0.04em;
   min-width: 2.5rem;
   text-align: right;
+}
+
+/* v5.26: clickable alliance shell rows + inspector affordance. */
+.alliance-shell-row-clickable {
+  cursor: pointer;
+  position: relative;
+  padding-right: 1.6rem;
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+.alliance-shell-row-clickable:hover {
+  background: var(--bg-card);
+  border-color: var(--text-dim);
+}
+.alliance-shell-arrow {
+  position: absolute;
+  right: 0.7rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1.05rem;
+  color: var(--text-faint);
+  opacity: 0.6;
+  transition: color 150ms ease, transform 150ms ease, opacity 150ms ease;
+  pointer-events: none;
+}
+.alliance-shell-row-clickable:hover .alliance-shell-arrow {
+  color: var(--gold);
+  opacity: 1;
+  transform: translateY(-50%) translateX(2px);
+}
+
+/* v5.26: alliance inspector — header + members list + action buttons. */
+.alliance-inspector-header {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.2rem 0.6rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-mid);
+  border-left: 3px solid var(--gold);
+  border-radius: 5px;
+  padding: 0.7rem 0.95rem 0.65rem;
+  margin-bottom: 0.7rem;
+}
+.alliance-inspector-eyebrow {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  grid-column: 1 / -1;
+}
+.alliance-inspector-name {
+  font-size: 1.1rem;
+  font-weight: bold;
+  color: var(--text-primary);
+  grid-column: 1;
+}
+.alliance-inspector-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  grid-column: 2;
+  justify-self: end;
+  font-size: 0.78rem;
+}
+.alliance-inspector-tier {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: bold;
+  color: var(--text-muted);
+}
+.alliance-inspector-tier[data-tier="core"]     { color: #5fa86f; }
+.alliance-inspector-tier[data-tier="loose"]    { color: #c89a4a; }
+.alliance-inspector-tier[data-tier="weakened"] { color: #b85060; }
+.alliance-inspector-strength {
+  color: var(--text-faint);
+  letter-spacing: 0.04em;
+}
+.alliance-inspector-stability {
+  grid-column: 1 / -1;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  font-style: italic;
+  line-height: 1.4;
+  margin-top: 0.2rem;
+}
+
+.alliance-inspector-members {
+  list-style: none;
+  margin: 0 0 0.85rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.alliance-inspector-member {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.4rem;
+  align-items: baseline;
+  padding: 0.4rem 0.7rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-dim);
+  border-radius: 4px;
+}
+.alliance-inspector-member-self {
+  border-left: 3px solid var(--gold-dim);
+}
+.alliance-inspector-member-name {
+  font-size: 0.88rem;
+  color: var(--text-primary);
+  font-weight: bold;
+}
+.alliance-inspector-member-sub {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-transform: lowercase;
+  letter-spacing: 0.02em;
+}
+
+.alliance-inspector-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.alliance-inspector-action-btn {
+  text-align: left;
+}
+
+.alliance-inspector-subheading {
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  margin-bottom: 0.45rem;
+  font-style: italic;
 }
 
 /* Planned-tools placeholder section beneath the action grid. Quiet,
