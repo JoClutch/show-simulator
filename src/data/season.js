@@ -150,6 +150,20 @@ function createSeasonState() {
     // list and AI strategic planning. Empty by default — no behavior change.
     campTargets: {},
 
+    // ── Alliance loyalty (v5.39) ───────────────────────────
+    // Per-member commitment level inside each alliance, distinct from
+    // alliance.strength (the alliance-wide health) and from inner-circle
+    // bonds (the per-pair trust derivation). Captures how committed each
+    // INDIVIDUAL is to a SPECIFIC alliance over time. Range 0–10, default
+    // 5 with members starting fresh alliances at 6 (slight commitment).
+    //
+    // Loyalty drifts gradually each round based on natural fit + alliance
+    // health + conflicts. It also responds to event-driven signals (vote
+    // coordination response, member additions/removals) so disengagement
+    // accumulates from real behavior, not spontaneously.
+    //   Structure: { [allianceId]: { [memberId]: number } }
+    allianceLoyalty: {},
+
     // ── Rumor pool (v5.17) ─────────────────────────────────
     // Each rumor: {
     //   id, kind, subjectId, objectId, createdRound, originatorId, accuracy,

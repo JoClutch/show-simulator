@@ -91,6 +91,11 @@ function createAlliance(state, members, founderId, initialStrength = 5) {
   };
   state.alliances.push(alliance);
 
+  // v5.39: each founder starts the alliance at loyalty 6 (they chose this).
+  for (const m of members) {
+    initAllianceLoyalty(state, alliance.id, m.id, "founder");
+  }
+
   // v5.17: alliance formation seeds an "alliance" rumor. Members start as
   // knowers (they obviously know about their own pact); the rumor will
   // leak to close contacts via spread. Only seed for 2-member pacts —
@@ -190,6 +195,115 @@ function getSharedAllianceTier(state, idA, idB) {
   return a ? getAllianceTier(a) : null;
 }
 
+// ── v5.39: Alliance loyalty drift ───────────────────────────────────────────
+//
+// Per-member commitment inside a SPECIFIC alliance, tracked in
+// state.allianceLoyalty[allianceId][memberId] (range 0–10, default 5).
+// Distinct from:
+//   • alliance.strength — the alliance-wide health of the pact
+//   • inner-circle bond  — per-pair trust read across the tribe
+//
+// Loyalty captures the more granular question: "Is THIS member still bought
+// into THIS alliance?" Two members of the same Core alliance can have
+// drastically different loyalty if one feels excluded or has been quietly
+// disengaging.
+//
+// ── Storage ───────────────────────────────────────────────────────────────
+function getAllianceLoyalty(state, allianceId, memberId) {
+  return state.allianceLoyalty?.[allianceId]?.[memberId] ?? 5;
+}
+
+function adjustAllianceLoyalty(state, allianceId, memberId, delta) {
+  if (!state.allianceLoyalty) state.allianceLoyalty = {};
+  if (!state.allianceLoyalty[allianceId]) state.allianceLoyalty[allianceId] = {};
+  const cur = state.allianceLoyalty[allianceId][memberId] ?? 5;
+  state.allianceLoyalty[allianceId][memberId] = Math.max(0, Math.min(10, cur + delta));
+}
+
+function setAllianceLoyalty(state, allianceId, memberId, value) {
+  if (!state.allianceLoyalty) state.allianceLoyalty = {};
+  if (!state.allianceLoyalty[allianceId]) state.allianceLoyalty[allianceId] = {};
+  state.allianceLoyalty[allianceId][memberId] = Math.max(0, Math.min(10, value));
+}
+
+function clearAllianceLoyaltyEntry(state, allianceId, memberId) {
+  if (state.allianceLoyalty?.[allianceId]) {
+    delete state.allianceLoyalty[allianceId][memberId];
+  }
+}
+
+function clearAllianceLoyaltyForAlliance(state, allianceId) {
+  if (state.allianceLoyalty) delete state.allianceLoyalty[allianceId];
+}
+
+// ── Round-end drift pass ──────────────────────────────────────────────────
+//
+// For every active alliance and every member in it, gently move their
+// loyalty toward a target value computed from:
+//   • Natural fit: avg inner-circle bond from this member to others in
+//     the alliance — the foundation of "I belong here"
+//   • Alliance health: alliance.strength influence (strong alliances pull
+//     loyalty up; weakened ones don't reinforce)
+//   • Recent conflicts inside the alliance: members who clashed with
+//     pact-mates lately drift toward less commitment
+//
+// Drift step is small (~0.3 toward target) so flips never happen abruptly
+// from drift alone — but persistent disengagement compounds over rounds.
+function driftAllianceLoyalty(state) {
+  for (const a of state.alliances ?? []) {
+    if (a.status === "dissolved") continue;
+    if (a.memberIds.length < 2) continue;
+
+    for (const memberId of a.memberIds) {
+      // Compute natural-fit baseline using inner-circle bonds.
+      let bondSum = 0, bondCount = 0;
+      for (const otherId of a.memberIds) {
+        if (otherId === memberId) continue;
+        if (typeof getInnerCircleBond === "function") {
+          bondSum += getInnerCircleBond(state, memberId, otherId);
+          bondCount++;
+        }
+      }
+      const avgBond = bondCount > 0 ? bondSum / bondCount : 5;
+
+      // Compose target loyalty.
+      let target = 5;
+      target += (avgBond - 5) * 0.3;            // natural-fit contribution
+      target += (a.strength - 5) * 0.1;         // alliance health pull
+
+      // Recent in-alliance conflicts: each one pulls target down.
+      const round = state.round ?? 0;
+      let intraConflict = 0;
+      const myConflicts = state.lastConflicts?.[memberId] || {};
+      for (const otherId of a.memberIds) {
+        if (otherId === memberId) continue;
+        const e = myConflicts[otherId];
+        if (!e) continue;
+        const age = round - (e.round ?? 0);
+        if (age <= 2) intraConflict += 1;
+      }
+      target -= intraConflict * 0.4;
+
+      target = Math.max(0, Math.min(10, target));
+
+      // Move current loyalty toward target by a small step.
+      const cur = getAllianceLoyalty(state, a.id, memberId);
+      const diff = target - cur;
+      const step = Math.max(-0.3, Math.min(0.3, diff * 0.4));
+      adjustAllianceLoyalty(state, a.id, memberId, step);
+    }
+  }
+}
+
+// Initialize a member's loyalty when they join an alliance. Founders and
+// initial members start at 6 (slightly above neutral — they chose this
+// pact). Invitees brought in via inviteToAlliance start at 4.5 (newcomer
+// uncertainty — they've accepted but the bond hasn't proven out yet).
+function initAllianceLoyalty(state, allianceId, memberId, kind /* "founder" | "invitee" */) {
+  const start = kind === "invitee" ? 4.5 : 6.0;
+  setAllianceLoyalty(state, allianceId, memberId, start);
+}
+
 // Applies a delta to every active alliance that contains BOTH members.
 // Used by camp interactions where two specific members did something
 // together (deep talk, confide, aligned strategy talk).
@@ -220,10 +334,13 @@ function removeMemberFromAlliances(state, contestantId) {
     const wasPlayerMember = state.player && a.memberIds.includes(state.player.id);
 
     a.memberIds.splice(idx, 1);
+    // v5.39: clean up the eliminated member's loyalty entry for this alliance.
+    clearAllianceLoyaltyEntry(state, a.id, contestantId);
 
     if (a.memberIds.length < 2 && a.status !== "dissolved") {
       a.status   = "dissolved";
       a.strength = 0;
+      clearAllianceLoyaltyForAlliance(state, a.id);
       logEvent(state, {
         category:      "alliance",
         type:          "dissolved",
@@ -305,6 +422,10 @@ function inviteToAlliance(state, allianceId, inviterId, inviteeId) {
     alliance.memberIds.push(inviteeId);
     adjustAllianceStrength(alliance, +0.5);
     alliance.lastReinforcedRound = state.round ?? 0;
+
+    // v5.39: invitee enters at provisional loyalty 4.5 — committed enough
+    // to accept, but the bond isn't proven yet.
+    initAllianceLoyalty(state, alliance.id, inviteeId, "invitee");
 
     // Bond glue between invitee and existing members.
     for (const mid of alliance.memberIds) {
@@ -394,9 +515,15 @@ function bootFromAlliance(state, allianceId, booterId, targetId) {
     adjustAllianceStrength(alliance, -1);
     adjustRelationship(state, booterId, targetId, -5);
     adjustTrust(state, booterId, targetId, -3);
+    // v5.39: clean the booted member's loyalty entry; remaining members
+    // who backed the boot get a small loyalty bump (the alliance just did
+    // what they wanted), the booter most of all.
+    clearAllianceLoyaltyEntry(state, allianceId, targetId);
+    adjustAllianceLoyalty(state, allianceId, booterId, +0.4);
     if (alliance.memberIds.length < 2) {
       alliance.status = "dissolved";
       alliance.strength = 0;
+      clearAllianceLoyaltyForAlliance(state, allianceId);
     }
     logEvent(state, {
       category:      "alliance",
@@ -453,9 +580,17 @@ function leaveAlliance(state, allianceId, leaverId) {
   adjustAllianceStrength(alliance, -2);
   adjustSuspicion(state, leaverId, +1);
 
+  // v5.39: clean leaver's loyalty entry; remaining members lose loyalty
+  // (someone walking out shakes the rest's commitment).
+  clearAllianceLoyaltyEntry(state, allianceId, leaverId);
+  for (const mid of alliance.memberIds) {
+    adjustAllianceLoyalty(state, allianceId, mid, -0.4);
+  }
+
   if (alliance.memberIds.length < 2) {
     alliance.status = "dissolved";
     alliance.strength = 0;
+    clearAllianceLoyaltyForAlliance(state, allianceId);
   }
 
   logEvent(state, {
@@ -617,9 +752,11 @@ function coordinateAllianceVote(state, allianceId, coordinatorId, targetId) {
           setCampTargetForContestant(state, mid, targetId, 7);
         }
         adjustRelationship(state, mid, coordinatorId, +1);
+        adjustAllianceLoyalty(state, allianceId, mid, +0.4);  // v5.39
         break;
       case "soft-agree":
         adjustRelationship(state, mid, coordinatorId, +1);
+        adjustAllianceLoyalty(state, allianceId, mid, +0.2);  // v5.39
         break;
       case "hesitate":
         // No mechanical effect.
@@ -627,6 +764,7 @@ function coordinateAllianceVote(state, allianceId, coordinatorId, targetId) {
       case "mislead":
         // Says yes but doesn't commit. Trust quietly bleeds.
         adjustTrust(state, mid, coordinatorId, -1);
+        adjustAllianceLoyalty(state, allianceId, mid, -0.3);  // v5.39
         break;
       case "leak":
         adjustSuspicion(state, coordinatorId, +1);
@@ -634,10 +772,12 @@ function coordinateAllianceVote(state, allianceId, coordinatorId, targetId) {
           // Member becomes the originator of the leaked-targeting rumor.
           seedRumor(state, "targeting", coordinatorId, targetId, mid, 0.8);
         }
+        adjustAllianceLoyalty(state, allianceId, mid, -0.6);  // v5.39
         break;
       case "reject":
         adjustRelationship(state, mid, coordinatorId, -2);
         adjustAllianceStrength(alliance, -0.5);
+        adjustAllianceLoyalty(state, allianceId, mid, -0.4);  // v5.39
         break;
     }
 
@@ -668,8 +808,13 @@ function coordinateAllianceVote(state, allianceId, coordinatorId, targetId) {
     if (totalAgree >= Math.ceil(responses.length / 2) && rejectCount === 0) {
       adjustAllianceStrength(alliance, +0.5);
       alliance.lastReinforcedRound = state.round ?? 0;
+      // v5.39: coordinator feels seen and committed when their plan lands.
+      adjustAllianceLoyalty(state, allianceId, coordinatorId, +0.3);
     } else if (rejectCount >= responses.length / 2 && rejectCount >= 2) {
       adjustAllianceStrength(alliance, -0.5);
+      // v5.39: coordinator who proposed a plan that fractured loses their
+      // own commitment — this isn't the alliance they thought it was.
+      adjustAllianceLoyalty(state, allianceId, coordinatorId, -0.3);
     }
   }
 

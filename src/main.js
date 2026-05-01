@@ -269,6 +269,12 @@ function advanceRound() {
   // captures the round just played.
   updateAlliances(gameState);
 
+  // v5.39: per-member loyalty drift inside each active alliance. Gentle
+  // step toward the natural-fit target (avg inner-circle bond + alliance
+  // health − recent intra-alliance conflicts). Compounds across rounds so
+  // long-running alliances develop authentic loyalty distributions.
+  driftAllianceLoyalty(gameState);
+
   // Clear ephemeral voting blocs from the just-concluded tribal. Blocs only
   // persist for the round they formed in (visible in dev panel until reset).
   gameState.votingBlocs = [];
