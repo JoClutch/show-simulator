@@ -197,6 +197,18 @@ function scoreVoteTarget(state, voter, c) {
     idolFactor = voter.strategy >= 6 ? -2 : +3;
   }
 
+  // v5.34: idol-fear hesitation for less-strategic voters. Goes BEYOND raw
+  // idol suspicion — picks up reputation (Schemer / high-strategy holder)
+  // and active rumor signal as well. Strategic voters (≥6) have already
+  // been handled by idolFactor's flush logic above; this layer specifically
+  // models the camp's collective "let's not pile on the obvious target"
+  // hesitation that emerges from broad fear, not just direct witness.
+  if (voter.strategy < 6 && typeof getIdolFear === "function") {
+    const fear = getIdolFear(state, voter.id, c.id);
+    if      (fear >= 5) idolFactor += 2;
+    else if (fear >= 3) idolFactor += 1;
+  }
+
   // v5.16: social capital — broad tribe-standing nudge. High-capital targets
   // are slightly harder to vote out (the room defaults to giving them
   // benefit of the doubt); low-capital targets become consensus targets a

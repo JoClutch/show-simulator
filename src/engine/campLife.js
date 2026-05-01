@@ -2314,6 +2314,26 @@ function actionReadRoom(state, player, tribemates) {
     }
   }
 
+  // v5.34: collective idol-fear self-read. When the rest of the camp
+  // averages high fear of the PLAYER, surface a hedged line — the room is
+  // tiptoeing around them because they're worried about an idol/advantage,
+  // even when the player's actual vulnerability would otherwise put them
+  // on the chopping block. Indirect signal that idol paranoia is buying
+  // them time. Only fires when fear is genuinely meaningful across the
+  // tribe, not from a single panicked observer.
+  if (typeof getIdolFear === "function" && tribemates.length >= 2) {
+    let fearSum = 0;
+    for (const c of tribemates) fearSum += getIdolFear(state, c.id, player.id);
+    const avgFearOfPlayer = fearSum / tribemates.length;
+    if (avgFearOfPlayer >= 4) {
+      candidates.push({ weight: 4 + avgFearOfPlayer * 0.4, text: pickFrom([
+        `The room seems to be tiptoeing around you. They're not pushing your name even though they could — somebody's worried you have something.`,
+        `You picked up a quiet caution from the camp today, the kind that reads as "they're not sure what we're walking into with this one." Idol paranoia, maybe — and it's working in your favor.`,
+        `For someone who could be on the block tonight, the air around you is oddly soft. The tribe has questions about you they aren't asking out loud.`,
+      ])});
+    }
+  }
+
   // v5.33: hedged idol-fear read. Surfaces the tribemate the player is
   // most afraid may have an idol/advantage right now. Doesn't expose any
   // raw number — purely the qualitative read. Only fires when fear is
@@ -3082,13 +3102,23 @@ function pickDeflectionTarget(state, scrambler, pool) {
 
   // Rank by pressure descending — deflect at someone the room is already
   // softer on, so the pitch has somewhere to land.
+  // v5.34: also factor in idol fear. A scrambler doesn't want to deflect
+  // toward someone who might play an idol on the deflection vote — that
+  // backfires twice (the deflection target survives AND the scrambler
+  // looks like the obvious villain). High-fear candidates are penalized
+  // heavily so the scrambler picks safer "obvious target" backups.
   const ranked = candidates.map(c => ({
     c,
     pressure: getPressureScore(state, c.id),
     rel:      getRelationship(state, scrambler.id, c.id),
+    fear:     typeof getIdolFear === "function"
+                ? getIdolFear(state, scrambler.id, c.id)
+                : 0,
   }));
-  // Prefer high-pressure candidates the scrambler also doesn't like.
-  ranked.sort((a, b) => (b.pressure - b.rel * 0.3) - (a.pressure - a.rel * 0.3));
+  ranked.sort((a, b) =>
+    (b.pressure - b.rel * 0.3 - b.fear * 0.5) -
+    (a.pressure - a.rel * 0.3 - a.fear * 0.5)
+  );
   return ranked[0]?.c ?? null;
 }
 
