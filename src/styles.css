@@ -2212,6 +2212,48 @@ button:disabled {
   margin-top: 0.1rem;
 }
 
+/* v5.36: camp mood pill — small thematic indicator of current tribe
+   temperature (calm / steady / uneasy / tense / chaotic). Rendered in
+   the camp header next to the tribe tag. Single word + colored dot;
+   intentionally small and quiet so it reads as ambient atmosphere
+   rather than a stat readout. */
+.camp-mood-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.25rem;
+  padding: 0.15rem 0.55rem;
+  border: 1px solid var(--border-dim);
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: var(--bg-card);
+  color: var(--text-muted);
+  cursor: help;
+  transition: color 200ms ease, border-color 200ms ease;
+}
+.camp-mood-dot {
+  width: 0.42rem;
+  height: 0.42rem;
+  border-radius: 50%;
+  display: inline-block;
+  background: var(--text-muted);
+}
+.camp-mood-label {
+  letter-spacing: 0.06em;
+}
+.camp-mood-pill[data-mood="calm"]    { color: #7aa088; border-color: rgba(122, 160, 136, 0.4); }
+.camp-mood-pill[data-mood="calm"]    .camp-mood-dot { background: #5fa86f; }
+.camp-mood-pill[data-mood="steady"]  { color: var(--text-muted); }
+.camp-mood-pill[data-mood="steady"]  .camp-mood-dot { background: var(--text-muted); }
+.camp-mood-pill[data-mood="uneasy"]  { color: #c89a4a; border-color: rgba(200, 154, 74, 0.4); }
+.camp-mood-pill[data-mood="uneasy"]  .camp-mood-dot { background: #c89a4a; }
+.camp-mood-pill[data-mood="tense"]   { color: #e89a4a; border-color: rgba(232, 154, 74, 0.45); background: rgba(232, 154, 74, 0.05); }
+.camp-mood-pill[data-mood="tense"]   .camp-mood-dot { background: #e89a4a; }
+.camp-mood-pill[data-mood="chaotic"] { color: #b85060; border-color: rgba(184, 80, 96, 0.5);  background: rgba(184, 80, 96, 0.06); }
+.camp-mood-pill[data-mood="chaotic"] .camp-mood-dot { background: #b85060; }
+
 .actions-counter {
   font-size: 0.82rem;
   background-color: var(--bg-card);

@@ -282,6 +282,18 @@ function renderCampLifeScreen(container, state) {
     snap.pressure   = (typeof getPressureScore   === "function") ? getPressureScore(state, player.id)   : 5;
     snap.capital    = (typeof getSocialCapital   === "function") ? getSocialCapital(state, player.id)    : 5;
     snap.rumorCount = (typeof getRumorsKnownBy   === "function") ? getRumorsKnownBy(state, player.id).length : 0;
+    // v5.36: snapshot camp temperature tier so the recap can surface
+    // mood-shift lines (e.g. "the camp slid from steady to tense today").
+    if (typeof getCampTemperature === "function") {
+      const tribePool = state.merged
+        ? (state.tribes?.merged || [])
+        : (state.tribes?.[player.tribe] || []);
+      snap.moodTier = tribePool.length >= 2
+        ? getCampTemperature(state, tribePool).tier
+        : null;
+    } else {
+      snap.moodTier = null;
+    }
     return snap;
   }
 
@@ -407,6 +419,29 @@ function renderCampLifeScreen(container, state) {
       lines.push(`You walked away from camp with one fresh whisper that wasn't there this morning.`);
     }
 
+    // ── v5.36: camp mood shift ─────────────────────────────────────────
+    // If the temperature tier crossed at least one band during the phase,
+    // surface a short narration of the shift. Doesn't fire when mood
+    // stayed put — quiet days don't need a temperature line.
+    if (snap.moodTier && typeof getCampTemperature === "function") {
+      const tribePool = state.merged
+        ? (state.tribes?.merged || [])
+        : (state.tribes?.[player.tribe] || []);
+      if (tribePool.length >= 2) {
+        const moodNow = getCampTemperature(state, tribePool).tier;
+        const order = ["calm", "steady", "uneasy", "tense", "chaotic"];
+        const before = order.indexOf(snap.moodTier);
+        const after  = order.indexOf(moodNow);
+        if (before >= 0 && after >= 0 && before !== after) {
+          if (after > before) {
+            lines.push(`The camp slid toward ${moodNow} today. The temperature came up.`);
+          } else {
+            lines.push(`The camp settled. Mood went from ${snap.moodTier} to ${moodNow} by evening.`);
+          }
+        }
+      }
+    }
+
     // ── Camp tone fallback ─────────────────────────────────────────────
     if (lines.length === 0) {
       const calm = pickFrom([
@@ -435,6 +470,34 @@ function renderCampLifeScreen(container, state) {
 
   function pickFrom(arr) {
     return arr[Math.floor(Math.random() * arr.length)];
+  }
+
+  // v5.36: camp mood pill builder. Returns a small thematic tag reflecting
+  // the current camp temperature tier (calm / steady / uneasy / tense /
+  // chaotic). Single hyphenated word, color-coded via data-mood attribute.
+  // Reads getCampTemperature on demand so the pill always reflects current
+  // state. Hidden gracefully if the helper isn't available.
+  function buildCampMoodPillHTML() {
+    if (typeof getCampTemperature !== "function") return "";
+    const tribePool = state.merged
+      ? (state.tribes?.merged || [])
+      : (state.tribes?.[player.tribe] || []);
+    if (tribePool.length < 2) return "";
+    const temp = getCampTemperature(state, tribePool);
+    const labelMap = {
+      calm:    "Calm",
+      steady:  "Steady",
+      uneasy:  "Uneasy",
+      tense:   "Tense",
+      chaotic: "Chaotic",
+    };
+    const label = labelMap[temp.tier] ?? "Steady";
+    return `
+      <span class="camp-mood-pill" data-mood="${temp.tier}" title="The overall tribe mood right now">
+        <span class="camp-mood-dot" aria-hidden="true"></span>
+        <span class="camp-mood-label">${label}</span>
+      </span>
+    `;
   }
 
   // v5.14: emerging camp-role identity card. Reads state via the engine
@@ -662,6 +725,10 @@ function renderCampLifeScreen(container, state) {
           <p class="screen-eyebrow">Episode ${state.round} · Day ${getDay(state) + (isPhase2 ? DAY_OFFSETS.campPhase2 : DAY_OFFSETS.campPhase1)}</p>
           <h2>${phaseLabel}</h2>
           <span class="camp-tribe-tag" style="color:${tribeColor}">${escapeHtml(tribeName)} tribe</span>
+          <!-- v5.36: camp mood pill — single thematic word reflecting the
+               current tribe temperature (calm/steady/uneasy/tense/chaotic).
+               Updated live in showActionButtons as actions land. -->
+          <span id="camp-mood-pill">${buildCampMoodPillHTML()}</span>
           <span class="camp-step-note">${stepNote}</span>
         </div>
         <div class="camp-header-right">
@@ -816,6 +883,12 @@ function renderCampLifeScreen(container, state) {
     // (alliance formed, idol found) that should appear immediately.
     const notesContainer = container.querySelector("#strategic-notes-container");
     if (notesContainer) notesContainer.innerHTML = buildStrategicNotesHTML();
+
+    // v5.36: refresh the camp mood pill. Most actions move underlying
+    // signals (suspicion, rumors, conflicts, alliance strength) so the
+    // tier may shift mid-phase as the player's camp moves accumulate.
+    const moodPill = container.querySelector("#camp-mood-pill");
+    if (moodPill) moodPill.innerHTML = buildCampMoodPillHTML();
 
     // Re-read live idol state for the search button — same reason.
     const currentHoldsScope = getHeldIdols(state, player.id)
