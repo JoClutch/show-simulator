@@ -51,21 +51,84 @@
 // the player picks a category first, then an action within it. Adding a new
 // action only requires adding an entry to CAMP_ACTIONS with the right
 // category id; the UI auto-routes it into the correct submenu.
+// v5.21: action architecture refactor — preparing for consolidation.
+//
+// CATEGORIES added "alliances" (separate from strategy). The Camp Life menu
+// now has four top-level slots:
+//
+//   • Social    — relationships, trust, repair, observation
+//   • Strategy  — votes, intel, influence, third-party reads
+//   • Alliances — pact formation and reinforcement
+//   • Island    — solo / non-social actions (camp, idols, low profile)
+//
+// ACTION OBJECTS now carry an optional `consolidationGroup` string. Actions
+// with the same group are tagged as candidates to be merged into a single
+// player-facing action in a future phase. The engine logic for each is
+// preserved as-is during this phase — the tag is purely structural so we
+// can build the consolidated dispatcher safely.
+//
+// ── Identified overlap groups ──────────────────────────────────────────────
+//
+//   group: "spendTime"         — talk, confide
+//                                Both build pair social standing; depth
+//                                varies by trust. Future merged action picks
+//                                between them based on context.
+//
+//   group: "repairBond"        — smoothOver, checkIn
+//                                Both repair social damage. checkIn handles
+//                                recent specific conflict; smoothOver handles
+//                                ambient strain. Future merged action auto-
+//                                detects which mode to apply.
+//
+//   group: "readCamp"          — observeCamp, readRoom
+//                                Both surface broad camp dynamics. observeCamp
+//                                returns concrete pair signals; readRoom
+//                                returns vibe/mood. Future merged action
+//                                returns a blended read scaled by social.
+//
+//   group: "playerIntel"       — observePair, compareNotes
+//                                Both gather intel about a non-self target.
+//                                observePair watches passively; compareNotes
+//                                routes through a partner. Future merged
+//                                action picks the path based on whether a
+//                                viable partner exists.
+//
+//   group: "alliancePact"      — proposeAlliance
+//                                Already self-contained (form / strengthen
+//                                via the same action). Tagged for the new
+//                                Alliances category move; future expansions
+//                                may add reinforce / dissolve here.
+//
+// Strategy actions (strategy / askVote / lobby) and Island actions are not
+// consolidation candidates in the current design — each fills a distinct
+// strategic role.
+//
+// ── Backward compatibility guarantee ───────────────────────────────────────
+// Every legacy action id continues to work end-to-end through this phase.
+// executeAction(legacyId, ...) routes to the same engine function as before.
+// recordCampAction logs the legacy id; getCanonicalActionId(legacyId) maps
+// it to the canonical group id for role-detection rollups.
+
 const CAMP_ACTION_CATEGORIES = [
   {
     id:    "social",
     label: "Social",
-    description: "Build relationships and trust with your tribemates.",
+    description: "Build relationships, repair bonds, read the room.",
   },
   {
     id:    "strategy",
     label: "Strategy",
-    description: "Plan votes, share intel, lock in alliances.",
+    description: "Float votes, fish for intel, push targets, trade reads.",
+  },
+  {
+    id:    "alliances",
+    label: "Alliances",
+    description: "Form pacts and reinforce existing alliances.",
   },
   {
     id:    "island",
     label: "Island",
-    description: "Explore the jungle, manage your profile, search for advantages.",
+    description: "Tend camp, search for advantages, manage your profile.",
   },
 ];
 
@@ -74,29 +137,31 @@ const CAMP_ACTIONS = [
     id: "talk",
     // v5.3: renamed to make the "spend time with another player" framing
     // explicit. Engine logic is enhanced (rel momentum) but compatible.
+    // v5.21: tagged for future consolidation with "confide" under spendTime.
     label: "Spend time with someone",
     detail: "Hang out, share stories, build a real bond over time.",
     needsTarget: true,
     category: "social",
+    consolidationGroup: "spendTime",
   },
-  // v5.5: "Improve camp" was relabeled to "Tend camp" and moved from Social
-  // to Island. Same engine effect (tribe-wide rel + suspicion drop) plus a
-  // tend-camp credit that boosts the next idol search.
   {
     id: "confide",
     label: "Open up to someone",
     detail: "Share something real. The fastest way to build genuine trust.",
     needsTarget: true,
     category: "social",
+    consolidationGroup: "spendTime",
   },
   {
     // v5.3: new — repair a strained relationship.
+    // v5.21: tagged for future consolidation with "checkIn" under repairBond.
     id: "smoothOver",
     label: "Smooth things over",
     detail: "Try to repair a strained bond. Works best on small rifts.",
     needsTarget: true,
     targetPrompt: "Who do you want to mend things with?",
     category: "social",
+    consolidationGroup: "repairBond",
   },
   {
     // v5.12: dedicated post-conflict repair. Distinct from "Smooth things
@@ -110,6 +175,7 @@ const CAMP_ACTIONS = [
     needsTarget: true,
     targetPrompt: "Who do you want to check in with?",
     category: "social",
+    consolidationGroup: "repairBond",
   },
   {
     // v5.3: new — observe social dynamics without doing anything yourself.
@@ -118,6 +184,7 @@ const CAMP_ACTIONS = [
     detail: "Read the room. You'll notice what others are putting out there.",
     needsTarget: false,
     category: "social",
+    consolidationGroup: "readCamp",
   },
   {
     // v5.11: broad mood/tempo read. Distinct from "Observe the camp"
@@ -129,6 +196,7 @@ const CAMP_ACTIONS = [
     detail: "Step back and feel the temperature. You'll get vibes more than facts.",
     needsTarget: false,
     category: "social",
+    consolidationGroup: "readCamp",
   },
   {
     id: "strategy",
@@ -161,10 +229,12 @@ const CAMP_ACTIONS = [
     // v5.4 deepened — when you're already allied with the target, this
     // action strengthens that pact instead of being a no-op. Same option,
     // smart engine.
+    // v5.21: moved from "strategy" to the new "alliances" category.
     detail: "Form a new pact — or deepen one you already share. Needs trust to land.",
     needsTarget: true,
     targetPrompt: "Who do you want to bring in?",
-    category: "strategy",
+    category: "alliances",
+    consolidationGroup: "alliancePact",
   },
   {
     // v5.4: targeted observation of a single player's social position.
@@ -174,6 +244,7 @@ const CAMP_ACTIONS = [
     needsTarget: true,
     targetPrompt: "Who do you want to watch?",
     category: "strategy",
+    consolidationGroup: "playerIntel",
   },
   {
     // v5.4: trust-gated intel sharing about THIRD parties.
@@ -183,6 +254,7 @@ const CAMP_ACTIONS = [
     needsTarget: true,
     targetPrompt: "Who do you want to compare notes with?",
     category: "strategy",
+    consolidationGroup: "playerIntel",
   },
   {
     // v5.5: renamed from "improvecamp" / "Improve camp" (was Social).
@@ -221,11 +293,59 @@ const CAMP_ACTIONS = [
   },
 ];
 
+// v5.21: action registry — id → action def. Built once from CAMP_ACTIONS so
+// dispatcher code can look up an action's metadata (category, group, target
+// requirements, label) without an O(n) scan. Single source of truth.
+const CAMP_ACTION_REGISTRY = Object.fromEntries(CAMP_ACTIONS.map(a => [a.id, a]));
+
+// v5.21: returns all actions sharing a consolidation group. Used by the
+// camp-role roll-up so that future merged actions can claim their group's
+// share of action history without duplicate counting. Returns [] for
+// actions with no group set.
+function getActionsInGroup(group) {
+  if (!group) return [];
+  return CAMP_ACTIONS.filter(a => a.consolidationGroup === group);
+}
+
+// v5.21: canonical-id resolver. Currently identity for legacy ids; future
+// merged-action phases will remap legacy ids to their canonical merged id
+// (e.g. getCanonicalActionId("talk") → "spendTime") once a merged action
+// exists. Used by camp-role detection and any analytics layer that needs
+// to roll legacy + merged ids together.
+function getCanonicalActionId(actionId) {
+  const def = CAMP_ACTION_REGISTRY[actionId];
+  if (!def) return actionId;
+  // For now, the canonical id is just the action's own id. The future merged
+  // action will replace this mapping at the time of consolidation by
+  // returning the merged id when given any of its legacy ids.
+  return def.id;
+}
+
+// v5.21: group lookup. Returns the consolidationGroup for an action id, or
+// null if the action isn't part of a group. Used by the consolidation-aware
+// dispatcher to detect when a merged action should fire instead.
+function getActionConsolidationGroup(actionId) {
+  return CAMP_ACTION_REGISTRY[actionId]?.consolidationGroup ?? null;
+}
+
+// v5.21: lookup an action's metadata by id without leaking the registry
+// constant outside this module. Returns null for unknown ids.
+function getCampActionDef(actionId) {
+  return CAMP_ACTION_REGISTRY[actionId] ?? null;
+}
+
 // ── Entry point ───────────────────────────────────────────────────────────────
 
 // Executes one camp action. Mutates state and/or contestant objects.
 // Returns { feedback: string, hint: string|null }
 // hint carries a name when an action reveals who someone is watching.
+//
+// v5.21: dispatch is registry-aware. The switch below stays as the
+// authoritative routing layer — every legacy id continues to route to its
+// existing engine function, preserving end-to-end behavior. When a future
+// phase introduces a merged action (e.g. "spendTime"), it can be added as
+// a new switch case AND its consolidationGroup members can be optionally
+// removed from CAMP_ACTIONS without further engine surgery.
 function executeAction(state, actionId, player, tribemates, target) {
   // v5.14: log every camp action against the actor for camp-role detection.
   recordCampAction(state, player.id, actionId);
