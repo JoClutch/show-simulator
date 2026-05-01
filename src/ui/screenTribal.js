@@ -183,6 +183,14 @@ function runVoteResolution(container, state, attendees, originalVotes, protected
       return;
     }
     const revealOrder = buildRevealOrder(originalVotes, result.eliminated.id);
+    // v6.6: stash fallout metadata on state so onTribalDone can read it.
+    state._lastTribalMeta = {
+      allVotes:       originalVotes,
+      originalVotes,
+      revoteVotes:    null,
+      resolutionKind: "decided",
+      protectedIds,
+    };
     renderRevealPhase(container, state, revealOrder, result.eliminated, protectedIds);
     return;
   }
@@ -296,6 +304,10 @@ function runRevotePhase(container, state, attendees, originalVotes, tiedIds, pro
 }
 
 function finishRevote(container, state, attendees, originalVotes, tiedIds, revoteBallots, protectedIds) {
+  // v6.6: cache for rocks-branch fallout in case revote also ties.
+  state._lastTribalOriginalVotes = originalVotes;
+  state._lastTribalRevoteVotes   = revoteBallots;
+  state._lastTribalProtectedIds  = protectedIds;
   // Tally revote ballots. No idol play in the revote phase (idols are spent
   // pre-vote in the modern format), so protectedIds is empty for this tally.
   const result = tallyVotes(revoteBallots, state, new Set());
@@ -305,6 +317,15 @@ function finishRevote(container, state, attendees, originalVotes, tiedIds, revot
     // so the player sees how the room broke when forced to choose between
     // the tied players. The original-round votes are already history.
     const revealOrder = buildRevealOrder(revoteBallots, result.eliminated.id);
+    // v6.6: stash fallout metadata. The "all votes" used for fallout is
+    // the REVOTE — that's what produced the elimination.
+    state._lastTribalMeta = {
+      allVotes:       revoteBallots,
+      originalVotes,
+      revoteVotes:    revoteBallots,
+      resolutionKind: "tie-revote",
+      protectedIds,
+    };
     showRevoteResolvedBeat(container, state, () => {
       renderRevealPhase(container, state, revealOrder, result.eliminated, new Set());
     });
@@ -393,6 +414,16 @@ function runRocksPhase(container, state, attendees, tiedIds) {
   `;
 
   container.querySelector("#rocks-finish-btn").addEventListener("click", () => {
+    // v6.6: stash fallout metadata for the rocks branch. allVotes here is
+    // best-effort — we use the original ballots since rocks aren't ballots.
+    // The resolutionKind drives the rocks-specific fallout effects.
+    state._lastTribalMeta = {
+      allVotes:       state._lastTribalOriginalVotes ?? [],
+      originalVotes:  state._lastTribalOriginalVotes ?? [],
+      revoteVotes:    state._lastTribalRevoteVotes ?? [],
+      resolutionKind: "tie-rocks",
+      protectedIds:   state._lastTribalProtectedIds ?? new Set(),
+    };
     onTribalDone(result.eliminated);
   });
 }
@@ -668,7 +699,9 @@ function renderRevealPhase(container, state, revealOrder, eliminated, protectedI
 
   function revealNext() {
     if (i >= revealOrder.length) {
-      setTimeout(showFinishButton, 900);
+      // v6.5: longer post-decisive beat so the result lands before the
+      // finish button appears. Was 900ms, now 1500ms.
+      setTimeout(showFinishButton, 1500);
       return;
     }
 
@@ -704,7 +737,22 @@ function renderRevealPhase(container, state, revealOrder, eliminated, protectedI
 
     i++;
 
-    const delay = isDecisive ? 0 : (i === 1 ? 700 : 1200);
+    // v6.5: pacing tuned for tension.
+    //   • First reveal: 700ms (existing — gives the player a beat to read
+    //     the intro before the first vote drops).
+    //   • Mid reveals:  1100ms (was 1200ms — slight quicken so a long
+    //     reveal doesn't drag).
+    //   • Pre-decisive beat: a touch longer (1300ms) so the decisive
+    //     reveal feels weighty when it lands.
+    //   • Decisive itself: 0 — it animates immediately, the post-decisive
+    //     setTimeout above handles the dramatic pause before the finish
+    //     button.
+    const isPreDecisive = i === revealOrder.length - 1;
+    let delay;
+    if (isDecisive)         delay = 0;
+    else if (i === 1)       delay = 700;
+    else if (isPreDecisive) delay = 1300;
+    else                    delay = 1100;
     setTimeout(revealNext, delay);
   }
 

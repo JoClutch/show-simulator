@@ -803,39 +803,302 @@ function drawRocks(state, attendees, tiedIds) {
 
 // ── Dramatic reveal ordering ──────────────────────────────────────────────────
 
-// Orders votes so the reveal feels like Survivor:
+// v6.5: orders votes so the reveal feels like Survivor and STOPS reading
+// once the result is mathematically decided. Three goals:
 //
-//   1. Votes for the eliminated person and votes for others are interleaved —
-//      so the counts swing back and forth and the outcome stays unclear.
-//   2. One vote for the eliminated person is held back as the decisive final
-//      reveal. The last vote shown always clinches the result.
+//   1. Suspense: alternate between votes-for-eliminated and votes-for-
+//      others so the count swings back and forth.
+//   2. Mathematical stop: in real Survivor, Jeff stops reading once it's
+//      impossible for any other candidate to catch up. We mirror that —
+//      the last revealed vote is the one that "locks it in."
+//   3. Drama floor: even when the result is decided early (e.g. on the 3rd
+//      of 9 votes), reveal at least 3 votes before stopping so the moment
+//      doesn't feel anticlimactic. For unanimous votes (no others-votes
+//      exist) all eliminated votes are revealed sequentially — the drama
+//      is the revelation of unanimity itself.
 //
-// If everyone voted the same way (landslide) the votes still reveal in a
-// random order with the last one saved as the "clincher."
+// Returns the prefix of the full vote list that should actually be shown.
+// Hidden votes are not displayed — matching the real-show behavior of
+// "we don't need to read the rest."
 function buildRevealOrder(votes, eliminatedId) {
   const forEliminated = shuffleArray(votes.filter(v => v.target.id === eliminatedId));
   const forOthers     = shuffleArray(votes.filter(v => v.target.id !== eliminatedId));
 
-  // Edge case: unanimous vote. Just shuffle and hold the last back.
+  // Unanimous reveal — show every eliminated vote, last one held as clincher.
   if (forOthers.length === 0) {
-    const decisive = forEliminated.pop();
-    return [...forEliminated, decisive];
+    return forEliminated;
   }
 
-  // Save the decisive vote for last.
-  const decisive = forEliminated.pop();
-
-  // Interleave: one for others, one for eliminated, alternating.
+  // Build the alternating sequence with mathematical early-stop.
   const ordered = [];
-  const len     = Math.max(forEliminated.length, forOthers.length);
+  let visibleEliminated = 0;
+  const visibleByTarget = {};   // for runner-up tracking
+  let visibleRunnerUp   = 0;
 
-  for (let i = 0; i < len; i++) {
-    if (i < forOthers.length)     ordered.push(forOthers[i]);
-    if (i < forEliminated.length) ordered.push(forEliminated[i]);
+  // Use copies we can shift from. Lead with an "other" vote (suspense start).
+  const elimQueue   = [...forEliminated];
+  const othersQueue = [...forOthers];
+
+  // Drama floor — read at least min(3, totalVotes) votes before allowing
+  // the early-stop. Prevents anticlimactic 1-vote reveals on lopsided
+  // ballots that only contain a couple of "for eliminated" votes.
+  const dramaFloor = Math.min(3, votes.length);
+
+  // Alternate, leading with "other".
+  let nextIsOther = true;
+
+  while (elimQueue.length > 0 || othersQueue.length > 0) {
+    let pickedFromElim = false;
+    if (nextIsOther && othersQueue.length > 0) {
+      const v = othersQueue.shift();
+      ordered.push(v);
+      const t = v.target.id;
+      visibleByTarget[t] = (visibleByTarget[t] ?? 0) + 1;
+      if (visibleByTarget[t] > visibleRunnerUp) visibleRunnerUp = visibleByTarget[t];
+    } else if (elimQueue.length > 0) {
+      const v = elimQueue.shift();
+      ordered.push(v);
+      visibleEliminated++;
+      pickedFromElim = true;
+    } else if (othersQueue.length > 0) {
+      const v = othersQueue.shift();
+      ordered.push(v);
+      const t = v.target.id;
+      visibleByTarget[t] = (visibleByTarget[t] ?? 0) + 1;
+      if (visibleByTarget[t] > visibleRunnerUp) visibleRunnerUp = visibleByTarget[t];
+    }
+    nextIsOther = !nextIsOther;
+
+    // Mathematical decisive check. The MAX possible final count for any
+    // other candidate is their currently-visible count plus all unread
+    // "other" votes (eliminated votes go to eliminated, not runners-up).
+    // If visibleEliminated exceeds that ceiling, the result is locked.
+    const remainingOthers = othersQueue.length;
+    const maxOtherFinal   = visibleRunnerUp + remainingOthers;
+    if (pickedFromElim &&
+        visibleEliminated > maxOtherFinal &&
+        ordered.length >= dramaFloor) {
+      break;
+    }
   }
 
-  ordered.push(decisive);
   return ordered;
+}
+
+// ── v6.6: Post-vote fallout ─────────────────────────────────────────────────
+//
+// Apply the social and alliance consequences of a Tribal Council outcome.
+// Reads the actual vote pattern + resolution metadata and updates rel,
+// trust, alliance loyalty, suspicion memory, and contestant.suspicion to
+// reflect what the room saw. Different vote shapes produce different
+// fallout — a 5-2 blindside hits much harder than a unanimous boot.
+//
+// `meta` shape:
+//   {
+//     allVotes:        [{voter, target}, ...]   // the deciding ballots
+//     originalVotes:   [{voter, target}, ...]   // first-round if revote happened
+//     revoteVotes:     [{voter, target}, ...]   // revote if happened
+//     resolutionKind:  "decided" | "tie-revote" | "tie-rocks"
+//     protectedIds:    Set<id>                  // idol-protected ids
+//   }
+//
+// Called once per Tribal from main.js → onTribalDone, AFTER the eliminated
+// has been pushed to state.eliminated but BEFORE removeFromTribes (so
+// alliance lookups still reflect the in-tribal state).
+function applyTribalFallout(state, eliminated, meta) {
+  if (!eliminated || !meta) return;
+
+  const allVotes = meta.allVotes ?? [];
+  const resolutionKind = meta.resolutionKind ?? "decided";
+
+  // ── Vote pattern analysis ────────────────────────────────────────────
+  const votersForElim = allVotes
+    .filter(v => v.target.id === eliminated.id)
+    .map(v => v.voter);
+  const votersAgainstElim = allVotes
+    .filter(v => v.target.id !== eliminated.id)
+    .map(v => v.voter);
+
+  const elimCount    = votersForElim.length;
+  const totalVotes   = allVotes.length;
+  const otherCount   = totalVotes - elimCount;
+  const isUnanimous  = otherCount === 0 && totalVotes > 0;
+  const isClose      = !isUnanimous && otherCount > 0 && (elimCount - otherCount) <= 1;
+
+  // Did the eliminated player see it coming? Heuristic: their own ballot
+  // didn't pick anyone close to themselves on the receiving end.
+  const eliminatedVote = allVotes.find(v => v.voter.id === eliminated.id);
+  const isBlindside = eliminatedVote
+    ? eliminatedVote.target.id !== eliminated.id
+      && elimCount > otherCount
+      && !votersAgainstElim.some(v => v.id === eliminated.id) // self-vote is rare
+    : false;
+
+  // ── Eliminated's allies (the ones still left in the game) ────────────
+  let eliminatedAllyIds = new Set();
+  if (typeof getAlliancesForMember === "function") {
+    const elimAlliances = getAlliancesForMember(state, eliminated.id);
+    for (const a of elimAlliances) {
+      for (const mid of a.memberIds) {
+        if (mid !== eliminated.id) eliminatedAllyIds.add(mid);
+      }
+    }
+  }
+
+  // Helper: identify "betrayal" — a voter who voted for the eliminated
+  // while being in an alliance with them.
+  function isBetrayal(voter) {
+    return eliminatedAllyIds.has(voter.id);
+  }
+
+  // ── Universal fallout: rel / trust / suspicion-memory shifts ─────────
+
+  // For each voter who voted FOR the eliminated:
+  //   • Surviving allies of the eliminated lose rel toward this voter
+  //   • Surviving allies log suspicion-memory against this voter
+  //   • If this voter was THEMSELVES an ally of the eliminated (betrayal):
+  //     - Bigger rel / trust hits
+  //     - Their alliance loyalty in the shared alliance drops
+  for (const voter of votersForElim) {
+    const betrayal = isBetrayal(voter);
+
+    for (const allyId of eliminatedAllyIds) {
+      if (allyId === voter.id) continue;
+      // Surviving ally → voter rel drops
+      const relHit = betrayal ? -3 : -1;
+      adjustRelationship(state, allyId, voter.id, relHit);
+      if (betrayal) adjustTrust(state, allyId, voter.id, -2);
+
+      // Suspicion memory: ally privately notes who turned the boot
+      if (typeof recordSuspiciousAct === "function") {
+        recordSuspiciousAct(state, allyId, voter.id,
+          betrayal ? "betrayedAlliance" : "votedAgainstAlly",
+          betrayal ? 1.5 : 0.5);
+      }
+    }
+
+    // Loyalty hit: betraying voter loses alliance loyalty in any alliance
+    // shared with the eliminated.
+    if (betrayal && typeof getAlliancesForMember === "function" &&
+        typeof adjustAllianceLoyalty === "function") {
+      const elimAlliances = getAlliancesForMember(state, eliminated.id);
+      for (const a of elimAlliances) {
+        if (a.memberIds.includes(voter.id)) {
+          adjustAllianceLoyalty(state, a.id, voter.id, -1.5);
+        }
+      }
+    }
+  }
+
+  // For each voter who voted AGAINST the eliminated AND was an ally of them:
+  // they protected the alliance — small loyalty bump in shared alliances.
+  for (const voter of votersAgainstElim) {
+    if (eliminatedAllyIds.has(voter.id) &&
+        typeof getAlliancesForMember === "function" &&
+        typeof adjustAllianceLoyalty === "function") {
+      const elimAlliances = getAlliancesForMember(state, eliminated.id);
+      for (const a of elimAlliances) {
+        if (a.memberIds.includes(voter.id)) {
+          adjustAllianceLoyalty(state, a.id, voter.id, +0.5);
+        }
+      }
+    }
+  }
+
+  // ── Outcome-specific fallout ─────────────────────────────────────────
+
+  if (isBlindside) {
+    // Blindside intensifies effects: surviving allies' rel toward EVERY
+    // voter who voted for the eliminated drops an additional point
+    // (the room registers who didn't loop them in).
+    for (const voter of votersForElim) {
+      for (const allyId of eliminatedAllyIds) {
+        if (allyId === voter.id) continue;
+        adjustRelationship(state, allyId, voter.id, -1);
+      }
+    }
+    // Log a "blindside" event so the strategic notes pick it up.
+    if (typeof logEvent === "function") {
+      logEvent(state, {
+        category: "tribal",
+        type:     "blindside",
+        text:     `${eliminated.name} was blindsided.`,
+        playerVisible: state.player && (
+          state.player.id === eliminated.id ||
+          eliminatedAllyIds.has(state.player.id)
+        ),
+        meta: { eliminatedId: eliminated.id },
+      });
+    }
+  }
+
+  if (isUnanimous) {
+    // Unanimous: the room is in lockstep. Everyone gains a tiny mutual
+    // rel bump with everyone else who voted (shared experience). Mild
+    // because unanimity is often a sign of a clean dispatch, not a bond
+    // forged in fire.
+    for (const v1 of votersForElim) {
+      for (const v2 of votersForElim) {
+        if (v1.id === v2.id) continue;
+        adjustRelationship(state, v1.id, v2.id, 1);
+      }
+    }
+  }
+
+  if (isClose) {
+    // Close vote: voters on the LOSING side share rel +1 (camaraderie of
+    // having stood together). Voters on the WINNING side also get +1 with
+    // each other (shared victory).
+    for (const v1 of votersAgainstElim) {
+      for (const v2 of votersAgainstElim) {
+        if (v1.id === v2.id) continue;
+        adjustRelationship(state, v1.id, v2.id, 1);
+      }
+    }
+    for (const v1 of votersForElim) {
+      for (const v2 of votersForElim) {
+        if (v1.id === v2.id) continue;
+        adjustRelationship(state, v1.id, v2.id, 1);
+      }
+    }
+  }
+
+  if (resolutionKind === "tie-revote") {
+    // Going to a revote shakes confidence. Every attendee's
+    // contestant.suspicion bumps, every active alliance loses 0.5 strength.
+    for (const v of allVotes) {
+      adjustSuspicion(state, v.voter.id, +1);
+    }
+    for (const a of state.alliances ?? []) {
+      if (a.status === "dissolved") continue;
+      if (typeof adjustAllianceStrength === "function") {
+        adjustAllianceStrength(a, -0.5);
+      }
+    }
+  }
+
+  if (resolutionKind === "tie-rocks") {
+    // Rocks: major social shock. Larger suspicion bump, alliance strength
+    // hit across the board (the pact didn't deliver).
+    for (const v of allVotes) {
+      adjustSuspicion(state, v.voter.id, +2);
+    }
+    for (const a of state.alliances ?? []) {
+      if (a.status === "dissolved") continue;
+      if (typeof adjustAllianceStrength === "function") {
+        adjustAllianceStrength(a, -1);
+      }
+    }
+    if (typeof logEvent === "function") {
+      logEvent(state, {
+        category: "tribal",
+        type:     "rocks-drawn",
+        text:     `${eliminated.name} was eliminated by rock draw.`,
+        playerVisible: true,   // rocks are dramatic — every player sees
+        meta: { eliminatedId: eliminated.id },
+      });
+    }
+  }
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────

@@ -218,6 +218,19 @@ function onSwapDone() {
 }
 
 function onTribalDone(eliminatedContestant) {
+  // v6.6: apply post-vote fallout BEFORE the eliminated is removed from
+  // tribes/alliances. The fallout helper reads alliance membership and
+  // rel/trust state as it stood AT TRIBAL — pruning the eliminated first
+  // would erase the betrayal targets.
+  if (typeof applyTribalFallout === "function") {
+    applyTribalFallout(gameState, eliminatedContestant, gameState._lastTribalMeta || null);
+  }
+  // Clean up the cached metadata after fallout has consumed it.
+  delete gameState._lastTribalMeta;
+  delete gameState._lastTribalOriginalVotes;
+  delete gameState._lastTribalRevoteVotes;
+  delete gameState._lastTribalProtectedIds;
+
   gameState.eliminated.push(eliminatedContestant);
   removeFromTribes(eliminatedContestant);
 
