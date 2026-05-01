@@ -172,18 +172,19 @@ const CAMP_ACTIONS = [
     consolidationGroup: "readCamp",
   },
   {
-    id: "strategy",
-    label: "Discuss strategy",
-    detail: "Float vote ideas. Works best when you think alike.",
+    // v5.23: consolidates legacy "strategy" + "askVote" + "compareNotes".
+    // The dispatcher picks the conversation angle (alignment talk, vote
+    // ask, or third-party read trade) based on trust, alliance ties, and
+    // weighted random — preserving the v5.10 truth/lie nuance, the v5.13
+    // alliance-tier candor scaling, and the v5.17 rumor-transfer hooks
+    // that lived in compareNotes.
+    id: "talkStrategy",
+    label: "Talk strategy with someone",
+    detail: "Trade reads, float a vote, ask where their head is. What you get back depends on where you stand.",
     needsTarget: true,
+    targetPrompt: "Who do you want to talk strategy with?",
     category: "strategy",
-  },
-  {
-    id: "askVote",
-    label: "Ask who they want out",
-    detail: "Fish for intel. What you hear depends on how much they trust you.",
-    needsTarget: true,
-    category: "strategy",
+    consolidationGroup: "strategyTalk",
   },
   {
     id: "lobby",
@@ -216,16 +217,6 @@ const CAMP_ACTIONS = [
     detail: "Watch one tribemate closely. Pick up on who they're drawn to and who they avoid.",
     needsTarget: true,
     targetPrompt: "Who do you want to watch?",
-    category: "strategy",
-    consolidationGroup: "playerIntel",
-  },
-  {
-    // v5.4: trust-gated intel sharing about THIRD parties.
-    id: "compareNotes",
-    label: "Compare notes",
-    detail: "Trade reads with someone you trust. The intel is only as honest as the relationship.",
-    needsTarget: true,
-    targetPrompt: "Who do you want to compare notes with?",
     category: "strategy",
     consolidationGroup: "playerIntel",
   },
@@ -290,12 +281,16 @@ function getActionsInGroup(group) {
 // This map ensures role-detection rolls those legacy entries up under the
 // merged action's group bucket so cumulative behavior counts correctly.
 const CAMP_ACTION_LEGACY_MAP = {
-  talk:        "spendTime",
-  confide:     "spendTime",
-  smoothOver:  "mendBond",
-  checkIn:     "mendBond",
-  observeCamp: "readCamp",
-  readRoom:    "readCamp",
+  talk:         "spendTime",
+  confide:      "spendTime",
+  smoothOver:   "mendBond",
+  checkIn:      "mendBond",
+  observeCamp:  "readCamp",
+  readRoom:     "readCamp",
+  // v5.23
+  strategy:     "talkStrategy",
+  askVote:      "talkStrategy",
+  compareNotes: "talkStrategy",
 };
 
 function getCanonicalActionId(actionId) {
@@ -343,16 +338,19 @@ function executeAction(state, actionId, player, tribemates, target) {
     case "mendBond":    return dispatchMendBond(state, player, target);
     case "readCamp":    return dispatchReadCamp(state, player, tribemates);
 
+    // v5.23: consolidated strategy talk. Picks one of three legacy paths
+    // (alignment / vote-ask / third-party-read) per call based on context
+    // + weighted random — preserving v5.10's truth-band model, v5.13's
+    // alliance-tier candor, and v5.17's rumor transfer hooks.
+    case "talkStrategy": return dispatchTalkStrategy(state, player, target, tribemates);
+
     case "tendCamp":    return actionTendCamp(state, player, tribemates);
     case "searchidol":  return actionSearchIdol(state, player, tribemates);
     case "takeWalk":    return actionTakeWalk(state, player, tribemates);
-    case "strategy":    return actionStrategy(state, player, target);
-    case "askVote":     return actionAskVote(state, player, target, tribemates);
     case "lobby":       return actionLobby(state, player, tribemates, target);
     case "laylow":      return actionLayLow(state, player, tribemates);
     case "proposeAlliance": return actionProposeAlliance(state, player, target);
     case "observePair":     return actionObservePair(state, player, tribemates, target);
-    case "compareNotes":    return actionCompareNotes(state, player, tribemates, target);
     default:            return { feedback: "Nothing happened.", hint: null };
   }
 }
@@ -392,6 +390,57 @@ function dispatchMendBond(state, player, target) {
     return actionCheckIn(state, player, target);
   }
   return actionSmoothOver(state, player, target);
+}
+
+// v5.23: Talk strategy — picks one of three legacy strategy modes per call.
+// Each mode produces a meaningfully different conversation outcome:
+//   • alignment (actionStrategy)   — float vote ideas, gauge agreement
+//   • vote ask  (actionAskVote)    — fish for who they want out
+//   • read trade (actionCompareNotes) — exchange reads on third parties
+//
+// Weights are biased by trust + alliance + relationship so the conversation
+// type tilts toward what the standing between the pair actually supports —
+// closer pairs are more likely to share specific intel (askVote / compareNotes);
+// thinner ties stay at alignment talk. Random component within those tilts
+// preserves the v5.10 unpredictability so two consecutive calls between the
+// same pair can land on different angles.
+function dispatchTalkStrategy(state, player, target, tribemates) {
+  const trust    = getTrust(state, player.id, target.id);
+  const rel      = getRelationship(state, player.id, target.id);
+  const allyTier = (typeof getSharedAllianceTier === "function")
+    ? getSharedAllianceTier(state, player.id, target.id) : null;
+
+  // Each mode starts with a baseline so any can fire in any conversation.
+  const w = { alignment: 1.2, askVote: 1.0, compareNotes: 0.8 };
+
+  // Trust pushes specific-intel modes (vote ask / read trade) over alignment.
+  if (trust >= 4) { w.askVote += 0.6; w.compareNotes += 0.4; }
+  if (trust >= 6) { w.askVote += 0.5; w.compareNotes += 0.5; }
+  if (trust <= 2) { w.alignment += 0.6; w.askVote -= 0.3; }
+
+  // Alliance tier amplifies — core allies share more freely; loose allies
+  // tilt only mildly; weakened allies behave like acquaintances.
+  if (allyTier === "core")     { w.askVote += 0.6; w.compareNotes += 0.5; }
+  if (allyTier === "loose")    { w.askVote += 0.3; w.compareNotes += 0.2; }
+
+  // Relationship floor pushes alignment-only when rel is genuinely cool.
+  if (rel < 0) { w.alignment += 0.5; w.askVote -= 0.4; w.compareNotes -= 0.4; }
+
+  // Per-call jitter so equivalent contexts don't always pick the same mode.
+  for (const k of Object.keys(w)) {
+    w[k] = Math.max(0.1, w[k] * (0.85 + Math.random() * 0.30));
+  }
+
+  // Need at least 2 other tribemates to discuss third parties — compareNotes
+  // is meaningless in a 2-person scope. Filter the option out if so.
+  const others = tribemates.filter(c => c.id !== target.id);
+  if (others.length < 2) w.compareNotes = 0;
+
+  const total = w.alignment + w.askVote + w.compareNotes;
+  let roll = Math.random() * total;
+  if ((roll -= w.alignment)    <= 0) return actionStrategy(state, player, target);
+  if ((roll -= w.askVote)      <= 0) return actionAskVote(state, player, target, tribemates);
+  return actionCompareNotes(state, player, tribemates, target);
 }
 
 // Read the camp — combines vibe (readRoom) with concrete dynamics
@@ -2789,7 +2838,7 @@ function clearCampTargets(state) {
 // merged-action choices.
 const CAMP_ROLE_CATEGORIES = {
   provider:        ["tendCamp"],
-  strategist:      ["strategy", "askVote", "observePair", "compareNotes"],
+  strategist:      ["talkStrategy", "observePair"],
   schemer:         ["lobby", "searchidol"],
   socialConnector: ["spendTime", "mendBond", "proposeAlliance"],
   drifter:         ["laylow", "takeWalk", "readCamp"],
