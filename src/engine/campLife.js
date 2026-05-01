@@ -109,6 +109,10 @@
 // recordCampAction logs the legacy id; getCanonicalActionId(legacyId) maps
 // it to the canonical group id for role-detection rollups.
 
+// v5.30: category render order is Social → Strategy → Island → Alliances.
+// The CAMP_ACTION_CATEGORIES array IS the source of truth for menu ordering;
+// the picker, in-category renders, and category counts all iterate this
+// array directly. Reordering here propagates everywhere automatically.
 const CAMP_ACTION_CATEGORIES = [
   {
     id:    "social",
@@ -121,14 +125,14 @@ const CAMP_ACTION_CATEGORIES = [
     description: "Float votes, fish for intel, push targets, trade reads.",
   },
   {
-    id:    "alliances",
-    label: "Alliances",
-    description: "Form pacts and reinforce existing alliances.",
-  },
-  {
     id:    "island",
     label: "Island",
     description: "Tend camp, search for advantages, manage your profile.",
+  },
+  {
+    id:    "alliances",
+    label: "Alliances",
+    description: "Form pacts and reinforce existing alliances.",
   },
 ];
 
