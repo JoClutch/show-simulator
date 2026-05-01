@@ -2126,6 +2126,51 @@ function actionReadRoom(state, player, tribemates) {
   // ── Build hedged candidate lines ──────────────────────────────────────────
   const candidates = [];
 
+  // v5.35: camp temperature line — a single hedged read summarizing the
+  // overall tribe mood (calm / steady / uneasy / tense / chaotic), drawn
+  // from the v5.35 getCampTemperature helper. Distinct from line 1
+  // (rel-only cohesion) and line 2 (suspicion-only scheming energy):
+  // temperature blends rumor load, conflicts, alliance instability, idol
+  // fear, scramble count, and pressure spread into one gestalt reading.
+  // Surfaces only when the tier is meaningful — calm/chaotic always, steady
+  // sometimes, uneasy/tense reliably.
+  if (typeof getCampTemperature === "function") {
+    const tribePool = state.merged
+      ? (state.tribes?.merged || [])
+      : (state.tribes?.[player.tribe] || []);
+    const temp = getCampTemperature(state, tribePool);
+    const tempLines = {
+      calm: [
+        `The camp ran calm today. Whatever's coming, it isn't here yet.`,
+        `Nothing was happening at full volume. The tribe is in a holding pattern.`,
+        `An almost peaceful day at camp. Don't get used to it.`,
+      ],
+      steady: [
+        `The camp was steady today. Currents under the surface, but nothing breaking.`,
+        `A working day at the tribe — moves in motion but no fires lit.`,
+      ],
+      uneasy: [
+        `Something is off. The camp doesn't feel settled — too many small conversations, too many glances. You're not sure where it's going to land.`,
+        `There's an unease in the air today. People are reading each other harder than usual.`,
+      ],
+      tense: [
+        `The camp is on edge. You can feel the temperature in the silences and the half-finished sentences. Something is about to give.`,
+        `Tense day. Conversations are shorter, eye contact is heavier, and nobody's pretending nothing's going on.`,
+      ],
+      chaotic: [
+        `It's chaos out there. Multiple lines of conversation, multiple plans in motion, nobody fully holding the room. Anything could happen tonight.`,
+        `The camp feels like it's about to break in three directions at once. The number of things in motion is more than anyone can fully track.`,
+      ],
+    };
+    const tierWeight =
+        temp.tier === "calm"    ? 3
+      : temp.tier === "steady"  ? 1.5    // less interesting; lower weight
+      : temp.tier === "uneasy"  ? 4
+      : temp.tier === "tense"   ? 5
+      : /* chaotic */             6;
+    candidates.push({ weight: tierWeight, text: pickFrom(tempLines[temp.tier]) });
+  }
+
   // 1. Tribe-cohesion vibe.
   if (avgRel >= 5) {
     candidates.push({ weight: 3 + avgRel * 0.2, text: pickFrom([

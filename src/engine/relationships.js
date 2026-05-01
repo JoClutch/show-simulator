@@ -651,6 +651,158 @@ function getIdolFear(state, observerId, holderId) {
   return Math.max(0, Math.min(10, fear));
 }
 
+// ── v5.35: Camp temperature / tribe mood ────────────────────────────────────
+//
+// A summary layer over the existing v5.x social and strategic systems. Returns
+//   { tier, heat, factors }
+//
+//   tier   : "calm" | "steady" | "uneasy" | "tense" | "chaotic"
+//   heat   : float 0–10 (continuous; tier is just a band)
+//   factors: object exposing each input's normalized contribution for tuning
+//
+// Camp temperature is intentionally a SUMMARY, not a replacement. Every
+// underlying system (suspicion, rumors, target pressure, scramble, conflicts,
+// alliance instability, trust strain, idol fear) keeps its own logic and
+// player-facing surface. Temperature gives the camp a single readable mood
+// reading that captures the gestalt for use in summary surfaces (Read the
+// camp, future mood-driven narration) without flattening the inputs.
+//
+// Pure-derived (no new state). Recomputed on demand from current state — so
+// it always reflects whatever just happened.
+
+function getCampTemperature(state, pool) {
+  if (!Array.isArray(pool) || pool.length < 2) {
+    return { tier: "steady", heat: 5, factors: {} };
+  }
+
+  // ── Suspicion: average public-suspicion across active tribe ─────────
+  let suspSum = 0;
+  for (const c of pool) suspSum += (c.suspicion ?? 0);
+  const avgSusp = suspSum / pool.length;
+
+  // ── Recent conflicts: pairs with a logged conflict in last 2 rounds ─
+  // Each pair gets counted twice (A→B and B→A); halve to compensate.
+  let recentConflicts = 0;
+  const round = state.round ?? 0;
+  for (const c of pool) {
+    const conflicts = state.lastConflicts?.[c.id] || {};
+    for (const otherId of Object.keys(conflicts)) {
+      const e = conflicts[otherId];
+      if (!e) continue;
+      const age = round - (e.round ?? 0);
+      if (age <= 2) recentConflicts += 0.5;
+    }
+  }
+
+  // ── Alliance instability: ratio of weakened-or-near-dissolution pacts ─
+  let weakAlliances = 0, totalAlliances = 0;
+  for (const a of state.alliances ?? []) {
+    if (a.status === "dissolved") continue;
+    totalAlliances++;
+    if ((a.strength ?? 0) < 4) weakAlliances++;
+  }
+  const allianceInstability = totalAlliances > 0 ? weakAlliances / totalAlliances : 0;
+
+  // ── Rumor load: total active-rumor confidence per capita ─────────────
+  let rumorSignal = 0;
+  for (const r of state.rumors ?? []) {
+    if (r.dissolved) continue;
+    const knowers = Object.values(r.knownBy || {});
+    if (knowers.length === 0) continue;
+    const avgConf = knowers.reduce((s, k) => s + (k.confidence ?? 0), 0) / knowers.length;
+    rumorSignal += avgConf;
+  }
+  rumorSignal = rumorSignal / pool.length;
+
+  // ── Scramble count: only meaningful in phase 2 ──────────────────────
+  let scrambling = 0;
+  if (state.campPhase === 2 && typeof isScrambling === "function") {
+    for (const c of pool) {
+      if (isScrambling(state, c.id)) scrambling++;
+    }
+  }
+
+  // ── High-pressure candidates: count above the consensus threshold ────
+  let highPressureCount = 0;
+  if (typeof getPressureScore === "function") {
+    for (const c of pool) {
+      if (getPressureScore(state, c.id) >= 6.5) highPressureCount++;
+    }
+  }
+
+  // ── Idol fear load: ratio of pairs with meaningful fear ─────────────
+  let idolFearPairs = 0;
+  if (typeof getIdolFear === "function") {
+    for (const obs of pool) {
+      for (const holder of pool) {
+        if (obs.id === holder.id) continue;
+        if (getIdolFear(state, obs.id, holder.id) >= 5) idolFearPairs++;
+      }
+    }
+  }
+  const idolFearLoad = pool.length > 1
+    ? idolFearPairs / (pool.length * (pool.length - 1))
+    : 0;
+
+  // ── Trust-cluster strain: ratio of formal-alliance pairs with low bond ─
+  // High strain means alliances exist on paper but the trust under them has
+  // hollowed out. A major mood signal — papered-over fractures feel tense.
+  let strainedPairs = 0, totalFormalPairs = 0;
+  if (typeof getInnerCircleBond === "function") {
+    for (const a of state.alliances ?? []) {
+      if (a.status === "dissolved") continue;
+      for (let i = 0; i < a.memberIds.length; i++) {
+        for (let j = i + 1; j < a.memberIds.length; j++) {
+          totalFormalPairs++;
+          const avgBond = (
+            getInnerCircleBond(state, a.memberIds[i], a.memberIds[j]) +
+            getInnerCircleBond(state, a.memberIds[j], a.memberIds[i])
+          ) / 2;
+          if (avgBond < 4) strainedPairs++;
+        }
+      }
+    }
+  }
+  const trustStrain = totalFormalPairs > 0 ? strainedPairs / totalFormalPairs : 0;
+
+  // ── Compose heat ─────────────────────────────────────────────────────
+  // Baseline 2.0 → most quiet camps land near steady. Each factor adds its
+  // typical contribution; aggregate clamps to [0, 10].
+  let heat = 2.0;
+  heat += avgSusp           * 0.40;     // ~0–4 typical
+  heat += recentConflicts   * 0.30;     // ~0–2 typical
+  heat += allianceInstability * 1.50;   // 0–1.5
+  heat += rumorSignal       * 1.50;     // ~0–1.5 typical
+  heat += scrambling        * 0.50;     // ~0–2 typical
+  heat += highPressureCount * 0.50;     // ~0–2 typical
+  heat += idolFearLoad      * 2.00;     // 0–2
+  heat += trustStrain       * 1.00;     // 0–1
+  heat = Math.max(0, Math.min(10, heat));
+
+  // ── Map to tier band ─────────────────────────────────────────────────
+  let tier;
+  if      (heat <= 2.5) tier = "calm";
+  else if (heat <= 4.5) tier = "steady";
+  else if (heat <= 6.0) tier = "uneasy";
+  else if (heat <= 7.5) tier = "tense";
+  else                  tier = "chaotic";
+
+  return {
+    tier,
+    heat,
+    factors: {
+      avgSusp,
+      recentConflicts,
+      allianceInstability,
+      rumorSignal,
+      scrambling,
+      highPressureCount,
+      idolFearLoad,
+      trustStrain,
+    },
+  };
+}
+
 // ── v5.17: Rumors / information spread ───────────────────────────────────────
 //
 // Camp life is socially loud. People talk about each other when no one is in
