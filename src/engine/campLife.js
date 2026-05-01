@@ -2144,22 +2144,30 @@ function actionReadRoom(state, player, tribemates) {
         `The camp ran calm today. Whatever's coming, it isn't here yet.`,
         `Nothing was happening at full volume. The tribe is in a holding pattern.`,
         `An almost peaceful day at camp. Don't get used to it.`,
+        `The kind of quiet that lets you hear your own thoughts. Useful — for now.`,
+        `A still day. People are conserving energy. The next move isn't being made yet.`,
       ],
       steady: [
         `The camp was steady today. Currents under the surface, but nothing breaking.`,
         `A working day at the tribe — moves in motion but no fires lit.`,
+        `Today read like a holding day. Movement, but no momentum yet.`,
+        `Quiet enough that you'd miss the strategy if you weren't watching. It's there, just under.`,
       ],
       uneasy: [
         `Something is off. The camp doesn't feel settled — too many small conversations, too many glances. You're not sure where it's going to land.`,
         `There's an unease in the air today. People are reading each other harder than usual.`,
+        `A jumpy feel to the camp today. Nobody's said it out loud, but the air is thicker than yesterday.`,
+        `The temperature ticked up. Hard to point at one thing — but the day isn't sitting right.`,
       ],
       tense: [
         `The camp is on edge. You can feel the temperature in the silences and the half-finished sentences. Something is about to give.`,
         `Tense day. Conversations are shorter, eye contact is heavier, and nobody's pretending nothing's going on.`,
+        `You'd describe the air as crackling. Whatever's coming is close to the surface now.`,
       ],
       chaotic: [
         `It's chaos out there. Multiple lines of conversation, multiple plans in motion, nobody fully holding the room. Anything could happen tonight.`,
         `The camp feels like it's about to break in three directions at once. The number of things in motion is more than anyone can fully track.`,
+        `Loud, fast, and unfocused. Everyone's working a different angle and nobody's sure which one is real.`,
       ],
     };
     const tierWeight =
@@ -3262,9 +3270,11 @@ function pickAIActionWeighted(state, ai, others) {
     // don't waste a vote, don't out yourself as the lobbyist if they
     // survive the play. Strategic AIs (≥6) factor fear most heavily;
     // low-strategy AIs barely consider it.
+    // v5.37: factors trimmed (0.18 → 0.14 / 0.08 → 0.06) so feared-but-not-
+    // holding reputation targets don't become artificially untouchable.
     if (typeof getIdolFear === "function") {
       const fear = getIdolFear(state, ai.id, enemyPool[0].id);
-      const factor = (ai.strategy ?? 5) >= 6 ? 0.18 : 0.08;
+      const factor = (ai.strategy ?? 5) >= 6 ? 0.14 : 0.06;
       w -= fear * factor;
     }
 

@@ -221,16 +221,17 @@ function scoreVoteTarget(state, voter, c) {
   // candidates they hold a high inner-circle bond toward — this captures
   // the COMBINATION of trust + alliance maturity + clean history that
   // bondProtection (rel-based) and allianceProtection (membership-based)
-  // each only partially express. Subtle: +2 at bond ≥ 6, scaling up to
-  // +4 at bond ≥ 8. Below 6 it adds nothing. Centers the "would I really
-  // put this person on the chopping block" question on the soft trust
-  // structure, not just on rel or alliance card.
+  // each only partially express. Below 6 it adds nothing.
+  // v5.37: magnitudes tuned down (4/3/2 → 3/2/1). Layered on top of the
+  // already-substantial bondProtection (+8/+20) and allianceProtection
+  // (up to +15), the original values were over-protecting tight bonds.
+  // Subtle additive layer is the right read.
   let innerCircleProtection = 0;
   if (typeof getInnerCircleBond === "function") {
     const bond = getInnerCircleBond(state, voter.id, c.id);
-    if      (bond >= 8) innerCircleProtection = 4;
-    else if (bond >= 7) innerCircleProtection = 3;
-    else if (bond >= 6) innerCircleProtection = 2;
+    if      (bond >= 8) innerCircleProtection = 3;
+    else if (bond >= 7) innerCircleProtection = 2;
+    else if (bond >= 6) innerCircleProtection = 1;
   }
 
   // v5.19: late-game resume-threat factor. Once the merge has happened AND

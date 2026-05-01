@@ -622,19 +622,27 @@ function getIdolFear(state, observerId, holderId) {
   if (observerId === holderId) return 0;
 
   // Direct belief — the existing idolSuspicion scalar (0–10).
-  let fear = state.idolSuspicion?.[observerId]?.[holderId] ?? 0;
+  const direct = state.idolSuspicion?.[observerId]?.[holderId] ?? 0;
+  let fear = direct;
+
+  // v5.37: reputation contribution accumulated separately and capped, so
+  // a Schemer with strategy 9 + a couple of vague rumors can't reach the
+  // high-impact fear threshold (≥6) on perception alone — direct evidence
+  // (idolSuspicion) is still needed to push fear into the strong-effect
+  // range. Caps reputation-only fear at ~3.
+  let reputation = 0;
 
   // Reputation lift — schemers and strategists read as more likely to
   // hold/play advantages, regardless of whether they do.
   if (typeof getCampRole === "function") {
     const role = (getCampRole(state, holderId) || "").replace(/^leaning:/, "");
-    if (role === "schemer")    fear += 1.0;
-    if (role === "strategist") fear += 0.5;
+    if (role === "schemer")    reputation += 1.0;
+    if (role === "strategist") reputation += 0.5;
   }
 
   // High-strategy stat: "I'd bet they have one even if I haven't seen it."
   const holder = findContestant(state, holderId);
-  if (holder && (holder.strategy ?? 5) >= 8) fear += 1.0;
+  if (holder && (holder.strategy ?? 5) >= 8) reputation += 1.0;
 
   // Active "suspicious" rumors about the holder that the observer knows
   // about each contribute up to +0.5 fear scaled by confidence.
@@ -644,9 +652,13 @@ function getIdolFear(state, observerId, holderId) {
       if (r.subjectId !== holderId) continue;
       const k = r.knownBy?.[observerId];
       if (!k) continue;
-      fear += (k.confidence ?? 0) * 0.5;
+      reputation += (k.confidence ?? 0) * 0.5;
     }
   }
+
+  // Cap the reputation-only contribution at 3.0. Direct idolSuspicion can
+  // still push fear above this, but pure perception alone caps mid-range.
+  fear += Math.min(3.0, reputation);
 
   return Math.max(0, Math.min(10, fear));
 }

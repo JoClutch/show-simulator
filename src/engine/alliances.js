@@ -569,9 +569,12 @@ function coordinateAllianceVote(state, allianceId, coordinatorId, targetId) {
     // may have an idol, they hesitate to commit — wasting a vote on someone
     // who'd play an idol is a bad outcome they'd rather avoid. Strategic
     // members (≥6) feel this most; low-strategy members barely register it.
+    // v5.37: factors trimmed (0.30 → 0.20 / 0.12 → 0.10) so reputation-only
+    // fear doesn't single-handedly kill alliance vote plans against high-
+    // strategy archetypes who have no actual idol.
     if (typeof getIdolFear === "function") {
       const fearOfTarget = getIdolFear(state, mid, targetId);
-      const fearFactor = (member.strategy ?? 5) >= 6 ? 0.30 : 0.12;
+      const fearFactor = (member.strategy ?? 5) >= 6 ? 0.20 : 0.10;
       score -= fearOfTarget * fearFactor;
     }
 
