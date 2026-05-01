@@ -205,6 +205,22 @@ function scoreVoteTarget(state, voter, c) {
     ? getSocialCapital(state, c.id) : 5;
   const capitalFactor = (capital - 5) * 0.5;
 
+  // v5.31: inner-circle protection. Voters give additional protection to
+  // candidates they hold a high inner-circle bond toward — this captures
+  // the COMBINATION of trust + alliance maturity + clean history that
+  // bondProtection (rel-based) and allianceProtection (membership-based)
+  // each only partially express. Subtle: +2 at bond ≥ 6, scaling up to
+  // +4 at bond ≥ 8. Below 6 it adds nothing. Centers the "would I really
+  // put this person on the chopping block" question on the soft trust
+  // structure, not just on rel or alliance card.
+  let innerCircleProtection = 0;
+  if (typeof getInnerCircleBond === "function") {
+    const bond = getInnerCircleBond(state, voter.id, c.id);
+    if      (bond >= 8) innerCircleProtection = 4;
+    else if (bond >= 7) innerCircleProtection = 3;
+    else if (bond >= 6) innerCircleProtection = 2;
+  }
+
   // v5.19: late-game resume-threat factor. Once the merge has happened AND
   // the field has narrowed, strategic voters consider who would beat them
   // at final tribal. Players with strong combined social + challenge stats
@@ -226,7 +242,8 @@ function scoreVoteTarget(state, voter, c) {
        + idolFactor
        + crossTribeFactor + tribeStrengthFactor
        + capitalFactor
-       + resumeFactor;
+       + resumeFactor
+       + innerCircleProtection;
 }
 
 // pickVoteTarget — returns the contestant the given voter would vote for

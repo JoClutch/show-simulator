@@ -474,6 +474,121 @@ function getSocialCapital(state, contestantId) {
   return Math.max(0, Math.min(10, capital));
 }
 
+// ── v5.31: Hidden trust clusters / inner circles ─────────────────────────────
+//
+// A pure-derived model of who genuinely trusts whom across the tribe. Like
+// social capital (v5.16), nothing is stored — every read recomputes from the
+// current state of trust, rel, alliance history, conflicts, suspicion
+// memory, and social capital.
+//
+// "Inner circle" is intentionally distinct from formal alliances:
+//   • Two members of the SAME alliance can have a low inner-circle bond if
+//     conflict / suspicion memory has eroded the underlying trust, even
+//     while the formal pact still holds.
+//   • Two players NOT in any alliance can have a high inner-circle bond if
+//     trust + rel + clean history support it (informal close ties).
+//   • Bonds are ASYMMETRIC: A's bond toward B may differ from B's toward A
+//     because suspicion memory and social capital are asymmetric. This
+//     models the real Survivor pattern where one player feels "in the
+//     core" and the other has already moved on.
+//   • The threshold for "inner circle" is soft — bond is a continuous 0–10
+//     float, and any system reading it can pick its own cutoff.
+//
+// ── Inputs ────────────────────────────────────────────────────────────────────
+//   • Trust (primary)            — does A actually rely on B's word?
+//   • Relationship (positive)    — bonus for warmth; negatives don't subtract
+//                                  (you can mistrust someone you don't dislike)
+//   • Shared alliance + tier     — formal anchor, scaled by tier
+//   • Alliance maturity (rounds) — older pacts have built deeper trust
+//   • Recent conflict severity   — fresh fractures eat into the bond
+//   • Suspicion memory (A→B)     — private "I've watched them do shady things"
+//   • A's social capital         — confident players have wider circles
+//
+// ── Used by ──────────────────────────────────────────────────────────────────
+//   • vote.js scoreVoteTarget — small extra protection from voters who hold
+//                                a high inner-circle bond toward the
+//                                candidate (beyond bondProtection /
+//                                allianceProtection / trustFactor)
+//
+// Surface is INDIRECT only. Voting outcomes that defy formal alliance lines
+// (e.g. someone protecting their inner-circle ally over a same-alliance
+// member they've been quietly losing trust in) is the player-facing signal.
+// No UI panel, no number, no list.
+
+function getInnerCircleBond(state, idA, idB) {
+  if (idA === idB) return 0;
+
+  const trust = getTrust(state, idA, idB);              // 0–10
+  const rel   = getRelationship(state, idA, idB);       // mostly -30..+30
+
+  // Trust dominates — inner circle is fundamentally a TRUST construct.
+  let bond = trust * 0.5;                                // 0–5
+
+  // Positive rel adds warmth; negative rel doesn't subtract (you can
+  // mistrust someone you don't dislike). Bond is "would you put your
+  // game in their hands", not "do you enjoy their company".
+  bond += Math.max(0, rel) * 0.10;                       // 0 to ~3 typical
+
+  // Shared alliance — formal anchor. Tier scales the bonus, and alliance
+  // maturity (rounds since formation) gradually deepens the bond. Caps so
+  // a 12-round-old core alliance doesn't fully dominate the score.
+  const sharedAlliance = (typeof getStrongestSharedAlliance === "function")
+    ? getStrongestSharedAlliance(state, idA, idB) : null;
+  if (sharedAlliance) {
+    const tier = sharedAlliance.tier ?? "loose";
+    const tierBonus =
+        tier === "core"     ? 1.5
+      : tier === "loose"    ? 0.7
+      :                       0.2;
+    bond += tierBonus;
+    const age = Math.max(0,
+      (state.round ?? 0) - (sharedAlliance.formedRound ?? state.round ?? 0)
+    );
+    bond += Math.min(1.5, age * 0.25);
+  }
+
+  // Recent conflict eats into bond directly — even when rel/trust haven't
+  // yet recorded the full hit. Models the lingering "we just had words"
+  // hesitation.
+  if (typeof getRecentConflict === "function") {
+    const conflict = getRecentConflict(state, idA, idB);
+    if (conflict) bond -= Math.min(2.0, (conflict.severity ?? 1) * 0.4);
+  }
+
+  // A's private suspicion memory of B drags A's bond toward B. Asymmetric:
+  // B's view of A may not match.
+  const memoryAtoB = state.suspicionMemory?.[idA]?.[idB] ?? 0;
+  bond -= Math.min(2.5, memoryAtoB * 0.3);
+
+  // Confident, well-liked players have a slightly wider inner circle.
+  if (typeof getSocialCapital === "function") {
+    const cap = getSocialCapital(state, idA);
+    bond += (cap - 5) * 0.05;                            // ±0.25
+  }
+
+  return Math.max(0, Math.min(10, bond));
+}
+
+// Returns the contestant's inner circle as a sorted array of
+//   { id, name, bond }
+// where bond ≥ threshold. Default threshold 5 marks "actually trusts them";
+// callers can pass a higher threshold (e.g. 7) for "ride-or-die only".
+function getInnerCircle(state, contestantId, threshold = 5) {
+  const c = findContestant(state, contestantId);
+  if (!c) return [];
+  const pool = state.merged
+    ? (state.tribes?.merged || [])
+    : (state.tribes?.[c.tribe] || []);
+  const out = [];
+  for (const other of pool) {
+    if (other.id === contestantId) continue;
+    const bond = getInnerCircleBond(state, contestantId, other.id);
+    if (bond >= threshold) out.push({ id: other.id, name: other.name, bond });
+  }
+  out.sort((a, b) => b.bond - a.bond);
+  return out;
+}
+
 // ── v5.17: Rumors / information spread ───────────────────────────────────────
 //
 // Camp life is socially loud. People talk about each other when no one is in
