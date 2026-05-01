@@ -207,6 +207,16 @@ function showTieAnnouncement(container, state, attendees, tiedIds, counts, onCon
     .filter(n => n !== "?");
   const voteCount = counts[tiedIds[0]] ?? 0;
 
+  // v6.7: rule-text variants so the moment doesn't read identically each
+  // time a tie occurs. Each variant says the same thing in slightly
+  // different words so the rules remain crystal clear.
+  const ruleVariants = [
+    "We will revote. Only the tied players can receive votes — and they themselves do not vote in this round.",
+    "The tied players will not vote in the revote. Everyone else will choose between them.",
+    "Revote: the rest of the tribe picks between the tied players. The tied themselves sit this one out.",
+  ];
+  const rule = ruleVariants[Math.floor(Math.random() * ruleVariants.length)];
+
   container.innerHTML = `
     <div class="screen">
       <p class="screen-eyebrow">Episode ${state.round} · Day ${getDay(state) + DAY_OFFSETS.tribal}</p>
@@ -217,10 +227,7 @@ function showTieAnnouncement(container, state, attendees, tiedIds, counts, onCon
           ${tiedNames.map(n => `<strong>${escapeHtml(n)}</strong>`).join(" and ")}
           tied with ${voteCount} vote${voteCount !== 1 ? "s" : ""} each.
         </p>
-        <p class="tribal-tie-rule">
-          We will revote. Only the tied players can receive votes —
-          and they themselves do not vote in this round.
-        </p>
+        <p class="tribal-tie-rule">${escapeHtml(rule)}</p>
         <button id="tie-continue-btn" class="tribal-finish-btn">Continue to Revote →</button>
       </div>
     </div>
@@ -354,6 +361,15 @@ function showPersistentTieAnnouncement(container, state, attendees, tiedIds, onC
     .map(id => attendees.find(c => c.id === id)?.name ?? "?")
     .filter(n => n !== "?");
 
+  // v6.7: variant rocks-rule lines so persistent ties don't all read
+  // identically. Substance is identical across variants.
+  const ruleVariants = [
+    `We are going to rocks. Everyone except the tied players ${state.immunityHolder ? "and the Immunity holder " : ""}will draw a rock. Whoever draws the odd rock leaves the game.`,
+    `Drawing rocks. The tied players ${state.immunityHolder ? "and the Immunity holder are " : "are "}safe. Everyone else has a chance of going home.`,
+    `It comes down to chance now. Tied players ${state.immunityHolder ? "and Immunity " : ""}don't draw. The odd rock from the rest of the tribe is going home.`,
+  ];
+  const rule = ruleVariants[Math.floor(Math.random() * ruleVariants.length)];
+
   container.innerHTML = `
     <div class="screen">
       <p class="screen-eyebrow">Episode ${state.round} · Day ${getDay(state) + DAY_OFFSETS.tribal}</p>
@@ -364,11 +380,7 @@ function showPersistentTieAnnouncement(container, state, attendees, tiedIds, onC
           The revote is also tied between
           ${tiedNames.map(n => `<strong>${escapeHtml(n)}</strong>`).join(" and ")}.
         </p>
-        <p class="tribal-tie-rule">
-          We are going to rocks. Everyone except the tied players
-          ${state.immunityHolder ? "and the Immunity holder " : ""}
-          will draw a rock. Whoever draws the odd rock leaves the game.
-        </p>
+        <p class="tribal-tie-rule">${rule}</p>
         <button id="rocks-continue-btn" class="tribal-finish-btn">Continue to the Draw →</button>
       </div>
     </div>

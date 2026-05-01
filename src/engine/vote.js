@@ -1005,16 +1005,47 @@ function applyTribalFallout(state, eliminated, meta) {
     }
   }
 
+  // v6.7: "executed the plan" loyalty bump. Closes the loop with v5.27 vote
+  // coordination — when a coordinated plan lands at Tribal, the alliance
+  // members who set their campTarget against the eliminated and then voted
+  // through it earn a small loyalty bump in that alliance. Reinforces the
+  // pattern that successful alliance plans tighten the pact over time.
+  if (typeof getCampTargetForContestant === "function" &&
+      typeof getAlliancesForMember === "function" &&
+      typeof adjustAllianceLoyalty === "function") {
+    for (const voter of votersForElim) {
+      const intent = getCampTargetForContestant(state, voter.id);
+      if (!intent || intent.targetId !== eliminated.id) continue;
+      // The voter's campTarget matched the elimination — they were on plan.
+      // Bump loyalty in any alliance the voter is in (the alliance backed
+      // their plan implicitly even if not via formal coordination).
+      const myAlliances = getAlliancesForMember(state, voter.id);
+      for (const a of myAlliances) {
+        if (a.status === "dissolved") continue;
+        // Don't bump if this voter was simultaneously in the eliminated's
+        // alliance (they're betrayers and already had loyalty −1.5; a +0.3
+        // here would partially cancel that).
+        if (a.memberIds.includes(eliminated.id)) continue;
+        adjustAllianceLoyalty(state, a.id, voter.id, +0.3);
+      }
+    }
+  }
+
   // ── Outcome-specific fallout ─────────────────────────────────────────
 
   if (isBlindside) {
     // Blindside intensifies effects: surviving allies' rel toward EVERY
-    // voter who voted for the eliminated drops an additional point
+    // voter who voted for the eliminated drops an additional half point
     // (the room registers who didn't loop them in).
+    // v6.7: trimmed from −1 to ~−0.5 per ally so the compounding across
+    // multiple surviving allies doesn't tank a betrayer's whole social
+    // network in a single Tribal. Combined with the universal betrayal
+    // hit (−3), a blindside still produces a meaningful −3.5 to −4 per
+    // ally — significant, but recoverable over rounds.
     for (const voter of votersForElim) {
       for (const allyId of eliminatedAllyIds) {
         if (allyId === voter.id) continue;
-        adjustRelationship(state, allyId, voter.id, -1);
+        adjustRelationship(state, allyId, voter.id, Math.random() < 0.5 ? -1 : 0);
       }
     }
     // Log a "blindside" event so the strategic notes pick it up.
