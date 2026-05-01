@@ -3781,6 +3781,48 @@ button:disabled {
   flex-shrink: 0;
 }
 
+/* ── v6.8: Tribal Council host-style ritual lines ───────────────────────
+   Short host-voice messaging woven through the tribal flow. Renders as a
+   subtle italic line, distinct from the tribal-prompt instructions. */
+.tribal-host-line {
+  font-size: 0.95rem;
+  color: var(--gold);
+  font-style: italic;
+  letter-spacing: 0.01em;
+  line-height: 1.5;
+  margin: 0.65rem 0 0.5rem;
+}
+.tribal-host-line-centered {
+  text-align: center;
+  font-size: 1.05rem;
+  margin: 2rem auto;
+  max-width: 32rem;
+}
+.tribal-decisive-line {
+  text-align: center;
+  margin-top: 0.85rem;
+  opacity: 0;
+  transition: opacity 600ms ease 200ms;
+  color: var(--gold);
+}
+.tribal-decisive-line.revealed {
+  opacity: 1;
+}
+.tribal-tally-summary {
+  text-align: center;
+  margin: 0.4rem 0 0.2rem;
+  color: var(--text-primary);
+  font-style: normal;
+  font-weight: bold;
+  letter-spacing: 0.04em;
+  font-size: 0.92rem;
+}
+.tribal-farewell-line {
+  text-align: center;
+  margin: 0.2rem 0 1rem;
+  color: var(--gold);
+}
+
 /* ── v6.4: Tie / revote / rocks cards ──────────────────────────────────── */
 .tribal-tie-card,
 .tribal-rocks-card {

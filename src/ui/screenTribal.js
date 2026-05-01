@@ -53,6 +53,7 @@ function renderPreMergeTribalScreen(container, state) {
       ${buildTribalAttendeesRibbonHTML(tribe, state)}
       ${buildTribalReadingCardHTML(state, tribe)}
 
+      <p class="tribal-host-line">${pickFlavor(TRIBAL_PRE_VOTE_LINES)}</p>
       <p class="tribal-prompt">
         Vote for one tribemate to leave the game.
         Once your vote is cast it cannot be changed.
@@ -76,8 +77,10 @@ function renderPreMergeTribalScreen(container, state) {
     // the urn, not by what survives the count.
     processVotingAftermath(state, allVotes);
     detectVotingBlocs(state, allVotes);
-    runIdolPlayPhase(container, state, tribe, protectedIds => {
-      runVoteResolution(container, state, tribe, allVotes, protectedIds);
+    showTallyingBeat(container, state, () => {
+      runIdolPlayPhase(container, state, tribe, protectedIds => {
+        runVoteResolution(container, state, tribe, allVotes, protectedIds);
+      });
     });
   });
 }
@@ -128,6 +131,7 @@ function renderMergedTribalScreen(container, state) {
       ${buildTribalAttendeesRibbonHTML(tribe, state)}
       ${buildTribalReadingCardHTML(state, tribe)}
 
+      <p class="tribal-host-line">${pickFlavor(TRIBAL_PRE_VOTE_LINES)}</p>
       <p class="tribal-prompt">
         Vote for one player to leave the game.
         The immunity holder cannot receive votes.
@@ -152,10 +156,28 @@ function renderMergedTribalScreen(container, state) {
     const allVotes = collectAiVotes(state, tribe, playerVote, player, votePool);
     processVotingAftermath(state, allVotes);
     detectVotingBlocs(state, allVotes);
-    runIdolPlayPhase(container, state, tribe, protectedIds => {
-      runVoteResolution(container, state, tribe, allVotes, protectedIds);
+    showTallyingBeat(container, state, () => {
+      runIdolPlayPhase(container, state, tribe, protectedIds => {
+        runVoteResolution(container, state, tribe, allVotes, protectedIds);
+      });
     });
   });
+}
+
+// v6.8: brief "I'll go tally the votes" beat between vote cast and idol
+// play / reveal. Sits as a quiet interstitial — just a host-style line
+// with a short hold so the moment doesn't slam straight from cast button
+// to idol prompt or vote read.
+function showTallyingBeat(container, state, onContinue) {
+  const line = pickFlavor(TRIBAL_POST_VOTE_LINES);
+  container.innerHTML = `
+    <div class="screen">
+      <p class="screen-eyebrow">Episode ${state.round} · Day ${getDay(state) + DAY_OFFSETS.tribal}</p>
+      <h2>Tribal Council</h2>
+      <p class="tribal-host-line tribal-host-line-centered">${escapeHtml(line)}</p>
+    </div>
+  `;
+  setTimeout(onContinue, 1100);
 }
 
 // ── v6.4: Tie / revote / rocks resolution ───────────────────────────────────
@@ -747,6 +769,17 @@ function renderRevealPhase(container, state, revealOrder, eliminated, protectedI
       renderTally(tallyEl, liveTally);
     }
 
+    // v6.8: when the decisive (lock-in) vote lands, surface a host-style
+    // "that's the count" line below the cards. The line appears alongside
+    // the decisive card's animation so the player feels the moment lock.
+    if (isDecisive) {
+      const decisiveLine = document.createElement("p");
+      decisiveLine.className = "tribal-host-line tribal-decisive-line";
+      decisiveLine.textContent = pickFlavor(TRIBAL_DECISIVE_LINES);
+      cardsEl.appendChild(decisiveLine);
+      requestAnimationFrame(() => decisiveLine.classList.add("revealed"));
+    }
+
     i++;
 
     // v6.5: pacing tuned for tension.
@@ -770,11 +803,35 @@ function renderRevealPhase(container, state, revealOrder, eliminated, protectedI
 
   function showFinishButton() {
     const isElimPlayer = eliminated.id === player.id;
+
+    // v6.8: final tally summary line above the finish button. Synthesizes
+    // the visible counts into a short "X to Y" summary using a pooled
+    // template, so the player gets a host-style closing read on the math.
+    const sortedCounts = Object.values(liveTally)
+      .sort((a, b) => b.count - a.count)
+      .map(entry => entry.count);
+    if (sortedCounts.length > 0) {
+      const countsStr = sortedCounts.join(" to ");
+      const template  = pickFlavor(TRIBAL_TALLY_SUMMARY_LINES);
+      const summary   = template.replace("{counts}", countsStr);
+      const summaryEl = document.createElement("p");
+      summaryEl.className = "tribal-host-line tribal-tally-summary";
+      summaryEl.textContent = summary;
+      footerEl.appendChild(summaryEl);
+    }
+
+    // v6.8: farewell line above the finish button — host-style "the tribe
+    // has spoken" beat without copying Probst's exact phrase.
+    const farewellEl = document.createElement("p");
+    farewellEl.className = "tribal-host-line tribal-farewell-line";
+    farewellEl.textContent = pickFlavor(TRIBAL_FAREWELL_LINES);
+    footerEl.appendChild(farewellEl);
+
     const btn = document.createElement("button");
     btn.className   = "tribal-finish-btn";
     btn.textContent = isElimPlayer
-      ? "The tribe has spoken."
-      : "The tribe has spoken →";
+      ? "Walk out."
+      : "Continue →";
     btn.addEventListener("click", () => onTribalDone(eliminated));
     footerEl.appendChild(btn);
   }

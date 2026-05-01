@@ -188,14 +188,67 @@ function getTribalOpener(state) {
   ]);
 }
 
-// Opening line when Jeff begins reading the votes.
+// ── v6.8: Tribal Council ritual messaging ───────────────────────────────────
+//
+// Short, host-style lines used to dress the tribal flow. Original phrasing —
+// captures the cadence of the show without copying Jeff Probst's exact
+// words. Each pool can be edited or extended freely; pickFlavor handles
+// uniform random selection.
+
+// Lines shown right above the vote grid: "it's time to vote".
+const TRIBAL_PRE_VOTE_LINES = [
+  "All right, the moment is here. Cast a vote.",
+  "Time to settle this. One name.",
+  "The talking is over. Pick a name and write it down.",
+  "Let's vote.",
+  "You've heard what you've heard. Cast your vote.",
+];
+
+// Brief beat shown after votes are cast, before the idol-play / reveal
+// flow. Captures the "I'll go tally the votes" handoff.
+const TRIBAL_POST_VOTE_LINES = [
+  "Votes are in. Let me collect them.",
+  "Once I have the votes, I'll be back.",
+  "Stay where you are. I'll bring the urn.",
+  "Hold on. Let me gather them.",
+];
+
+// Opening line when the host begins reading the votes.
 const REVEAL_INTROS = [
-  "Jeff reaches into the urn…",
-  "Jeff pulls the first vote from the urn…",
-  "Jeff steps to the podium. The urn is in his hands…",
-  "Once the votes are read, the decision is final…",
-  "Jeff opens the first parchment…",
-  "Jeff retrieves the urn. The tribe waits…",
+  "We'll read them now.",
+  "Once the names are read, the decision stands.",
+  "The first vote.",
+  "Eyes up. Here's the first.",
+  "Reading the votes.",
+];
+
+// Line surfaced under the decisive (lock-in) vote card. Conveys the
+// "that's X, that's enough" beat without copying Probst's exact phrasing.
+const TRIBAL_DECISIVE_LINES = [
+  "That's the count.",
+  "That's the vote.",
+  "Enough names to send someone home.",
+  "And that locks it in.",
+  "That's all I need to read.",
+];
+
+// Final-tally summary surfaced near the finish button. Substitutes vote
+// counts in via the caller. e.g. "5 to 2 — that's the count tonight."
+const TRIBAL_TALLY_SUMMARY_LINES = [
+  "{counts} — that's the count tonight.",
+  "Final count: {counts}.",
+  "{counts}. That's how the room broke.",
+  "{counts} — and that's how it ends.",
+];
+
+// "The tribe has spoken" exit lines. Used on the finish button area or
+// as a small farewell card under the eliminated player's name.
+const TRIBAL_FAREWELL_LINES = [
+  "The tribe has decided. It's time to go.",
+  "Your time is done. Hand me the torch.",
+  "The tribe has made its choice. Walk out with your head up.",
+  "It's over. Time to leave.",
+  "The torch is going out.",
 ];
 
 // ── Elimination screen ────────────────────────────────────────────────────────
