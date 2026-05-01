@@ -244,17 +244,6 @@ const CAMP_ACTIONS = [
     needsTarget: false,
     category: "island",
   },
-  {
-    // v5.5: solo reflection — small suspicion drop + a self-observation
-    // about the player's current standing. Distinct from "Observe a
-    // player" (which observes others) and "Lay low" (which manages
-    // visibility, not insight).
-    id: "takeWalk",
-    label: "Take a walk",
-    detail: "Step away from the noise. Get a read on your own game.",
-    needsTarget: false,
-    category: "island",
-  },
 ];
 
 // v5.21: action registry — id → action def. Built once from CAMP_ACTIONS so
@@ -346,7 +335,6 @@ function executeAction(state, actionId, player, tribemates, target) {
 
     case "tendCamp":    return actionTendCamp(state, player, tribemates);
     case "searchidol":  return actionSearchIdol(state, player, tribemates);
-    case "takeWalk":    return actionTakeWalk(state, player, tribemates);
     case "lobby":       return actionLobby(state, player, tribemates, target);
     case "laylow":      return actionLayLow(state, player, tribemates);
     case "proposeAlliance": return actionProposeAlliance(state, player, target);
@@ -1546,117 +1534,11 @@ function actionLayLow(state, player, tribemates) {
   ]), hint: null };
 }
 
-// TAKE A WALK — solo reflection (v5.5, new).
-//
-// Solo Island action with no tribemate target. Steps the player away from
-// the camp briefly:
-//
-//   • Player suspicion −1 (a quiet beat, briefly off the radar)
-//   • Surfaces ONE self-observation about the player's standing — sourced
-//     from real game state (rel ranks, suspicion level, alliance health).
-//
-// Distinct from neighboring Island actions:
-//   • Tend Camp builds tribe-wide rel and grants idol-search support.
-//   • Search for Idol pursues advantages at suspicion cost.
-//   • Lay Low manages the player's visibility (bigger suspicion drop).
-//   • Take a Walk offers INSIGHT — what the player should be paying
-//     attention to in their own game.
-//
-// Distinct from Strategy → Observe a Player (which observes others' bonds)
-// and Social → Observe the Camp (which surfaces general dynamics). Take a
-// Walk is the player's own status read.
-//
-// No state mutation beyond the small suspicion drop. The point is that the
-// observation itself is the value.
-function actionTakeWalk(state, player, tribemates) {
-  // Quiet self-care beat — mild suspicion drop, smaller than Lay Low's
-  // intentional invisibility act.
-  adjustSuspicion(state, player.id, -1);
-
-  // Build a list of candidate self-observations sourced from current state.
-  const observations = [];
-
-  // Strongest ally and worst enemy by player rel.
-  let topAlly = null,    topRel    = -Infinity;
-  let worstFoe = null,   worstRel  =  Infinity;
-  for (const c of tribemates) {
-    const rel = getRelationship(state, player.id, c.id);
-    if (rel > topRel)   { topRel   = rel; topAlly  = c; }
-    if (rel < worstRel) { worstRel = rel; worstFoe = c; }
-  }
-
-  if (topAlly && topRel >= 10) {
-    observations.push(pickFrom([
-      `Your bond with ${topAlly.name} feels real. If you can keep that solid, you have someone in your corner.`,
-      `${topAlly.name} keeps coming up in your head. They're the ally you didn't expect to have — and the one you can't afford to lose.`,
-    ]));
-  }
-  if (worstFoe && worstRel <= -8) {
-    observations.push(pickFrom([
-      `You're not on good terms with ${worstFoe.name}. That's information you can use — or work to change.`,
-      `${worstFoe.name} is going to be a problem if you don't get ahead of it. The longer it festers, the worse it gets.`,
-    ]));
-  }
-
-  // Suspicion read.
-  const susp = player.suspicion ?? 0;
-  if (susp >= 5) {
-    observations.push(pickFrom([
-      "You can feel the tribe watching you. The next move you make has to be careful.",
-      "You're on the radar. Whatever you do today, it'll be noted. Move accordingly.",
-    ]));
-  } else if (susp <= 1) {
-    observations.push(pickFrom([
-      "No one's been paying you much attention. That's a kind of safety, for now.",
-      "You're flying under the radar. Useful — until it isn't.",
-    ]));
-  }
-
-  // Alliance health.
-  const myAlliances = (typeof getAlliancesForMember === "function")
-    ? getAlliancesForMember(state, player.id)
-    : [];
-  if (myAlliances.length > 0) {
-    // Rank by strength to surface the most relevant.
-    const sorted = [...myAlliances].sort((a, b) => b.strength - a.strength);
-    const strongest = sorted[0];
-    if (strongest.strength >= 7) {
-      observations.push(pickFrom([
-        `Your alliance "${strongest.name}" feels solid. That's something to lean on.`,
-        `"${strongest.name}" is in good shape. Don't take it for granted, but use it.`,
-      ]));
-    } else if (strongest.strength <= 3) {
-      observations.push(pickFrom([
-        `Your alliance "${strongest.name}" feels shaky. You'll need to invest in it — soon.`,
-        `"${strongest.name}" is on thin ice. If you don't tend to it, it won't hold.`,
-      ]));
-    }
-  }
-
-  // Generic fallback when nothing in particular stood out.
-  if (observations.length === 0) {
-    observations.push(pickFrom([
-      "You watched the waves for a while. The days were blurring together. You weren't sure where you stood — but the not-knowing was its own answer.",
-      "You walked the beach alone. There was no big revelation, just the steady push of the water. Sometimes that's all you can ask for.",
-      "You took a long breath of salt air and let it out. The game would be there when you got back.",
-      "You wandered far enough that the camp went quiet. For a while, you weren't a player. You were just someone on a beach.",
-    ]));
-  }
-
-  // Pick one observation to share; the action surfaces a single thought
-  // rather than an info dump, in line with the prompt's "limited info".
-  const observation = pickFrom(observations);
-
-  return {
-    feedback: pickFrom([
-      `You walked the beach alone, thinking. ${observation}`,
-      `You took a moment to step away from the noise. ${observation}`,
-      `You wandered off for a while and let your mind wander with you. ${observation}`,
-      `You stepped away from camp and let the quiet do its work. ${observation}`,
-    ]),
-    hint: null,
-  };
-}
+// v5.24: actionTakeWalk removed. The "Take a walk" action no longer appears
+// in the player menu. Self-insight reads now flow through the merged
+// "Read the camp" action's self-pressure / capital lines and through the
+// end-of-camp recap card. Lay Low remains the dedicated suspicion-management
+// action; Tend Camp and Search for Idol fill out the Island category.
 
 // PROPOSE ALLIANCE — explicit pact-making.
 //
@@ -2813,7 +2695,7 @@ function clearCampTargets(state) {
 //   strategist       — heavy strategy/askVote/observePair/compareNotes share
 //   schemer          — heavy lobby + searchidol share
 //   socialConnector  — heavy talk/confide/checkIn/smoothOver share
-//   drifter          — heavy laylow/takeWalk/observeCamp/readRoom share
+//   drifter          — heavy laylow/readCamp share
 //
 // A role is only "emerged" once the contestant has taken at least 5 camp
 // actions total (otherwise it's "undefined" — we don't read someone from
@@ -2841,7 +2723,7 @@ const CAMP_ROLE_CATEGORIES = {
   strategist:      ["talkStrategy", "observePair"],
   schemer:         ["lobby", "searchidol"],
   socialConnector: ["spendTime", "mendBond", "proposeAlliance"],
-  drifter:         ["laylow", "takeWalk", "readCamp"],
+  drifter:         ["laylow", "readCamp"],
 };
 
 const CAMP_ROLE_LABELS = {
