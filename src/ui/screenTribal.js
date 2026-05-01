@@ -716,6 +716,7 @@ function renderRevealPhase(container, state, revealOrder, eliminated, protectedI
       <h2>Reading the Votes</h2>
       <p class="tribal-reading-note muted">${revealIntro}</p>
 
+      <p id="reveal-status" class="tribal-host-line tribal-reveal-status"></p>
       <div id="reveal-cards" class="reveal-cards"></div>
 
       <div id="tally-board" class="tally-board"></div>
@@ -727,6 +728,7 @@ function renderRevealPhase(container, state, revealOrder, eliminated, protectedI
   const cardsEl  = container.querySelector("#reveal-cards");
   const tallyEl  = container.querySelector("#tally-board");
   const footerEl = container.querySelector("#reveal-footer");
+  const statusEl = container.querySelector("#reveal-status");
 
   const liveTally = {};
   let   i         = 0;
@@ -742,9 +744,26 @@ function renderRevealPhase(container, state, revealOrder, eliminated, protectedI
     const { target }      = revealOrder[i];
     const isAgainstPlayer = target.id === player.id;
     const isDecisive      = i === revealOrder.length - 1;
+    const isFirstVote     = i === 0;
     // Votes targeting an idol-protected contestant are still revealed (for
     // drama) but flagged so they read as voided and don't increment the tally.
     const isVoided        = protectedIds.has(target.id);
+
+    // v6.8: per-vote host-line caption above the cards. Shows "First vote"
+    // on the opener, "Next vote" on each subsequent vote until the
+    // decisive — the decisive then gets its own dedicated line below the
+    // cards (rendered further down). No status line on the decisive vote
+    // itself so the moment doesn't compete with the lock-in line.
+    if (statusEl) {
+      if (isDecisive && !isFirstVote) {
+        // Empty during decisive — the decisive line takes over.
+        statusEl.textContent = "";
+      } else if (isFirstVote) {
+        statusEl.textContent = pickFlavor(TRIBAL_HOST_TEXT.firstVote);
+      } else {
+        statusEl.textContent = pickFlavor(TRIBAL_HOST_TEXT.nextVote);
+      }
+    }
 
     const card = document.createElement("div");
     card.className = [

@@ -3798,6 +3798,14 @@ button:disabled {
   margin: 2rem auto;
   max-width: 32rem;
 }
+.tribal-reveal-status {
+  text-align: center;
+  margin: 0.4rem 0 0.6rem;
+  min-height: 1.4em;        /* hold space so cards don't jump as text changes */
+  font-size: 0.95rem;
+  letter-spacing: 0.02em;
+  transition: opacity 200ms ease;
+}
 .tribal-decisive-line {
   text-align: center;
   margin-top: 0.85rem;

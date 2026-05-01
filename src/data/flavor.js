@@ -188,68 +188,103 @@ function getTribalOpener(state) {
   ]);
 }
 
-// ── v6.8: Tribal Council ritual messaging ───────────────────────────────────
+// ── v6.8: Tribal Council host text — centralized configuration ──────────────
 //
-// Short, host-style lines used to dress the tribal flow. Original phrasing —
-// captures the cadence of the show without copying Jeff Probst's exact
-// words. Each pool can be edited or extended freely; pickFlavor handles
-// uniform random selection.
+// All host-voice messaging used through the Tribal flow lives in a single
+// config object below. Each property is an array of variants; pickFlavor()
+// picks one uniformly at render time. To tweak a beat, edit the array in
+// place — every UI surface reads from this object.
+//
+// Original phrasing throughout. Captures the structure and rhythm of the
+// show's Tribal Council ritual (pre-vote → tally → reveal one-by-one →
+// "that's enough" → final count → torch snuff) without copying any host's
+// exact lines. Brief, clear, and host-voiced.
+//
+// Stages mapped to keys:
+//   preVote          — "it's time to vote" beat above the vote grid
+//   postVoteTally    — "I'll go tally" interstitial before reveal
+//   revealIntro      — opener line when votes start being read
+//   firstVote        — caption shown alongside the first revealed vote
+//   nextVote         — caption shown alongside subsequent (non-first,
+//                      non-decisive) revealed votes
+//   decisive         — caption shown when the lock-in vote lands
+//   tallySummary     — final-count summary above the finish button.
+//                      Use {counts} placeholder; caller substitutes.
+//   farewell         — "tribe has spoken" exit line above finish button
+const TRIBAL_HOST_TEXT = {
+  preVote: [
+    "It is time to vote.",
+    "All right, the moment is here. Cast a vote.",
+    "Time to settle this. One name.",
+    "The talking is over. Pick a name and write it down.",
+    "Let's vote.",
+    "You've heard what you've heard. Cast your vote.",
+  ],
 
-// Lines shown right above the vote grid: "it's time to vote".
-const TRIBAL_PRE_VOTE_LINES = [
-  "All right, the moment is here. Cast a vote.",
-  "Time to settle this. One name.",
-  "The talking is over. Pick a name and write it down.",
-  "Let's vote.",
-  "You've heard what you've heard. Cast your vote.",
-];
+  postVoteTally: [
+    "I'll go tally the votes.",
+    "Votes are in. Let me collect them.",
+    "Once I have the votes, I'll be back.",
+    "Stay where you are. I'll bring the urn.",
+    "Hold on. Let me gather them.",
+  ],
 
-// Brief beat shown after votes are cast, before the idol-play / reveal
-// flow. Captures the "I'll go tally the votes" handoff.
-const TRIBAL_POST_VOTE_LINES = [
-  "Votes are in. Let me collect them.",
-  "Once I have the votes, I'll be back.",
-  "Stay where you are. I'll bring the urn.",
-  "Hold on. Let me gather them.",
-];
+  revealIntro: [
+    "Once the votes are read, the decision is final.",
+    "We'll read them now.",
+    "Once the names are read, the decision stands.",
+    "Eyes up. Here's the first.",
+    "Reading the votes.",
+  ],
 
-// Opening line when the host begins reading the votes.
-const REVEAL_INTROS = [
-  "We'll read them now.",
-  "Once the names are read, the decision stands.",
-  "The first vote.",
-  "Eyes up. Here's the first.",
-  "Reading the votes.",
-];
+  firstVote: [
+    "First vote.",
+    "First vote out of the urn.",
+    "And the first vote.",
+    "We'll start here.",
+  ],
 
-// Line surfaced under the decisive (lock-in) vote card. Conveys the
-// "that's X, that's enough" beat without copying Probst's exact phrasing.
-const TRIBAL_DECISIVE_LINES = [
-  "That's the count.",
-  "That's the vote.",
-  "Enough names to send someone home.",
-  "And that locks it in.",
-  "That's all I need to read.",
-];
+  nextVote: [
+    "Next vote.",
+    "Another vote.",
+    "And the next.",
+    "Pulling another.",
+  ],
 
-// Final-tally summary surfaced near the finish button. Substitutes vote
-// counts in via the caller. e.g. "5 to 2 — that's the count tonight."
-const TRIBAL_TALLY_SUMMARY_LINES = [
-  "{counts} — that's the count tonight.",
-  "Final count: {counts}.",
-  "{counts}. That's how the room broke.",
-  "{counts} — and that's how it ends.",
-];
+  decisive: [
+    "That's enough.",
+    "That's the vote.",
+    "And that's enough names.",
+    "That locks it in.",
+    "That's all I need to read.",
+  ],
 
-// "The tribe has spoken" exit lines. Used on the finish button area or
-// as a small farewell card under the eliminated player's name.
-const TRIBAL_FAREWELL_LINES = [
-  "The tribe has decided. It's time to go.",
-  "Your time is done. Hand me the torch.",
-  "The tribe has made its choice. Walk out with your head up.",
-  "It's over. Time to leave.",
-  "The torch is going out.",
-];
+  tallySummary: [
+    "Final vote count: {counts}.",
+    "{counts} — that's the count tonight.",
+    "{counts}. That's how the room broke.",
+    "{counts} — and that's how it ends.",
+  ],
+
+  farewell: [
+    "The tribe has decided. It's time for you to go.",
+    "Your time is done. Hand me the torch.",
+    "The tribe has spoken. Walk out with your head up.",
+    "It's over. Time to leave.",
+    "The torch goes out tonight.",
+  ],
+};
+
+// Backwards-compatible aliases — earlier callers reference these names.
+// Keeping the aliases (rather than refactoring every call site) lets the
+// centralized object be the single source of truth while the existing
+// pickFlavor(...) calls keep working unchanged.
+const TRIBAL_PRE_VOTE_LINES      = TRIBAL_HOST_TEXT.preVote;
+const TRIBAL_POST_VOTE_LINES     = TRIBAL_HOST_TEXT.postVoteTally;
+const REVEAL_INTROS              = TRIBAL_HOST_TEXT.revealIntro;
+const TRIBAL_DECISIVE_LINES      = TRIBAL_HOST_TEXT.decisive;
+const TRIBAL_TALLY_SUMMARY_LINES = TRIBAL_HOST_TEXT.tallySummary;
+const TRIBAL_FAREWELL_LINES      = TRIBAL_HOST_TEXT.farewell;
 
 // ── Elimination screen ────────────────────────────────────────────────────────
 
