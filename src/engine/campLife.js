@@ -2367,6 +2367,38 @@ function actionReadRoom(state, player, tribemates) {
     }
   }
 
+  // v5.40: hedged self-position read. Surfaces only at the meaningful
+  // extremes — influential / central produce a "you're at the heart of
+  // the camp" line; expendable / peripheral produce a "you're on the
+  // outside" line. Connected / protected (the middle bands) stay quiet
+  // — the player gets the read only when there's real signal worth
+  // surfacing. No numeric leak.
+  if (typeof getSocialPosition === "function") {
+    const pos = getSocialPosition(state, player.id).position;
+    if (pos === "influential") {
+      candidates.push({ weight: 4, text: pickFrom([
+        `You're aware that conversations bend toward you today. People are seeking you out, not the other way around. The room recognizes the shape of your game.`,
+        `Whatever you're doing socially, it's reading as power. Tribemates are deferring to you in small ways you only catch if you're looking.`,
+        `You realized today how many threads run through you. You're not just in the conversation — you're driving its direction.`,
+      ])});
+    } else if (pos === "central") {
+      candidates.push({ weight: 3, text: pickFrom([
+        `You're sitting comfortable today. Connected enough that the room reads you as part of the fabric. That's a useful place to be.`,
+        `The day moved through you. You weren't out front, but you weren't on the edges either — exactly where you'd want to be at this stage.`,
+      ])});
+    } else if (pos === "expendable") {
+      candidates.push({ weight: 5, text: pickFrom([
+        `You're in trouble. The conversations aren't including you, the safety nets aren't there, and the heat is on. You'd better make a move soon — passive is going to get you sent home.`,
+        `The room reads you as the easy vote tonight. Outside the alliances, low standing, and the heat hasn't moved off you. You need to do something.`,
+      ])});
+    } else if (pos === "peripheral") {
+      candidates.push({ weight: 3, text: pickFrom([
+        `You're on the outside of the camp's social fabric today. The conversations move past you more than they used to. That's information, even when it doesn't feel like it.`,
+        `You'd describe yourself as drifting at the edges of the tribe right now. Not necessarily in danger — but not embedded either.`,
+      ])});
+    }
+  }
+
   // v5.34: collective idol-fear self-read. When the rest of the camp
   // averages high fear of the PLAYER, surface a hedged line — the room is
   // tiptoeing around them because they're worried about an idol/advantage,
@@ -3112,9 +3144,29 @@ function isScrambling(state, contestantId) {
   }
 
   const pressure = getPressureScore(state, contestantId);
-  if (pressure >= 6.0) return true;
 
-  // Top-3 + meaningful pressure check
+  // v5.40: peripheral / expendable contestants sense danger earlier — they
+  // know they don't have the safety net that central / influential players
+  // do, so they trip into scramble at lower pressure thresholds. Central /
+  // influential players take longer to scramble (the room buffers them).
+  let pressureFloor = 6.0;
+  let topRankFloor  = 5.0;
+  let topRankCutoff = 3;
+  if (typeof getSocialPosition === "function") {
+    const pos = getSocialPosition(state, contestantId).position;
+    if (pos === "peripheral" || pos === "expendable") {
+      pressureFloor = 5.0;
+      topRankFloor  = 4.0;
+      topRankCutoff = 4;     // top-4 instead of top-3
+    } else if (pos === "central" || pos === "influential") {
+      pressureFloor = 6.5;
+      topRankFloor  = 5.5;
+    }
+  }
+
+  if (pressure >= pressureFloor) return true;
+
+  // Top-N + meaningful pressure check
   const c = findContestant(state, contestantId);
   if (c) {
     const pool = state.merged
@@ -3122,7 +3174,7 @@ function isScrambling(state, contestantId) {
       : (state.tribes?.[c.tribe] || []);
     const ranked = getPressureRanking(state, pool);
     const ix = ranked.findIndex(r => r.contestant.id === contestantId);
-    if (ix >= 0 && ix < 3 && pressure >= 5.0) return true;
+    if (ix >= 0 && ix < topRankCutoff && pressure >= topRankFloor) return true;
   }
 
   // Multiple-observer suspicion-memory check.
@@ -3291,7 +3343,20 @@ function pickAIActionWeighted(state, ai, others) {
     let w = 1 + ai.strategy * 0.5;
     if (arch === "sneaky")   w += 1.5;
     if (arch === "paranoid") w += 1;
-    options.push({ action: "askVote", weight: w, target: pickFrom(askPool) });
+    // v5.40: prefer high-embeddedness intel sources. Central / influential
+    // tribemates know more (they're connected to more conversations), so
+    // strategic AIs ask them more often. Random pick from the top half by
+    // embeddedness keeps it from being deterministic.
+    let askTarget = pickFrom(askPool);
+    if (typeof getSocialPosition === "function" && askPool.length >= 2) {
+      const ranked = askPool.map(c => ({
+        c,
+        emb: getSocialPosition(state, c.id).embeddedness,
+      })).sort((a, b) => b.emb - a.emb);
+      const topHalf = ranked.slice(0, Math.max(1, Math.ceil(ranked.length / 2)));
+      askTarget = pickFrom(topHalf).c;
+    }
+    options.push({ action: "askVote", weight: w, target: askTarget });
   }
 
   // ── FORM ALLIANCE ──

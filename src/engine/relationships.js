@@ -815,6 +815,138 @@ function getCampTemperature(state, pool) {
   };
 }
 
+// ── v5.40: Social positioning / tribe hierarchy ─────────────────────────────
+//
+// Composite read of where a contestant sits in the tribe's social structure.
+// Distinct from any single-axis metric — synthesizes how connected they are
+// (embeddedness) AGAINST how exposed they are (vulnerability) into one of
+// six positions:
+//
+//   "influential" — high embeddedness, low vulnerability, top of the room
+//   "central"     — well-connected, comfortably safe
+//   "protected"   — embedded enough that the room shields them mid-heat
+//   "connected"   — average integration, neither central nor at risk
+//   "peripheral"  — under-integrated; on the outside of the social fabric
+//   "expendable"  — vulnerable AND under-integrated; the easy vote
+//
+// Pure-derived (no new state). Builds on social capital, inner circles,
+// alliance loyalty, network rel, suspicion, target pressure, conflicts,
+// and scramble status — all existing v5.x systems. Acts as a SUMMARY layer
+// the same way camp temperature does for the tribe-wide mood.
+//
+// Returns { position, embeddedness, vulnerability, score, factors } so
+// any consumer can either read the categorical label or work with the
+// continuous embeddedness/vulnerability scores directly.
+function getSocialPosition(state, contestantId) {
+  const c = findContestant(state, contestantId);
+  if (!c) {
+    return { position: "peripheral", embeddedness: 0, vulnerability: 5, score: -5 };
+  }
+  const pool = state.merged
+    ? (state.tribes?.merged || [])
+    : (state.tribes?.[c.tribe] || []);
+  const others = pool.filter(p => p.id !== contestantId);
+  if (others.length === 0) {
+    return { position: "central", embeddedness: 7, vulnerability: 2, score: 5 };
+  }
+
+  // ── Embeddedness components ─────────────────────────────────────────
+  // Social capital — already aggregates broad standing, role, conflicts.
+  const capital = (typeof getSocialCapital === "function")
+    ? getSocialCapital(state, contestantId) : 5;
+
+  // Mutual inner-circle ties — pairs where bond is strong both directions.
+  let mutualCount = 0;
+  if (typeof getInnerCircleBond === "function") {
+    for (const other of others) {
+      const myBondToThem = getInnerCircleBond(state, contestantId, other.id);
+      const theirBondToMe = getInnerCircleBond(state, other.id, contestantId);
+      if (myBondToThem >= 5 && theirBondToMe >= 5) mutualCount++;
+    }
+  }
+
+  // Alliance integration: alliances they're in × tier × avg loyalty FROM
+  // others toward them (how committed the room is to their inclusion).
+  let allianceWeight = 0;
+  for (const a of state.alliances ?? []) {
+    if (a.status === "dissolved") continue;
+    if (!a.memberIds.includes(contestantId)) continue;
+    const tier = a.tier ?? (a.strength >= 7 ? "core" : a.strength >= 4 ? "loose" : "weakened");
+    const tierMult = tier === "core" ? 1.5 : tier === "loose" ? 1.0 : 0.5;
+    let otherLoyaltySum = 0, otherCount = 0;
+    if (typeof getAllianceLoyalty === "function") {
+      for (const mid of a.memberIds) {
+        if (mid === contestantId) continue;
+        otherLoyaltySum += getAllianceLoyalty(state, a.id, mid);
+        otherCount++;
+      }
+    }
+    const avgOtherLoyalty = otherCount > 0 ? otherLoyaltySum / otherCount : 5;
+    allianceWeight += tierMult * (avgOtherLoyalty / 10);
+  }
+
+  // Network rel: avg rel from OTHERS toward this contestant — captures how
+  // the room reads them, not just how they read the room.
+  let relSum = 0;
+  for (const other of others) relSum += getRelationship(state, other.id, contestantId);
+  const avgRelToMe = relSum / others.length;
+
+  let embeddedness = 4;                                  // baseline mid
+  embeddedness += (capital - 5) * 0.5;                   // ±2.5
+  embeddedness += mutualCount * 0.8;                     // 0..~5
+  embeddedness += allianceWeight * 1.0;                  // 0..~3
+  embeddedness += Math.max(0, avgRelToMe) * 0.10;        // 0..~2
+  embeddedness = Math.max(0, Math.min(10, embeddedness));
+
+  // ── Vulnerability components ─────────────────────────────────────────
+  let vulnerability = 0;
+  vulnerability += (c.suspicion ?? 0) * 0.5;             // 0..5
+
+  if (typeof getPressureScore === "function") {
+    const pressure = getPressureScore(state, contestantId);
+    vulnerability += Math.max(0, pressure - 5) * 0.6;    // 0..3
+  }
+
+  let recentConflicts = 0;
+  const conflicts = state.lastConflicts?.[contestantId] || {};
+  for (const otherId of Object.keys(conflicts)) {
+    const e = conflicts[otherId];
+    if (!e) continue;
+    const age = (state.round ?? 0) - (e.round ?? 0);
+    if (age <= 2) recentConflicts++;
+  }
+  vulnerability += recentConflicts * 0.3;
+
+  // Note: scramble status is intentionally NOT a vulnerability input to
+  // avoid a circular dependency with isScrambling (which now consults
+  // social position to lower its own threshold for peripheral players).
+  // Pressure already covers the same signal — a scrambling contestant's
+  // pressure score will be elevated, contributing through the pressure
+  // factor above.
+  vulnerability = Math.max(0, Math.min(10, vulnerability));
+
+  // ── Map to position ─────────────────────────────────────────────────
+  const score = embeddedness - vulnerability;
+  let position;
+  if      (embeddedness >= 7 && vulnerability <= 4) position = "influential";
+  else if (embeddedness >= 6 && vulnerability <= 3) position = "central";
+  else if (embeddedness >= 5 && vulnerability <= 5) position = "protected";
+  else if (embeddedness >= 4)                       position = "connected";
+  else if (vulnerability >= 6)                      position = "expendable";
+  else                                              position = "peripheral";
+
+  return {
+    position,
+    embeddedness,
+    vulnerability,
+    score,
+    factors: {
+      capital, mutualCount, allianceWeight, avgRelToMe,
+      suspicion: c.suspicion ?? 0, recentConflicts,
+    },
+  };
+}
+
 // ── v5.17: Rumors / information spread ───────────────────────────────────────
 //
 // Camp life is socially loud. People talk about each other when no one is in
