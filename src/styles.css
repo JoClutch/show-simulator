@@ -3781,6 +3781,56 @@ button:disabled {
   flex-shrink: 0;
 }
 
+/* ── v6.4: Tie / revote / rocks cards ──────────────────────────────────── */
+.tribal-tie-card,
+.tribal-rocks-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-mid);
+  border-left: 3px solid var(--gold);
+  border-radius: 0 5px 5px 0;
+  padding: 1.1rem 1.3rem;
+  margin: 1rem 0;
+  text-align: center;
+}
+.tribal-tie-card-rocks,
+.tribal-rocks-card {
+  border-left-color: #b85060;
+}
+.tribal-tie-icon {
+  font-size: 2rem;
+  color: var(--gold);
+  margin-bottom: 0.4rem;
+}
+.tribal-tie-card-rocks .tribal-tie-icon,
+.tribal-rocks-card    .tribal-tie-icon {
+  color: #b85060;
+}
+.tribal-tie-headline {
+  font-size: 1rem;
+  color: var(--text-primary);
+  line-height: 1.45;
+  margin: 0 0 0.7rem;
+}
+.tribal-tie-rule {
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  font-style: italic;
+  line-height: 1.5;
+  margin: 0 0 0.85rem;
+}
+.tribal-rocks-result {
+  font-size: 1.05rem;
+  color: var(--text-primary);
+  margin: 0.6rem 0 1rem;
+}
+.tribal-revote-instruction {
+  text-align: center;
+  font-size: 0.95rem;
+  color: var(--text-dim);
+  line-height: 1.5;
+  margin: 0.5rem 0 1.2rem;
+}
+
 /* ── v6.1: Tribal arrival — attendees ribbon ─────────────────────────── */
 .tribal-attendees {
   margin: 0.6rem 0 0.85rem;

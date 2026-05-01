@@ -77,9 +77,7 @@ function renderPreMergeTribalScreen(container, state) {
     processVotingAftermath(state, allVotes);
     detectVotingBlocs(state, allVotes);
     runIdolPlayPhase(container, state, tribe, protectedIds => {
-      const eliminated  = tallyVotes(allVotes, state, protectedIds);
-      const revealOrder = buildRevealOrder(allVotes, eliminated.id);
-      renderRevealPhase(container, state, revealOrder, eliminated, protectedIds);
+      runVoteResolution(container, state, tribe, allVotes, protectedIds);
     });
   });
 }
@@ -155,10 +153,264 @@ function renderMergedTribalScreen(container, state) {
     processVotingAftermath(state, allVotes);
     detectVotingBlocs(state, allVotes);
     runIdolPlayPhase(container, state, tribe, protectedIds => {
-      const eliminated  = tallyVotes(allVotes, state, protectedIds);
-      const revealOrder = buildRevealOrder(allVotes, eliminated.id);
-      renderRevealPhase(container, state, revealOrder, eliminated, protectedIds);
+      runVoteResolution(container, state, tribe, allVotes, protectedIds);
     });
+  });
+}
+
+// ── v6.4: Tie / revote / rocks resolution ───────────────────────────────────
+//
+// Single entry point for tallying votes and handling the full Survivor-style
+// tie-resolution flow:
+//
+//   1. Initial tally. If a single name leads → reveal phase as before.
+//   2. If tied: announce the tie, run revote (player picks among tied;
+//      tied players can't vote), tally again.
+//   3. If still tied after revote: announce persistent tie, run rocks
+//      (every non-tied non-immune attendee draws; random elimination).
+//   4. Reveal phase plays the chosen original-vote ordering, but if tie-
+//      resolution fired, an interstitial summary is shown first and the
+//      eliminated identity comes from the resolution path.
+
+function runVoteResolution(container, state, attendees, originalVotes, protectedIds) {
+  const result = tallyVotes(originalVotes, state, protectedIds);
+
+  if (result.kind === "decided") {
+    if (!result.eliminated) {
+      // Defensive: every vote was voided AND the fallback pool was empty.
+      // Surface a graceful continue rather than trapping the player.
+      renderTribalDeadEndScreen(container, state);
+      return;
+    }
+    const revealOrder = buildRevealOrder(originalVotes, result.eliminated.id);
+    renderRevealPhase(container, state, revealOrder, result.eliminated, protectedIds);
+    return;
+  }
+
+  // Tied — announce, then revote.
+  showTieAnnouncement(container, state, attendees, result.tiedIds, result.counts, () => {
+    runRevotePhase(container, state, attendees, originalVotes, result.tiedIds, protectedIds);
+  });
+}
+
+function showTieAnnouncement(container, state, attendees, tiedIds, counts, onContinue) {
+  const tiedNames = tiedIds
+    .map(id => attendees.find(c => c.id === id)?.name ?? "?")
+    .filter(n => n !== "?");
+  const voteCount = counts[tiedIds[0]] ?? 0;
+
+  container.innerHTML = `
+    <div class="screen">
+      <p class="screen-eyebrow">Episode ${state.round} · Day ${getDay(state) + DAY_OFFSETS.tribal}</p>
+      <h2>The Vote Is Tied</h2>
+      <div class="tribal-tie-card">
+        <div class="tribal-tie-icon">⚖</div>
+        <p class="tribal-tie-headline">
+          ${tiedNames.map(n => `<strong>${escapeHtml(n)}</strong>`).join(" and ")}
+          tied with ${voteCount} vote${voteCount !== 1 ? "s" : ""} each.
+        </p>
+        <p class="tribal-tie-rule">
+          We will revote. Only the tied players can receive votes —
+          and they themselves do not vote in this round.
+        </p>
+        <button id="tie-continue-btn" class="tribal-finish-btn">Continue to Revote →</button>
+      </div>
+    </div>
+  `;
+  container.querySelector("#tie-continue-btn").addEventListener("click", onContinue);
+}
+
+function runRevotePhase(container, state, attendees, originalVotes, tiedIds, protectedIds) {
+  const tiedSet = new Set(tiedIds);
+  const tiedContestants = attendees.filter(c => tiedSet.has(c.id));
+  const player          = state.player;
+  const playerIsTied    = tiedSet.has(player.id);
+
+  // If the player IS tied, they don't get to revote — go straight to AI revote.
+  if (playerIsTied) {
+    const revoteBallots = collectRevoteVotes(state, attendees, tiedIds, null);
+    finishRevote(container, state, attendees, originalVotes, tiedIds, revoteBallots, protectedIds);
+    return;
+  }
+
+  // Player is eligible to revote. Render a focused picker showing only the
+  // tied players as candidates.
+  let playerRevote = null;
+
+  container.innerHTML = `
+    <div class="screen">
+      <p class="screen-eyebrow">Episode ${state.round} · Day ${getDay(state) + DAY_OFFSETS.tribal}</p>
+      <h2>Revote</h2>
+      <p class="tribal-revote-instruction">
+        Vote for one of the tied players to leave the game.
+        <br><span class="muted">Tied players are not voting in this round.</span>
+      </p>
+
+      <div class="contestant-grid-2col" id="revote-grid"></div>
+
+      <div class="spacer">
+        <button id="revote-cast-btn" disabled>Cast My Revote</button>
+      </div>
+    </div>
+  `;
+
+  const grid = container.querySelector("#revote-grid");
+  const castBtn = container.querySelector("#revote-cast-btn");
+  for (const c of tiedContestants) {
+    const card = document.createElement("div");
+    card.className = "contestant-card";
+    card.innerHTML = `
+      <div class="card-name">${escapeHtml(c.name)}</div>
+      <div class="card-stats">
+        <div class="stat-row">
+          <span class="stat-label">Challenge</span>
+          <span class="stat-value">${c.challenge}</span>
+        </div>
+        <div class="stat-bar"><div class="stat-bar-fill" style="width:${c.challenge * 10}%"></div></div>
+        <div class="stat-row">
+          <span class="stat-label">Social</span>
+          <span class="stat-value">${c.social}</span>
+        </div>
+        <div class="stat-bar"><div class="stat-bar-fill" style="width:${c.social * 10}%"></div></div>
+        <div class="stat-row">
+          <span class="stat-label">Strategy</span>
+          <span class="stat-value">${c.strategy}</span>
+        </div>
+        <div class="stat-bar"><div class="stat-bar-fill" style="width:${c.strategy * 10}%"></div></div>
+      </div>
+    `;
+    card.addEventListener("click", () => {
+      grid.querySelectorAll(".contestant-card").forEach(el => el.classList.remove("selected"));
+      card.classList.add("selected");
+      playerRevote = c;
+      castBtn.disabled = false;
+    });
+    grid.appendChild(card);
+  }
+
+  castBtn.addEventListener("click", () => {
+    if (!playerRevote) return;
+    const revoteBallots = collectRevoteVotes(state, attendees, tiedIds, playerRevote);
+    finishRevote(container, state, attendees, originalVotes, tiedIds, revoteBallots, protectedIds);
+  });
+}
+
+function finishRevote(container, state, attendees, originalVotes, tiedIds, revoteBallots, protectedIds) {
+  // Tally revote ballots. No idol play in the revote phase (idols are spent
+  // pre-vote in the modern format), so protectedIds is empty for this tally.
+  const result = tallyVotes(revoteBallots, state, new Set());
+
+  if (result.kind === "decided" && result.eliminated) {
+    // Revote resolved cleanly. Use the revote ballots for the reveal order
+    // so the player sees how the room broke when forced to choose between
+    // the tied players. The original-round votes are already history.
+    const revealOrder = buildRevealOrder(revoteBallots, result.eliminated.id);
+    showRevoteResolvedBeat(container, state, () => {
+      renderRevealPhase(container, state, revealOrder, result.eliminated, new Set());
+    });
+    return;
+  }
+
+  // Revote still tied — escalate to rocks.
+  showPersistentTieAnnouncement(container, state, attendees, result.tiedIds, () => {
+    runRocksPhase(container, state, attendees, result.tiedIds);
+  });
+}
+
+function showRevoteResolvedBeat(container, state, onContinue) {
+  container.innerHTML = `
+    <div class="screen">
+      <p class="screen-eyebrow">Episode ${state.round} · Day ${getDay(state) + DAY_OFFSETS.tribal}</p>
+      <h2>Revote Cast</h2>
+      <p class="tribal-reading-note muted">The room has decided. Reading the new votes…</p>
+    </div>
+  `;
+  setTimeout(onContinue, 1400);
+}
+
+function showPersistentTieAnnouncement(container, state, attendees, tiedIds, onContinue) {
+  const tiedNames = tiedIds
+    .map(id => attendees.find(c => c.id === id)?.name ?? "?")
+    .filter(n => n !== "?");
+
+  container.innerHTML = `
+    <div class="screen">
+      <p class="screen-eyebrow">Episode ${state.round} · Day ${getDay(state) + DAY_OFFSETS.tribal}</p>
+      <h2>Still Tied</h2>
+      <div class="tribal-tie-card tribal-tie-card-rocks">
+        <div class="tribal-tie-icon">⬢</div>
+        <p class="tribal-tie-headline">
+          The revote is also tied between
+          ${tiedNames.map(n => `<strong>${escapeHtml(n)}</strong>`).join(" and ")}.
+        </p>
+        <p class="tribal-tie-rule">
+          We are going to rocks. Everyone except the tied players
+          ${state.immunityHolder ? "and the Immunity holder " : ""}
+          will draw a rock. Whoever draws the odd rock leaves the game.
+        </p>
+        <button id="rocks-continue-btn" class="tribal-finish-btn">Continue to the Draw →</button>
+      </div>
+    </div>
+  `;
+  container.querySelector("#rocks-continue-btn").addEventListener("click", onContinue);
+}
+
+function runRocksPhase(container, state, attendees, tiedIds) {
+  const result = drawRocks(state, attendees, tiedIds);
+
+  if (!result.eliminated) {
+    // Final guard — should never happen because drawRocks always returns
+    // a contestant. Render a continue screen if it does.
+    renderTribalDeadEndScreen(container, state);
+    return;
+  }
+
+  // Render the rock-draw reveal.
+  const drawerNames = result.rockDrawers.map(c => c.name);
+  const eliminatedName = result.eliminated.name;
+  const fallbackNote = result.eliminatedFromTied
+    ? `<p class="tribal-tie-rule muted">There was no neutral pool to draw from at this stage. The tie was resolved by chance among the tied players.</p>`
+    : "";
+
+  container.innerHTML = `
+    <div class="screen">
+      <p class="screen-eyebrow">Episode ${state.round} · Day ${getDay(state) + DAY_OFFSETS.tribal}</p>
+      <h2>Drawing Rocks</h2>
+      <div class="tribal-rocks-card">
+        <div class="tribal-tie-icon">⬢</div>
+        ${result.rockDrawers.length > 0 ? `
+          <p class="tribal-tie-rule">
+            Drawing rocks: ${drawerNames.map(n => `<strong>${escapeHtml(n)}</strong>`).join(", ")}.
+          </p>
+        ` : ""}
+        ${fallbackNote}
+        <p class="tribal-rocks-result">
+          The odd rock falls to <strong class="reveal-card-decisive">${escapeHtml(eliminatedName)}</strong>.
+        </p>
+        <button id="rocks-finish-btn" class="tribal-finish-btn">The tribe has spoken →</button>
+      </div>
+    </div>
+  `;
+
+  container.querySelector("#rocks-finish-btn").addEventListener("click", () => {
+    onTribalDone(result.eliminated);
+  });
+}
+
+// Defensive dead-end screen: shows when tallyVotes returns no eliminable
+// candidate. Should never fire in normal play but provides a graceful
+// continue path so the player can never get trapped on Tribal.
+function renderTribalDeadEndScreen(container, state) {
+  container.innerHTML = `
+    <div class="screen">
+      <p class="screen-eyebrow">Episode ${state.round} · Day ${getDay(state) + DAY_OFFSETS.tribal}</p>
+      <h2>Tribal Council</h2>
+      <p class="tribal-reading-note muted">No one was eliminated this Tribal — the votes resolved without a sendable target.</p>
+      <button id="dead-end-btn" class="tribal-finish-btn">Continue →</button>
+    </div>
+  `;
+  container.querySelector("#dead-end-btn").addEventListener("click", () => {
+    advanceRound();
   });
 }
 

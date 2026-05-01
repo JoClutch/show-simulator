@@ -682,29 +682,35 @@ function getTribalReading(state, attendees) {
 
 // ── Tallying ──────────────────────────────────────────────────────────────────
 
-// Returns the contestant object who received the most VALID votes.
-// Calls resolveTie() when multiple candidates are tied at the top.
+// v6.4: returns a richer result object so the caller can handle ties with
+// a proper revote flow. Two outcomes:
 //
-// protectedIds — optional Set of contestant ids whose received votes must be
-//                discarded (idol plays). Defaults to an empty set, preserving
-//                pre-v3.3 behavior for any caller that doesn't pass it.
+//   { kind: "decided", eliminated, validVotes, counts }
+//     — single highest-vote candidate; eliminated is the contestant object
 //
-// Edge case: if every vote was voided (everyone tried to vote out the same
-// idol-protected contestant) we fall back to a random non-protected attendee.
-// This is rare and approximates the chaos that a real re-vote would create
-// without bolting on a full re-vote system.
+//   { kind: "tied", tiedIds, validVotes, counts }
+//     — two or more candidates tied at the top; tiedIds is the array of
+//       contestant ids tied. The caller (typically the Tribal screen) is
+//       expected to run a revote phase among the tied players via
+//       collectRevoteVotes / drawRocks helpers below.
+//
+// Edge case: if every vote was voided (e.g. an idol play protected the
+// only target everyone voted for), we still return a "decided" result by
+// falling back to a random non-protected, non-immune attendee. This is
+// the original v3.3 behavior — keeps the chaos-of-the-moment plausible
+// without bolting on a separate special-case flow.
 function tallyVotes(votes, state, protectedIds = new Set()) {
   const validVotes = votes.filter(v => !protectedIds.has(v.target.id));
 
   if (validVotes.length === 0) {
-    // All votes were voided. Pick a random attendee who isn't currently
-    // protected (immunity necklace or idol). Use the voter pool from the
-    // original ballots so the fallback only considers people in the room.
     const fallbackPool = votes
       .map(v => v.voter)
       .filter(v => !protectedIds.has(v.id) && v.id !== state.immunityHolder);
-    if (fallbackPool.length === 0) return null;
-    return fallbackPool[Math.floor(Math.random() * fallbackPool.length)];
+    if (fallbackPool.length === 0) {
+      return { kind: "decided", eliminated: null, validVotes: [], counts: {} };
+    }
+    const eliminated = fallbackPool[Math.floor(Math.random() * fallbackPool.length)];
+    return { kind: "decided", eliminated, validVotes: [], counts: {} };
   }
 
   const counts = {};
@@ -717,15 +723,82 @@ function tallyVotes(votes, state, protectedIds = new Set()) {
     .filter(([, n]) => n === max)
     .map(([id]) => id);
 
-  const eliminatedId = resolveTie(tiedIds, validVotes, state);
+  if (tiedIds.length === 1) {
+    const eliminated = validVotes.map(v => v.target).find(c => c.id === tiedIds[0]);
+    return { kind: "decided", eliminated, validVotes, counts };
+  }
 
-  return validVotes.map(v => v.target).find(c => c.id === eliminatedId);
+  return { kind: "tied", tiedIds, validVotes, counts };
 }
 
-// Phase 1 stub — ties are broken by random draw.
-// Replace this function in Phase 2+ to add re-vote, fire-making, etc.
-function resolveTie(tiedIds, votes, state) {
-  return tiedIds[Math.floor(Math.random() * tiedIds.length)];
+// v6.4: collects AI revotes during a tie-revote phase. Tied players don't
+// vote; everyone else (including the immunity holder, if not tied) revotes
+// — but only among the tied players. Players cannot vote for themselves.
+//
+// Returns the same { voter, target } shape as collectAiVotes so the reveal
+// pipeline can treat revote ballots identically.
+function collectRevoteVotes(state, attendees, tiedIds, playerRevote) {
+  const tiedSet = new Set(tiedIds);
+  const tiedContestants = attendees.filter(c => tiedSet.has(c.id));
+  const eligibleVoters  = attendees.filter(c => !tiedSet.has(c.id));
+
+  const ballots = [];
+  const player = state.player;
+
+  for (const voter of eligibleVoters) {
+    if (voter.id === player.id) {
+      // Player's revote is supplied directly.
+      if (playerRevote && tiedSet.has(playerRevote.id)) {
+        ballots.push({ voter, target: playerRevote });
+      }
+      continue;
+    }
+
+    // AI revote: pick the most-attractive tied target via scoreVoteTarget.
+    // Don't filter by self because the voter isn't tied; if voter were
+    // somehow tied they'd already be filtered out above.
+    let best = null, bestScore = Infinity;
+    for (const cand of tiedContestants) {
+      if (cand.id === voter.id) continue;     // safety
+      const s = scoreVoteTarget(state, voter, cand);
+      const noise = (Math.random() - 0.5) * Math.max(2, (11 - voter.strategy) * 1.0);
+      const total = s + noise;
+      if (total < bestScore) { bestScore = total; best = cand; }
+    }
+    if (best) ballots.push({ voter, target: best });
+  }
+
+  return ballots;
+}
+
+// v6.4: rocks resolution. When a revote produces a second tie, every
+// attendee who isn't tied AND isn't the immunity holder draws a rock.
+// One person — chosen at random from the eligible pool — drew the odd
+// rock and is eliminated. If the eligible pool is empty (e.g. final 4
+// edge case where only tied + immune attendees remain), falls back to a
+// random pick from the tied players.
+//
+// Returns { eliminated, rockDrawers, eliminatedFromTied }
+//   eliminated:           the contestant who goes home
+//   rockDrawers:          the array of contestants who drew rocks (animation)
+//   eliminatedFromTied:   true if fallback fired (no neutral pool available)
+function drawRocks(state, attendees, tiedIds) {
+  const tiedSet = new Set(tiedIds);
+  const eligible = attendees.filter(c =>
+    !tiedSet.has(c.id) && c.id !== state.immunityHolder
+  );
+
+  if (eligible.length === 0) {
+    // No neutral drawers — final-4 / final-3 edge case where the rule
+    // can't apply. Eliminate a random tied player instead (modern Survivor
+    // typically uses fire-making here; we approximate with random pick).
+    const tied = attendees.filter(c => tiedSet.has(c.id));
+    const eliminated = tied[Math.floor(Math.random() * tied.length)];
+    return { eliminated, rockDrawers: [], eliminatedFromTied: true };
+  }
+
+  const eliminated = eligible[Math.floor(Math.random() * eligible.length)];
+  return { eliminated, rockDrawers: eligible, eliminatedFromTied: false };
 }
 
 // ── Dramatic reveal ordering ──────────────────────────────────────────────────
