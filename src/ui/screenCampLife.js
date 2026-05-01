@@ -903,6 +903,16 @@ function renderCampLifeScreen(container, state) {
     `;
     actionArea.appendChild(title);
 
+    // v5.25: Alliances category renders a management-area shell — overview
+    // of the player's current alliances, then the action grid, then a
+    // forward-looking footer for the deeper management hooks coming next.
+    if (categoryId === "alliances") {
+      const shell = document.createElement("div");
+      shell.className = "alliance-shell";
+      shell.innerHTML = buildAllianceShellHTML();
+      actionArea.appendChild(shell);
+    }
+
     // Action grid for this category.
     const actions = actionsForCategory(category.id);
     const grid    = document.createElement("div");
@@ -911,6 +921,103 @@ function renderCampLifeScreen(container, state) {
       grid.appendChild(buildActionButton(action, currentHoldsScope));
     }
     actionArea.appendChild(grid);
+
+    // v5.25: forward-looking footer for the Alliances category. Lists the
+    // management capabilities planned for future phases as a placeholder
+    // structure so the section feels like a management area rather than
+    // a single-action category. Each row is intentionally non-interactive
+    // and visually subdued so it can't be confused with a real action.
+    if (categoryId === "alliances") {
+      const planned = document.createElement("div");
+      planned.className = "alliance-planned-section";
+      planned.innerHTML = buildAllianceShellPlannedHTML();
+      actionArea.appendChild(planned);
+    }
+  }
+
+  // v5.25: builds the alliance overview block shown at the top of the
+  // Alliances category section. Lists every active alliance the player is
+  // in with members, strength, and tier — a management-context snapshot
+  // distinct from the right-column block (which surfaces the same info
+  // passively across all categories). This panel ALSO surfaces an empty
+  // state when the player isn't in any alliance, prompting them toward
+  // the Propose action below.
+  function buildAllianceShellHTML() {
+    const myAlliances = (state.alliances ?? []).filter(a =>
+      a.status !== "dissolved" && a.memberIds.includes(player.id)
+    );
+
+    const intro = `
+      <div class="alliance-shell-header">
+        <span class="alliance-shell-eyebrow">Manage your alliances</span>
+        <span class="alliance-shell-title">${myAlliances.length === 0
+          ? "You're unaligned right now."
+          : `${myAlliances.length} active pact${myAlliances.length !== 1 ? "s" : ""}`}</span>
+      </div>
+    `;
+
+    if (myAlliances.length === 0) {
+      return intro + `
+        <div class="alliance-shell-empty">
+          You haven't locked in a partnership yet. Propose one below to get started.
+        </div>
+      `;
+    }
+
+    const rows = myAlliances.map(a => {
+      const tier   = a.tier ?? (a.strength >= 7 ? "core" : a.strength >= 4 ? "loose" : "weakened");
+      const tierLabel =
+        tier === "core"     ? "Core"     :
+        tier === "loose"    ? "Loose"    :
+        "Weakened";
+      const others = a.memberIds
+        .filter(id => id !== player.id)
+        .map(id => findContestant(state, id)?.name ?? "?")
+        .map(n => `<span class="alliance-shell-chip">${escapeHtml(n)}</span>`)
+        .join("");
+      const strengthInt = Math.round(a.strength ?? 0);
+      const widthPct    = Math.max(5, strengthInt * 10);
+      return `
+        <div class="alliance-shell-row" data-tier="${tier}">
+          <div class="alliance-shell-row-top">
+            <span class="alliance-shell-name">${escapeHtml(a.name)}</span>
+            <span class="alliance-shell-tier">${tierLabel}</span>
+          </div>
+          <div class="alliance-shell-members">${others}</div>
+          <div class="alliance-shell-strength">
+            <span class="alliance-shell-bar"><span class="alliance-shell-bar-fill" style="width:${widthPct}%"></span></span>
+            <span class="alliance-shell-strength-num">${strengthInt}/10</span>
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    return intro + `<div class="alliance-shell-list">${rows}</div>`;
+  }
+
+  // v5.25: placeholder structure for future deep alliance management.
+  // Each row is purely informational — it shows the player what kinds of
+  // tools will land here, without any clickable behavior yet. Marked with
+  // a "coming soon" pill so the player isn't confused about availability.
+  function buildAllianceShellPlannedHTML() {
+    const items = [
+      { label: "Membership management", desc: "Invite a third member or step away from a pact." },
+      { label: "Vote planning",         desc: "Lock in a name with your alliance heading into tribal." },
+      { label: "Preference reads",      desc: "See where each ally's head is at on the next vote." },
+    ];
+    const rows = items.map(it => `
+      <li class="alliance-planned-row">
+        <span class="alliance-planned-label">${it.label}</span>
+        <span class="alliance-planned-desc">${it.desc}</span>
+        <span class="alliance-planned-pill">Coming soon</span>
+      </li>
+    `).join("");
+    return `
+      <div class="alliance-planned-header">
+        <span class="alliance-planned-eyebrow">Planned tools</span>
+      </div>
+      <ul class="alliance-planned-list">${rows}</ul>
+    `;
   }
 
   // Helper: returns the actions in a given category that should currently
