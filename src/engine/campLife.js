@@ -731,6 +731,17 @@ function pickTruthfulnessBand(state, player, target, ctx) {
     ? getSocialCapital(state, player.id) : 5;
   const capitalShift = (askerCapital - 5) * 0.20;
 
+  // v5.32: target's inner-circle bond toward the asker shifts candor. This
+  // captures informal close ties that trust + rel + alliance under-represent
+  // individually — a target who reads the asker as "in my circle" shares
+  // more freely even when the formal alliance card doesn't reflect it.
+  let bondShift = 0;
+  if (typeof getInnerCircleBond === "function") {
+    const bond = getInnerCircleBond(state, target.id, player.id);
+    if      (bond >= 7) bondShift = 1.0;
+    else if (bond >= 5) bondShift = 0.5;
+  }
+
   const candor =
       trust * 1.0
     + rel  * 0.25
@@ -742,7 +753,8 @@ function pickTruthfulnessBand(state, player, target, ctx) {
     - targetSusp      * 0.20
     - playerSusp      * 0.20
     + archetypeShift
-    + capitalShift;
+    + capitalShift
+    + bondShift;
 
   // v5.15: jitter widened from ±1.0 to ±1.4 so band selection isn't too
   // mechanical — two near-identical conversations might land one band
@@ -2302,6 +2314,34 @@ function actionReadRoom(state, player, tribemates) {
     }
   }
 
+  // v5.32: hedged "socially linked" read on a high inner-circle pair that
+  // wouldn't surface from rel alone. Captures invisible trust structures —
+  // two players who read mid-warm in casual interactions but are actually
+  // running quiet, mutually-trusted lanes. Only fires when the pair's
+  // mutual bond is high AND their rel isn't already high enough to flag
+  // them via the existing close-pairs detection.
+  if (typeof getInnerCircleBond === "function" && (player.social ?? 5) >= 5) {
+    for (let i = 0; i < tribemates.length; i++) {
+      for (let j = i + 1; j < tribemates.length; j++) {
+        const a = tribemates[i], b = tribemates[j];
+        const rel = getRelationship(state, a.id, b.id);
+        if (rel >= 12) continue;        // already a flagged close pair
+        const bondAB = getInnerCircleBond(state, a.id, b.id);
+        const bondBA = getInnerCircleBond(state, b.id, a.id);
+        const avgBond = (bondAB + bondBA) / 2;
+        if (avgBond >= 6) {
+          candidates.push({ weight: 3 + avgBond * 0.3, text: pickFrom([
+            `${a.name} and ${b.name} aren't loud about each other — but you'd swear they're moving on a quiet wavelength. Some kind of trust there that doesn't show up on the surface.`,
+            `Watching the camp, you noticed ${a.name} and ${b.name} cover for each other in small ways. They're not advertising it. They might not need to.`,
+            `${a.name} and ${b.name} read more linked than the room thinks. The trust between them is doing the work that loud conversation would otherwise.`,
+          ]) });
+          break; // surface at most one such pair per Read
+        }
+      }
+      if (candidates.some(c => c.text && c.text.includes("quiet wavelength"))) break;
+    }
+  }
+
   // v5.16: hedged self-read on the player's own social capital. Only
   // surfaces at the extremes (well above or well below baseline) so the
   // player gets useful indirect feedback without the model becoming a
@@ -3003,10 +3043,17 @@ function isScrambling(state, contestantId) {
 // pressured non-ally non-self. Used by lobby in scramble mode to model
 // "throwing another name out".
 function pickDeflectionTarget(state, scrambler, pool) {
-  const candidates = pool.filter(c =>
-    c.id !== scrambler.id
-    && !isInSameAlliance(state, scrambler.id, c.id)
-  );
+  // v5.32: also exclude inner-circle allies. A scrambling AI doesn't throw
+  // their actual trusted core under the bus even when the formal alliance
+  // card is gone (e.g. the alliance dissolved but the trust hasn't). Bond
+  // ≥ 6 is the protect threshold — captures real loyalty beyond paperwork.
+  const candidates = pool.filter(c => {
+    if (c.id === scrambler.id) return false;
+    if (isInSameAlliance(state, scrambler.id, c.id)) return false;
+    if (typeof getInnerCircleBond === "function" &&
+        getInnerCircleBond(state, scrambler.id, c.id) >= 6) return false;
+    return true;
+  });
   if (candidates.length === 0) return null;
 
   // Rank by pressure descending — deflect at someone the room is already
@@ -3092,9 +3139,15 @@ function pickAIActionWeighted(state, ai, others) {
   // ── LOBBY ──
   // Pool: any tribemate the AI clearly dislikes (rel < -3). The most-
   // disliked is the natural target — that's who the AI wants gone.
-  const enemyPool = others.filter(c =>
-    getRelationship(state, ai.id, c.id) < -3
-  );
+  // v5.32: ALSO exclude inner-circle members even when rel happens to dip
+  // below -3 (e.g. a recent conflict between trusted partners). The trust
+  // structure overrides momentary friction.
+  const enemyPool = others.filter(c => {
+    if (getRelationship(state, ai.id, c.id) >= -3) return false;
+    if (typeof getInnerCircleBond === "function" &&
+        getInnerCircleBond(state, ai.id, c.id) >= 5) return false;
+    return true;
+  });
   if (enemyPool.length > 0) {
     enemyPool.sort((a, b) =>
       getRelationship(state, ai.id, a.id) - getRelationship(state, ai.id, b.id)

@@ -716,7 +716,13 @@ function spreadRumors(state, pool) {
           ? getSharedAllianceTier(state, knower.id, listener.id)
           : null;
         const closeFriend = rel >= 5 && trust >= 4;
-        if (!allyTier && !closeFriend) continue;
+        // v5.32: high inner-circle bond is also a valid spread channel —
+        // information naturally flows along trust lines, not just along
+        // formal alliance / close-friend gates. Captures the realistic
+        // pattern of "I told them because I trust them" outside paperwork.
+        const bondGate = typeof getInnerCircleBond === "function"
+          && getInnerCircleBond(state, knower.id, listener.id) >= 6;
+        if (!allyTier && !closeFriend && !bondGate) continue;
 
         // Compose spread chance.
         let chance = 0.18 + (knower.social ?? 5) * 0.02;

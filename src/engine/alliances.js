@@ -554,6 +554,17 @@ function coordinateAllianceVote(state, allianceId, coordinatorId, targetId) {
                                            //   shadiness erodes willingness
     score += (coordCapital - 5) * 0.20;    // broad standing helps
 
+    // v5.32: inner-circle protection — if the proposed target is in this
+    // member's inner circle, they protect them HARDER than rel-to-target
+    // alone would predict. Captures the trust structure beneath the surface
+    // (mature alliance, clean history, deep trust) that bumps "I won't
+    // throw them under" responses.
+    if (typeof getInnerCircleBond === "function") {
+      const bondToTarget = getInnerCircleBond(state, mid, targetId);
+      if      (bondToTarget >= 7) score -= 3.0;
+      else if (bondToTarget >= 5) score -= 1.5;
+    }
+
     if (memberIntent && memberIntent.targetId === targetId)      score += 2.0;
     else if (memberIntent && memberIntent.targetId !== targetId) score -= 1.0;
 
@@ -741,6 +752,14 @@ function readAlliancePreferences(state, allianceId, askerId) {
     if (archetype === "sneaky")           candor -= 1.5;
     if (archetype === "paranoid")         candor -= 0.7;
     if (archetype === "socialButterfly")  candor += 0.5;
+    // v5.32: inner-circle bond from member toward asker adds candor — they
+    // open up to people they actually trust, not just people they're
+    // formally allied with.
+    if (typeof getInnerCircleBond === "function") {
+      const bondToAsker = getInnerCircleBond(state, mid, askerId);
+      if      (bondToAsker >= 7) candor += 1.5;
+      else if (bondToAsker >= 5) candor += 0.7;
+    }
     candor += (Math.random() - 0.5) * 1.5;
 
     // Helper: pick a random "misleading" target from the pool.
