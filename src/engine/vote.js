@@ -351,6 +351,120 @@ function getTopVoteTargets(state, attendees, count = 3) {
   return ranked.slice(0, count);
 }
 
+// ── v6.1: Tribal arrival reading ────────────────────────────────────────────
+//
+// Synthesizes a player-facing summary of how Tribal is shaping up before any
+// vote is cast. Returns { mood, stability, headline } where:
+//   mood       : "calm" | "steady" | "uneasy" | "tense" | "chaotic"
+//                (drawn from camp temperature tier — same scale the player
+//                already sees via the mood pill in Camp Life)
+//   stability  : "stable" | "shaky" | "volatile" | "open"
+//   headline   : a short hedged sentence describing the room
+//
+// Uses the existing v5.x systems — pressure ranking spread, scramble count,
+// camp temperature, idol fear load, recent rumor activity — to produce a
+// qualitative read that gives the player a "feel" for the danger and
+// unpredictability of the vote without exposing any raw numbers.
+function getTribalReading(state, attendees) {
+  if (!Array.isArray(attendees) || attendees.length < 2) {
+    return { mood: "steady", stability: "open", headline: "A short Tribal." };
+  }
+
+  // Camp temperature for the mood read.
+  const temp = (typeof getCampTemperature === "function")
+    ? getCampTemperature(state, attendees)
+    : { tier: "steady" };
+  const mood = temp.tier;
+
+  // Pressure spread: highest vs runner-up across every voteable attendee.
+  // Filter out the immunity holder if applicable — they can't be voted, so
+  // their pressure shouldn't shape the read of who's "the target".
+  const candidates = state.merged
+    ? attendees.filter(c => c.id !== state.immunityHolder)
+    : attendees;
+  const pressures = candidates.map(c => ({
+    c,
+    pressure: (typeof getPressureScore === "function")
+      ? getPressureScore(state, c.id) : 5,
+  }));
+  pressures.sort((a, b) => b.pressure - a.pressure);
+
+  const topPressure  = pressures[0]?.pressure ?? 5;
+  const runnerUp     = pressures[1]?.pressure ?? 5;
+  const gap          = topPressure - runnerUp;
+  const highPressureCount = pressures.filter(p => p.pressure >= 6.5).length;
+
+  // Count scrambling attendees.
+  let scrambling = 0;
+  if (typeof isScrambling === "function") {
+    for (const c of attendees) {
+      if (isScrambling(state, c.id)) scrambling++;
+    }
+  }
+
+  // Idol fear load — how many pairs sit at meaningful fear (≥5)?
+  let idolFearPairs = 0;
+  if (typeof getIdolFear === "function") {
+    for (const obs of attendees) {
+      for (const holder of attendees) {
+        if (obs.id === holder.id) continue;
+        if (getIdolFear(state, obs.id, holder.id) >= 5) idolFearPairs++;
+      }
+    }
+  }
+  const fearLoad = attendees.length > 1
+    ? idolFearPairs / (attendees.length * (attendees.length - 1))
+    : 0;
+
+  // ── Compose stability ───────────────────────────────────────────────
+  let stability;
+  if (topPressure >= 7 && gap >= 1.5 && scrambling <= 1 && fearLoad < 0.3) {
+    // Clear consensus on one name; nobody's panicking; idol fear isn't
+    // muddying the picture.
+    stability = "stable";
+  } else if (highPressureCount >= 2 && scrambling >= 2) {
+    // Multiple targets, multiple people running for cover — anything goes.
+    stability = "volatile";
+  } else if (topPressure < 6 && gap < 1.0) {
+    // Nobody's clearly the target; the vote could go anywhere.
+    stability = "open";
+  } else {
+    // Probable target exists but the room isn't bunkered around it.
+    stability = "shaky";
+  }
+
+  // ── Compose headline ────────────────────────────────────────────────
+  // Cross-product of mood and stability produces a one-liner. Headlines
+  // are intentionally short and hedged — they describe the room, they
+  // don't predict the outcome.
+  const headlines = {
+    "calm:stable":      "A quiet vote. The room knows where it's going.",
+    "calm:shaky":       "Quiet on the surface, but the read isn't fully locked.",
+    "calm:open":        "Easy room, undecided vote. Anyone could be the name.",
+    "calm:volatile":    "The calm is misleading. Pieces are still in motion.",
+    "steady:stable":    "Steady room, locked target. Tonight is going by the book.",
+    "steady:shaky":     "Steady room, but the name on the urn isn't fully decided.",
+    "steady:open":      "A working Tribal — no clear consensus walking in.",
+    "steady:volatile":  "The room reads steady, but the vote underneath is anything but.",
+    "uneasy:stable":    "Tension in the air, even though most people seem to know the name.",
+    "uneasy:shaky":     "Off-balance. The room has a target in mind, but it could shift.",
+    "uneasy:open":      "Uneasy and undecided. Watch carefully.",
+    "uneasy:volatile":  "Multiple plans in motion. This Tribal could break in pieces.",
+    "tense:stable":     "Tense room, but the consensus is holding. For now.",
+    "tense:shaky":      "Sharp edges in the room, and the vote itself isn't certain.",
+    "tense:open":       "Tense and unresolved. This is the kind of Tribal where reputations get made.",
+    "tense:volatile":   "On a knife's edge. Nobody's safe walking in.",
+    "chaotic:stable":   "Loud, fast, but the vote itself is locked. Surprising.",
+    "chaotic:shaky":    "Chaos at the surface, and the target may shift before votes are read.",
+    "chaotic:open":     "Pure chaos. No name is locked, and nobody's calm.",
+    "chaotic:volatile": "Everyone's scrambling, and nothing is settled. This is the wild Tribal.",
+  };
+  const headline = headlines[`${mood}:${stability}`]
+    ?? "The room is what it is. Time to vote.";
+
+  return { mood, stability, headline };
+}
+
 // ── Tallying ──────────────────────────────────────────────────────────────────
 
 // Returns the contestant object who received the most VALID votes.

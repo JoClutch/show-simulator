@@ -3781,6 +3781,128 @@ button:disabled {
   flex-shrink: 0;
 }
 
+/* ── v6.1: Tribal arrival — attendees ribbon ─────────────────────────── */
+.tribal-attendees {
+  margin: 0.6rem 0 0.85rem;
+}
+.tribal-attendees-eyebrow {
+  display: block;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-bottom: 0.35rem;
+}
+.tribal-attendees-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.tribal-attendee-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-dim);
+  border-radius: 4px;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+.tribal-attendee-chip.tribal-attendee-self {
+  border-color: var(--gold-dim);
+  color: var(--text-primary);
+}
+.tribal-attendee-chip.tribal-attendee-immune {
+  border-left: 3px solid var(--gold);
+  padding-left: calc(0.6rem - 2px);
+}
+.tribal-attendee-marker {
+  font-size: 0.7rem;
+  color: var(--gold);
+  letter-spacing: 0.04em;
+}
+.tribal-attendee-name {
+  letter-spacing: 0.02em;
+}
+
+/* ── v6.1: Tribal arrival — reading card ─────────────────────────────── */
+.tribal-reading-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-mid);
+  border-left: 3px solid var(--gold);
+  border-radius: 0 5px 5px 0;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+.tribal-reading-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.45rem;
+}
+.tribal-reading-eyebrow {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+.tribal-reading-pills {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.tribal-reading-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.55rem;
+  border: 1px solid var(--border-dim);
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: var(--bg-raised);
+  color: var(--text-muted);
+}
+.tribal-reading-pill-dot {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: var(--text-muted);
+  display: inline-block;
+}
+/* Mood pill colors mirror the camp mood pill so the player sees consistent
+   tier coding across Camp Life and Tribal. */
+.tribal-reading-pill[data-axis="mood"][data-value="calm"]    { color: #7aa088; border-color: rgba(122, 160, 136, 0.4); }
+.tribal-reading-pill[data-axis="mood"][data-value="calm"]    .tribal-reading-pill-dot { background: #5fa86f; }
+.tribal-reading-pill[data-axis="mood"][data-value="steady"]  { color: var(--text-muted); }
+.tribal-reading-pill[data-axis="mood"][data-value="uneasy"]  { color: #c89a4a; border-color: rgba(200, 154, 74, 0.4); }
+.tribal-reading-pill[data-axis="mood"][data-value="uneasy"]  .tribal-reading-pill-dot { background: #c89a4a; }
+.tribal-reading-pill[data-axis="mood"][data-value="tense"]   { color: #e89a4a; border-color: rgba(232, 154, 74, 0.45); background: rgba(232, 154, 74, 0.05); }
+.tribal-reading-pill[data-axis="mood"][data-value="tense"]   .tribal-reading-pill-dot { background: #e89a4a; }
+.tribal-reading-pill[data-axis="mood"][data-value="chaotic"] { color: #b85060; border-color: rgba(184, 80, 96, 0.5); background: rgba(184, 80, 96, 0.06); }
+.tribal-reading-pill[data-axis="mood"][data-value="chaotic"] .tribal-reading-pill-dot { background: #b85060; }
+/* Stability pill colors: green=stable, amber=shaky, red=volatile, blue=open */
+.tribal-reading-pill[data-axis="stability"][data-value="stable"]    { color: #5fa86f; border-color: rgba(95, 168, 111, 0.4); }
+.tribal-reading-pill[data-axis="stability"][data-value="stable"]    .tribal-reading-pill-dot { background: #5fa86f; }
+.tribal-reading-pill[data-axis="stability"][data-value="shaky"]     { color: #c89a4a; border-color: rgba(200, 154, 74, 0.4); }
+.tribal-reading-pill[data-axis="stability"][data-value="shaky"]     .tribal-reading-pill-dot { background: #c89a4a; }
+.tribal-reading-pill[data-axis="stability"][data-value="volatile"]  { color: #b85060; border-color: rgba(184, 80, 96, 0.45); background: rgba(184, 80, 96, 0.05); }
+.tribal-reading-pill[data-axis="stability"][data-value="volatile"]  .tribal-reading-pill-dot { background: #b85060; }
+.tribal-reading-pill[data-axis="stability"][data-value="open"]      { color: #7a90c0; border-color: rgba(122, 144, 192, 0.4); }
+.tribal-reading-pill[data-axis="stability"][data-value="open"]      .tribal-reading-pill-dot { background: #7a90c0; }
+
+.tribal-reading-headline {
+  font-size: 0.92rem;
+  color: var(--text-primary);
+  font-style: italic;
+  line-height: 1.5;
+  margin: 0;
+}
+
 /* ── Jury Panel (elimination screen) ── */
 .jury-panel {
   margin-top: 1.25rem;

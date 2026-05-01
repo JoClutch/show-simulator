@@ -42,10 +42,16 @@ function renderPreMergeTribalScreen(container, state) {
         <div class="tribal-meta">
           <span style="color:${tribeColor}">${escapeHtml(tribeName)}</span>
           &nbsp;·&nbsp; ${tribe.length} members attending
+          ${state.jury && state.jury.length > 0
+            ? `&nbsp;·&nbsp; Jury of ${state.jury.length}`
+            : ""}
         </div>
       </div>
 
       <p class="tribal-opener muted">${getTribalOpener(state)}</p>
+
+      ${buildTribalAttendeesRibbonHTML(tribe, state)}
+      ${buildTribalReadingCardHTML(state, tribe)}
 
       <p class="tribal-prompt">
         Vote for one tribemate to leave the game.
@@ -120,6 +126,9 @@ function renderMergedTribalScreen(container, state) {
           Individual Immunity</strong> and cannot be voted out tonight.
         </div>
       ` : ""}
+
+      ${buildTribalAttendeesRibbonHTML(tribe, state)}
+      ${buildTribalReadingCardHTML(state, tribe)}
 
       <p class="tribal-prompt">
         Vote for one player to leave the game.
@@ -462,6 +471,72 @@ function renderRevealPhase(container, state, revealOrder, eliminated, protectedI
 }
 
 // ── Tally board ───────────────────────────────────────────────────────────────
+
+// ── v6.1: Tribal arrival presentation ───────────────────────────────────────
+//
+// Two helpers that render above the vote grid to make Tribal feel like a
+// real event:
+//   • Attendees ribbon — every attendee chip with a marker for the player
+//     and the immunity holder
+//   • Reading card     — concise mood + stability read with a one-line
+//     headline drawn from the v5.x social systems
+
+function buildTribalAttendeesRibbonHTML(tribe, state) {
+  const player = state.player;
+  const holderId = state.immunityHolder;
+  const chips = tribe.map(c => {
+    const isYou       = c.id === player.id;
+    const isHolder    = c.id === holderId;
+    const cls = ["tribal-attendee-chip"];
+    if (isYou)    cls.push("tribal-attendee-self");
+    if (isHolder) cls.push("tribal-attendee-immune");
+    const marker =
+        isYou && isHolder ? `<span class="tribal-attendee-marker" aria-hidden="true">★ ⬡</span>`
+      : isYou             ? `<span class="tribal-attendee-marker" aria-hidden="true">★</span>`
+      : isHolder          ? `<span class="tribal-attendee-marker" aria-hidden="true">⬡</span>`
+      : "";
+    return `<span class="${cls.join(" ")}">${marker}<span class="tribal-attendee-name">${escapeHtml(c.name)}</span></span>`;
+  }).join("");
+
+  return `
+    <div class="tribal-attendees">
+      <span class="tribal-attendees-eyebrow">Attending tonight</span>
+      <div class="tribal-attendees-list">${chips}</div>
+    </div>
+  `;
+}
+
+function buildTribalReadingCardHTML(state, attendees) {
+  if (typeof getTribalReading !== "function") return "";
+  const reading = getTribalReading(state, attendees);
+  const moodLabel = {
+    calm:    "Calm",    steady:  "Steady",  uneasy: "Uneasy",
+    tense:   "Tense",   chaotic: "Chaotic",
+  }[reading.mood] ?? "Steady";
+  const stabilityLabel = {
+    stable:    "Stable",   shaky:    "Shaky",
+    volatile:  "Volatile", open:     "Open",
+  }[reading.stability] ?? "Open";
+
+  return `
+    <div class="tribal-reading-card">
+      <div class="tribal-reading-header">
+        <span class="tribal-reading-eyebrow">The room reads</span>
+        <span class="tribal-reading-pills">
+          <span class="tribal-reading-pill" data-axis="mood" data-value="${reading.mood}">
+            <span class="tribal-reading-pill-dot" aria-hidden="true"></span>
+            <span class="tribal-reading-pill-label">${moodLabel}</span>
+          </span>
+          <span class="tribal-reading-pill" data-axis="stability" data-value="${reading.stability}">
+            <span class="tribal-reading-pill-dot" aria-hidden="true"></span>
+            <span class="tribal-reading-pill-label">${stabilityLabel}</span>
+          </span>
+        </span>
+      </div>
+      <p class="tribal-reading-headline">${escapeHtml(reading.headline)}</p>
+    </div>
+  `;
+}
 
 function renderTally(container, liveTally) {
   const sorted = Object.values(liveTally).sort((a, b) => b.count - a.count);
