@@ -589,6 +589,68 @@ function getInnerCircle(state, contestantId, threshold = 5) {
   return out;
 }
 
+// ── v5.33: Hidden idol fear / paranoia ──────────────────────────────────────
+//
+// "Idol fear" = how strongly an observer fears a specific holder may have an
+// idol or advantage, INDEPENDENT of whether they actually do. Built on top
+// of the existing idolSuspicion mechanic but additionally factors in:
+//
+//   • Reputation: holders read as Schemer/Strategist invite extra paranoia
+//   • Stats: very high strategy (≥ 8) reads as "would absolutely play one"
+//   • Rumors: any "suspicious" rumors known by the observer about the holder
+//
+// This is a DERIVED function — no new storage. idolSuspicion remains the
+// authoritative numeric belief; idol fear is the layered read AIs use when
+// deciding whether to push someone publicly. It can produce surprising
+// outcomes:
+//   • A Schemer with 8 strategy and an active "suspicious" rumor against
+//     them can have idol fear ~5 from observers, even with idolSuspicion 0
+//     (they LOOK like an idol holder even when they aren't)
+//   • A workhorse-archetype with low strategy and an actual idol can have
+//     idol fear ~1 (the room reads them as not the type)
+//
+// Used by Camp Life behavior:
+//   • AI lobby weight scales DOWN against high-fear targets (don't push a
+//     name that might just play an idol on you)
+//   • Alliance vote-coordination response: members resist proposals against
+//     high-fear targets (wasted vote risk)
+//   • Read the camp surfaces a hedged "X feels like they might have
+//     something" line at high fear
+//
+// Surface is fully indirect — no UI panel, no number anywhere.
+function getIdolFear(state, observerId, holderId) {
+  if (observerId === holderId) return 0;
+
+  // Direct belief — the existing idolSuspicion scalar (0–10).
+  let fear = state.idolSuspicion?.[observerId]?.[holderId] ?? 0;
+
+  // Reputation lift — schemers and strategists read as more likely to
+  // hold/play advantages, regardless of whether they do.
+  if (typeof getCampRole === "function") {
+    const role = (getCampRole(state, holderId) || "").replace(/^leaning:/, "");
+    if (role === "schemer")    fear += 1.0;
+    if (role === "strategist") fear += 0.5;
+  }
+
+  // High-strategy stat: "I'd bet they have one even if I haven't seen it."
+  const holder = findContestant(state, holderId);
+  if (holder && (holder.strategy ?? 5) >= 8) fear += 1.0;
+
+  // Active "suspicious" rumors about the holder that the observer knows
+  // about each contribute up to +0.5 fear scaled by confidence.
+  if (state.rumors) {
+    for (const r of state.rumors) {
+      if (r.kind !== "suspicious") continue;
+      if (r.subjectId !== holderId) continue;
+      const k = r.knownBy?.[observerId];
+      if (!k) continue;
+      fear += (k.confidence ?? 0) * 0.5;
+    }
+  }
+
+  return Math.max(0, Math.min(10, fear));
+}
+
 // ── v5.17: Rumors / information spread ───────────────────────────────────────
 //
 // Camp life is socially loud. People talk about each other when no one is in

@@ -565,6 +565,16 @@ function coordinateAllianceVote(state, allianceId, coordinatorId, targetId) {
       else if (bondToTarget >= 5) score -= 1.5;
     }
 
+    // v5.33: idol fear hesitation. If this member fears the proposed target
+    // may have an idol, they hesitate to commit — wasting a vote on someone
+    // who'd play an idol is a bad outcome they'd rather avoid. Strategic
+    // members (≥6) feel this most; low-strategy members barely register it.
+    if (typeof getIdolFear === "function") {
+      const fearOfTarget = getIdolFear(state, mid, targetId);
+      const fearFactor = (member.strategy ?? 5) >= 6 ? 0.30 : 0.12;
+      score -= fearOfTarget * fearFactor;
+    }
+
     if (memberIntent && memberIntent.targetId === targetId)      score += 2.0;
     else if (memberIntent && memberIntent.targetId !== targetId) score -= 1.0;
 

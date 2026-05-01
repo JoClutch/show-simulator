@@ -2314,6 +2314,30 @@ function actionReadRoom(state, player, tribemates) {
     }
   }
 
+  // v5.33: hedged idol-fear read. Surfaces the tribemate the player is
+  // most afraid may have an idol/advantage right now. Doesn't expose any
+  // raw number — purely the qualitative read. Only fires when fear is
+  // genuinely high (≥ 5) so it surfaces only when there's real signal.
+  if (typeof getIdolFear === "function") {
+    let fearedTarget = null, fearedScore = 0;
+    for (const c of tribemates) {
+      const f = getIdolFear(state, player.id, c.id);
+      if (f > fearedScore) { fearedScore = f; fearedTarget = c; }
+    }
+    if (fearedTarget && fearedScore >= 5) {
+      const tier = fearedScore >= 7 ? "high" : "mid";
+      candidates.push({ weight: 4 + fearedScore * 0.3, text: pickFrom(tier === "high" ? [
+        `Something about ${fearedTarget.name} keeps catching your attention. They feel like someone with a card up their sleeve.`,
+        `You'd put real money on ${fearedTarget.name} sitting on something. Maybe an idol, maybe an advantage. The vibe is there.`,
+        `${fearedTarget.name}'s movements have read deliberate all day. You're not sure what they have, but they have something.`,
+      ] : [
+        `${fearedTarget.name} has been giving you a feeling. Probably nothing — but maybe not.`,
+        `You'd watch ${fearedTarget.name} a little more carefully tonight. Something about how they're moving doesn't quite fit.`,
+        `If anyone here is sitting on a surprise, your gut says ${fearedTarget.name}. Soft read, but it's there.`,
+      ])});
+    }
+  }
+
   // v5.32: hedged "socially linked" read on a high inner-circle pair that
   // wouldn't surface from rel alone. Captures invisible trust structures —
   // two players who read mid-warm in casual interactions but are actually
@@ -3157,6 +3181,18 @@ function pickAIActionWeighted(state, ai, others) {
     if (arch === "paranoid")  w += 1;
     if (arch === "loyal")     w -= 1;
     if (arch === "workhorse") w -= 1;
+
+    // v5.33: idol-fear hesitation. AI scales DOWN their willingness to push
+    // a public lobby against someone they fear may have an advantage —
+    // don't waste a vote, don't out yourself as the lobbyist if they
+    // survive the play. Strategic AIs (≥6) factor fear most heavily;
+    // low-strategy AIs barely consider it.
+    if (typeof getIdolFear === "function") {
+      const fear = getIdolFear(state, ai.id, enemyPool[0].id);
+      const factor = (ai.strategy ?? 5) >= 6 ? 0.18 : 0.08;
+      w -= fear * factor;
+    }
+
     options.push({ action: "lobby", weight: Math.max(0.2, w), target: enemyPool[0] });
   }
 
