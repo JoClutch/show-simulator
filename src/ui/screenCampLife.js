@@ -1118,11 +1118,14 @@ function renderCampLifeScreen(container, state) {
     // act → restructure → leave" so the player can navigate the inspector
     // without having to scan every button each time.
 
-    // 1. Read alliance preferences — pure information, no consequences.
+    // 1. Check alliance target — pure information, no consequences.
+    // (v5.38: renamed from "Get a read on the alliance" for clearer intent —
+    // the action specifically surfaces who each member is leaning toward
+    // for the next vote.)
     const canRead = alliance.memberIds.length >= 2;
     grid.appendChild(buildAllianceActionButton({
-      label: "Get a read on the alliance",
-      detail: "Ask everyone where their head's at. Some will be candid, some won't, and some may misdirect you.",
+      label: "Check alliance target",
+      detail: "Ask each member who they're leaning toward. Some will be candid, some won't, and some may misdirect you.",
       disabled: !canRead,
       onClick: () => resolveAllianceAction("read", alliance, null),
     }));
@@ -1274,7 +1277,7 @@ function renderCampLifeScreen(container, state) {
       kind === "invite" ? `Bring in · ${escapeHtml(target.name)}` :
       kind === "boot"   ? `Push out · ${escapeHtml(target.name)}` :
       kind === "vote"   ? `Vote plan · ${escapeHtml(target.name)}` :
-      kind === "read"   ? `Alliance read · ${escapeHtml(alliance.name)}` :
+      kind === "read"   ? `Check alliance target · ${escapeHtml(alliance.name)}` :
       "Step away from alliance";
     const entry = document.createElement("div");
     entry.className = "feedback-entry";
