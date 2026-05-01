@@ -313,18 +313,19 @@ function pickVoteTarget(state, voter, tribe) {
     // pullStrength: 0.0 at loyalty 0, 1.0 at loyalty 10
     const pullStrength = Math.max(0, Math.min(1, voterLoyaltyAvg / 10));
 
-    // Idol fear of the consensus target weakens the pull — even a loyal
-    // voter may waver if they think the alliance is walking into an idol play.
+    // Idol fear of the consensus target weakens the main-target pull — even
+    // a loyal voter may waver if they think the alliance is walking into an
+    // idol play. v6.3 layers a separate BACKUP-target pull on top of this
+    // when fear is high enough that hedging makes sense.
+    const mainFear = (typeof getIdolFear === "function")
+      ? getIdolFear(state, voter.id, consensus.dominantId) : 0;
     let fearDampener = 1;
-    if (typeof getIdolFear === "function") {
-      const fear = getIdolFear(state, voter.id, consensus.dominantId);
-      if      (fear >= 7) fearDampener = 0.55;
-      else if (fear >= 5) fearDampener = 0.75;
-    }
+    if      (mainFear >= 7) fearDampener = 0.55;
+    else if (mainFear >= 5) fearDampener = 0.75;
 
-    // Apply pull: the consensus target's score gets a downward push (lower
-    // score = more attractive vote target). Magnitude up to ~−5 for fully
-    // loyal voters with no fear; ~−1.5 for low-loyalty voters or high-fear.
+    // Apply main-target pull: the consensus target's score gets a downward
+    // push (lower score = more attractive vote target). Magnitude up to ~−5
+    // for fully loyal voters with no fear; ~−1.5 for low-loyalty / high-fear.
     const pullMagnitude = 5.0 * pullStrength * fearDampener;
     for (const result of scored) {
       if (result.contestant.id === consensus.dominantId) {
@@ -335,6 +336,59 @@ function pickVoteTarget(state, voter, tribe) {
             `loyalty=${voterLoyaltyAvg.toFixed(1)} pull=${pullMagnitude.toFixed(1)} ` +
             `fearDampener=${fearDampener.toFixed(2)}`
           );
+        }
+      }
+    }
+
+    // ── v6.3: idol-fear backup-target hedge ──────────────────────────
+    // When fear of the main consensus target is meaningful, some voters
+    // hedge to a backup target instead. The hedge decision is per-voter
+    // and based on:
+    //   • Strategy: low-strategy AIs hedge more (they don't trust the
+    //                                            flush math)
+    //   • Archetype: paranoid +; sneaky − (would flush); loyal − (sticks)
+    //   • Loyalty: low loyalty pushes toward hedge
+    //   • Social position: peripheral / expendable hedge more (can't
+    //                       afford a wrong vote); influential / central
+    //                       commit more (they shape outcomes)
+    //   • Random jitter
+    //
+    // When the hedge fires, the backup target gets its OWN downward pull
+    // — which combined with the dampened main pull lets the voter's
+    // sort find the backup as the most attractive vote target.
+    if (mainFear >= 5) {
+      const backupId = getAllianceBackupTarget(
+        state, voter, others, consensus.dominantId, consensus
+      );
+      if (backupId) {
+        let hedgeScore = (mainFear - 4) * 0.4;
+        hedgeScore += Math.max(0, 6 - (voter.strategy ?? 5)) * 0.4;
+        const arch = voter.archetype || "balanced";
+        if (arch === "paranoid") hedgeScore += 1.5;
+        if (arch === "sneaky")   hedgeScore -= 1.0;
+        if (arch === "loyal")    hedgeScore -= 0.5;
+        hedgeScore -= (voterLoyaltyAvg - 5) * 0.3;
+        if (typeof getSocialPosition === "function") {
+          const pos = getSocialPosition(state, voter.id).position;
+          if (pos === "peripheral" || pos === "expendable") hedgeScore += 1.0;
+          if (pos === "influential" || pos === "central")   hedgeScore -= 0.5;
+        }
+        hedgeScore += (Math.random() - 0.5) * 1.5;
+
+        if (hedgeScore > 0) {
+          const backupPullMagnitude = 4.0 * Math.min(1, hedgeScore / 3);
+          for (const result of scored) {
+            if (result.contestant.id === backupId) {
+              result.score -= backupPullMagnitude;
+              if (VOTE_DEBUG) {
+                console.log(
+                  `  [BACKUP] ${voter.name} hedged toward ${result.contestant.name}: ` +
+                  `mainFear=${mainFear.toFixed(1)} hedgeScore=${hedgeScore.toFixed(2)} ` +
+                  `pull=${backupPullMagnitude.toFixed(1)}`
+                );
+              }
+            }
+          }
         }
       }
     }
@@ -423,6 +477,36 @@ function getAllianceConsensus(state, voter, eligibleCandidates) {
   if (!dominantId) return null;
 
   return { dominantId, dominantWeight, counts };
+}
+
+// v6.3: returns the backup-target id for a voter — the second-most-preferred
+// candidate across their alliance(s), excluding the dominant main target.
+// Used by the idol-fear hedge logic to give voters a coherent "if not the
+// main name, then this name" alternative rather than letting them scatter
+// to any random runner-up.
+//
+// Returns null when no meaningful backup exists (alliance support too thin
+// outside the main target). The caller should treat null as "no hedge
+// possible" and fall back to the voter's natural scoreVoteTarget pick.
+//
+// `consensus` may be passed if already computed; otherwise computes fresh.
+function getAllianceBackupTarget(state, voter, eligibleCandidates, mainTargetId, consensus) {
+  const c = consensus || getAllianceConsensus(state, voter, eligibleCandidates);
+  if (!c) return null;
+
+  let backupId = null, backupWeight = 0;
+  for (const id of Object.keys(c.counts)) {
+    if (id === mainTargetId) continue;
+    if (c.counts[id] > backupWeight) {
+      backupWeight = c.counts[id];
+      backupId = id;
+    }
+  }
+
+  // Require meaningful backup support so the hedge points at a real
+  // alternative rather than a random runner-up with one half-vote behind it.
+  if (backupWeight < 0.5) return null;
+  return backupId;
 }
 
 // Helper: averages a voter's loyalty across all alliances they're in.
