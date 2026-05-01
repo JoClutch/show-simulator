@@ -477,6 +477,194 @@ function leaveAlliance(state, allianceId, leaverId) {
   };
 }
 
+// ── v5.27: Alliance-wide vote coordination ───────────────────────────────────
+//
+// Pushes a vote plan to every other member of the given alliance. Each
+// member responds independently based on their relationship with the
+// coordinator, current personal vote intent, suspicion of the coordinator,
+// alliance tier, archetype, and a small random component. Six response
+// kinds:
+//
+//   agree       — full commitment; their campTarget is set to the proposed
+//                 target; rel +1 with coordinator
+//   soft-agree  — verbally on board but no commitment recorded; rel +1
+//   hesitate    — non-committal; no mechanical change
+//   mislead     — says yes but actually plans to vote a different name; small
+//                 trust drop (the dishonesty quietly registers)
+//   leak        — confides the plan to a non-member; seeds a "targeting"
+//                 rumor with the coordinator as subject, low confidence;
+//                 coordinator suspicion +1
+//   reject      — refuses; rel −2 with coordinator; alliance strength −0.5
+//
+// Aggregate effects:
+//   • Target's contestant.suspicion rises proportional to agreement count
+//   • Alliance strength shifts: +0.5 on broad consensus, −0.5 if 2+ rejects
+//   • Coordinator's suspicion rises by 1 per leak
+//
+// Returns { responses: [{memberId, name, response}], target, ... } so the
+// UI can render a per-member breakdown card.
+function coordinateAllianceVote(state, allianceId, coordinatorId, targetId) {
+  const alliance = (state.alliances ?? []).find(a => a.id === allianceId);
+  if (!alliance || alliance.status === "dissolved") {
+    return { responses: [], error: "That alliance is no longer in play." };
+  }
+  if (!alliance.memberIds.includes(coordinatorId)) {
+    return { responses: [], error: "You aren't part of that pact." };
+  }
+  const target = findContestant(state, targetId);
+  const coordinator = findContestant(state, coordinatorId);
+  if (!target || !coordinator) {
+    return { responses: [], error: "There was no one to push the plan against." };
+  }
+
+  // Tier-based base bias on member willingness.
+  const tier = alliance.tier ?? (alliance.strength >= 7 ? "core" : alliance.strength >= 4 ? "loose" : "weakened");
+  const tierBonus =
+      tier === "core"     ?  1.5
+    : tier === "loose"    ?  0.5
+    :                       -0.5;
+
+  // Coordinator's broad standing also factors in.
+  const coordCapital = (typeof getSocialCapital === "function")
+    ? getSocialCapital(state, coordinatorId) : 5;
+
+  const responses = [];
+  for (const mid of alliance.memberIds) {
+    if (mid === coordinatorId) continue;
+    const member = findContestant(state, mid);
+    if (!member) continue;
+
+    const trust         = getTrust(state, mid, coordinatorId);
+    const rel           = getRelationship(state, mid, coordinatorId);
+    const memberRelToT  = getRelationship(state, mid, targetId);
+    const memberSusp    = state.suspicionMemory?.[mid]?.[coordinatorId] ?? 0;
+    const memberIntent  = (typeof getCampTargetForContestant === "function")
+      ? getCampTargetForContestant(state, mid) : null;
+    const archetype     = member.archetype || "balanced";
+
+    // ── Compose support score ─────────────────────────────────────────
+    let score = 0;
+    score += (trust - 3) * 1.0;            // trust dominates
+    score += rel * 0.15;                   // rapport reinforces
+    score += tierBonus;                    // alliance tier baseline
+    score -= memberRelToT * 0.20;          // the closer they are to the
+                                           //   proposed target, the more
+                                           //   they resist
+    score -= memberSusp * 0.50;            // private memory of coordinator
+                                           //   shadiness erodes willingness
+    score += (coordCapital - 5) * 0.20;    // broad standing helps
+
+    if (memberIntent && memberIntent.targetId === targetId)      score += 2.0;
+    else if (memberIntent && memberIntent.targetId !== targetId) score -= 1.0;
+
+    // Archetype tilts (soft).
+    if (archetype === "loyal")    score += 1.0;
+    if (archetype === "sneaky")   score -= 0.7;
+    if (archetype === "paranoid") score -= 0.6;
+    if (archetype === "socialButterfly") score += 0.3;
+
+    // Per-member jitter so equivalent contexts can break differently.
+    score += (Math.random() - 0.5) * 2;
+
+    // ── Map score to response ─────────────────────────────────────────
+    let response;
+    if      (score >=  4) response = "agree";
+    else if (score >=  2) response = "soft-agree";
+    else if (score >=  0) response = "hesitate";
+    else if (score >= -2) {
+      // Could be hesitate or a sneaky mislead.
+      response = (archetype === "sneaky" && Math.random() < 0.35)
+        ? "mislead" : "hesitate";
+    } else if (score >= -4) {
+      // Could be reject or a leak (leak is more likely with sneaky / paranoid).
+      const leakChance =
+          archetype === "sneaky"   ? 0.45
+        : archetype === "paranoid" ? 0.30
+        :                            0.10;
+      response = Math.random() < leakChance ? "leak" : "reject";
+    } else {
+      response = "reject";
+    }
+
+    // ── Apply per-member effects ──────────────────────────────────────
+    switch (response) {
+      case "agree":
+        if (typeof setCampTargetForContestant === "function") {
+          setCampTargetForContestant(state, mid, targetId, 7);
+        }
+        adjustRelationship(state, mid, coordinatorId, +1);
+        break;
+      case "soft-agree":
+        adjustRelationship(state, mid, coordinatorId, +1);
+        break;
+      case "hesitate":
+        // No mechanical effect.
+        break;
+      case "mislead":
+        // Says yes but doesn't commit. Trust quietly bleeds.
+        adjustTrust(state, mid, coordinatorId, -1);
+        break;
+      case "leak":
+        adjustSuspicion(state, coordinatorId, +1);
+        if (typeof seedRumor === "function") {
+          // Member becomes the originator of the leaked-targeting rumor.
+          seedRumor(state, "targeting", coordinatorId, targetId, mid, 0.8);
+        }
+        break;
+      case "reject":
+        adjustRelationship(state, mid, coordinatorId, -2);
+        adjustAllianceStrength(alliance, -0.5);
+        break;
+    }
+
+    responses.push({ memberId: mid, name: member.name, response });
+  }
+
+  // ── Aggregate effects ───────────────────────────────────────────────
+  const agreeCount  = responses.filter(r => r.response === "agree").length;
+  const softCount   = responses.filter(r => r.response === "soft-agree").length;
+  const rejectCount = responses.filter(r => r.response === "reject").length;
+  const leakCount   = responses.filter(r => r.response === "leak").length;
+  const totalAgree  = agreeCount + softCount;
+
+  // Target gets a public-suspicion bump per agreement landed (the room is
+  // tilting on them).
+  if (totalAgree >= 1) {
+    adjustSuspicion(state, targetId, totalAgree);
+  }
+
+  // Alliance strength shifts based on outcome distribution.
+  if (responses.length > 0) {
+    if (totalAgree >= Math.ceil(responses.length / 2) && rejectCount === 0) {
+      adjustAllianceStrength(alliance, +0.5);
+      alliance.lastReinforcedRound = state.round ?? 0;
+    } else if (rejectCount >= 2) {
+      adjustAllianceStrength(alliance, -0.5);
+    }
+  }
+
+  logEvent(state, {
+    category:      "alliance",
+    type:          "vote-coordinated",
+    text: state.player && state.player.id === coordinatorId
+      ? `You pushed a vote plan against ${target.name} through "${alliance.name}".`
+      : `${coordinator.name} pushed a vote plan against ${target.name} through "${alliance.name}".`,
+    playerVisible: state.player && (
+      state.player.id === coordinatorId ||
+      alliance.memberIds.includes(state.player.id)
+    ),
+    meta: { allianceId, coordinatorId, targetId, responses: responses.map(r => r.response) },
+  });
+
+  return {
+    responses,
+    target,
+    alliance,
+    agreeCount, softCount, rejectCount, leakCount,
+    totalAgree,
+  };
+}
+
 // ── Round-end drift ───────────────────────────────────────────────────────────
 //
 // Once per round, each active alliance's strength drifts based on five

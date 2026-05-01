@@ -102,10 +102,10 @@ function renderCampLifeScreen(container, state) {
   // is "alliances", the inspector view renders for that specific alliance
   // instead of the generic Alliances overview. Cleared on category back.
   let _currentAllianceId = null;
-  // v5.26: the inspector's pending sub-flow — when the player clicks
-  // "Bring someone in" or "Push someone out", we render an inline target
-  // picker before resolving. null = no sub-flow active.
-  let _allianceSubAction = null;   // "invite" | "boot" | null
+  // v5.26 / v5.27: the inspector's pending sub-flow — when the player
+  // clicks one of the inspector's action buttons, we render an inline
+  // target picker before resolving. null = no sub-flow active.
+  let _allianceSubAction = null;   // "invite" | "boot" | "vote" | null
 
   // ── Idol state for this screen ────────────────────────────────────────────
   //
@@ -1032,8 +1032,8 @@ function renderCampLifeScreen(container, state) {
     }
     actionArea.appendChild(memberList);
 
-    // ── Sub-flow: target picker for invite / boot ────────────────────────
-    if (_allianceSubAction === "invite" || _allianceSubAction === "boot") {
+    // ── Sub-flow: target picker for invite / boot / vote ─────────────────
+    if (_allianceSubAction === "invite" || _allianceSubAction === "boot" || _allianceSubAction === "vote") {
       renderAllianceTargetPicker(alliance);
       return;
     }
@@ -1065,6 +1065,18 @@ function renderCampLifeScreen(container, state) {
       onClick: () => { _allianceSubAction = "boot"; showActionButtons(); },
     }));
 
+    // v5.27: Coordinate a vote — pushes a vote plan to all other members.
+    // Disabled if the player is alone in the alliance (nobody to coordinate
+    // with) or the camp pool has no valid vote target.
+    const canCoordinate = alliance.memberIds.length >= 2 &&
+      tribePool.some(c => c.id !== player.id);
+    grid.appendChild(buildAllianceActionButton({
+      label: "Push a vote plan",
+      detail: "Pick a name and rally the alliance behind it. Some members will commit, some will hesitate, some may leak.",
+      disabled: !canCoordinate,
+      onClick: () => { _allianceSubAction = "vote"; showActionButtons(); },
+    }));
+
     // Leave — always enabled (the player can always walk away).
     grid.appendChild(buildAllianceActionButton({
       label: "Step away from this pact",
@@ -1090,9 +1102,10 @@ function renderCampLifeScreen(container, state) {
 
     const heading = document.createElement("div");
     heading.className = "alliance-inspector-subheading";
-    heading.textContent = _allianceSubAction === "invite"
-      ? "Who do you want to bring in?"
-      : "Who do you want to push out?";
+    heading.textContent =
+        _allianceSubAction === "invite" ? "Who do you want to bring in?"
+      : _allianceSubAction === "boot"   ? "Who do you want to push out?"
+      :                                   "Whose name do you want to push?";
     actionArea.appendChild(heading);
 
     const tribePool = state.merged
@@ -1104,11 +1117,16 @@ function renderCampLifeScreen(container, state) {
       candidates = tribePool.filter(c =>
         c.id !== player.id && !alliance.memberIds.includes(c.id)
       );
-    } else {
+    } else if (_allianceSubAction === "boot") {
       candidates = alliance.memberIds
         .filter(id => id !== player.id)
         .map(id => findContestant(state, id))
         .filter(Boolean);
+    } else {
+      // v5.27: vote target — any active tribemate other than the player.
+      // Targeting an alliance member is allowed but obviously high-friction
+      // (those members are likely to reject); the engine handles the fallout.
+      candidates = tribePool.filter(c => c.id !== player.id);
     }
 
     if (candidates.length === 0) {
@@ -1153,6 +1171,8 @@ function renderCampLifeScreen(container, state) {
       result = bootFromAlliance(state, alliance.id, player.id, target.id);
     } else if (kind === "leave") {
       result = leaveAlliance(state, alliance.id, player.id);
+    } else if (kind === "vote") {
+      result = coordinateAllianceVote(state, alliance.id, player.id, target.id);
     } else {
       return;
     }
@@ -1171,13 +1191,24 @@ function renderCampLifeScreen(container, state) {
     const labelText =
       kind === "invite" ? `Bring in · ${escapeHtml(target.name)}` :
       kind === "boot"   ? `Push out · ${escapeHtml(target.name)}` :
+      kind === "vote"   ? `Vote plan · ${escapeHtml(target.name)}` :
       "Step away from alliance";
     const entry = document.createElement("div");
     entry.className = "feedback-entry";
-    entry.innerHTML = `
-      <span class="feedback-action-tag">${labelText}</span>
-      <span class="feedback-text">${escapeHtml(result.feedback ?? "")}</span>
-    `;
+    if (kind === "vote") {
+      // v5.27: per-member breakdown card. Replaces the single feedback line
+      // with a structured response list so the player can see who's with
+      // them and who isn't.
+      entry.innerHTML = `
+        <span class="feedback-action-tag">${labelText}</span>
+        ${buildVoteCoordinationFeedbackHTML(result, target, alliance)}
+      `;
+    } else {
+      entry.innerHTML = `
+        <span class="feedback-action-tag">${labelText}</span>
+        <span class="feedback-text">${escapeHtml(result.feedback ?? "")}</span>
+      `;
+    }
     feedbackLog.prepend(entry);
 
     // If leaving dissolved the player's perspective on this alliance, drop
@@ -1188,6 +1219,68 @@ function renderCampLifeScreen(container, state) {
     if (!stillIn) _currentAllianceId = null;
 
     showActionButtons();
+  }
+
+  // v5.27: builds the per-member breakdown card for a vote-coordination
+  // outcome. Renders one row per alliance member's response, plus a small
+  // headline summarizing the overall result. Survivor-flavored language;
+  // no raw scores leak.
+  function buildVoteCoordinationFeedbackHTML(result, target, alliance) {
+    if (result.error) {
+      return `<span class="feedback-text">${escapeHtml(result.error)}</span>`;
+    }
+    if (!result.responses || result.responses.length === 0) {
+      return `<span class="feedback-text">You laid out the plan against ${escapeHtml(target.name)}, but there was nobody else in "${escapeHtml(alliance.name)}" to respond.</span>`;
+    }
+
+    const RESPONSE_FLAVOR = {
+      "agree":      { icon: "✓", label: "agreed",       color: "agree"     },
+      "soft-agree": { icon: "~", label: "soft yes",     color: "softagree" },
+      "hesitate":   { icon: "?", label: "hesitated",    color: "hesitate"  },
+      "mislead":    { icon: "≈", label: "said yes...",  color: "mislead"   },
+      "leak":       { icon: "‼", label: "leaked it",    color: "leak"      },
+      "reject":     { icon: "✗", label: "rejected",     color: "reject"    },
+    };
+
+    const rows = result.responses.map(r => {
+      const f = RESPONSE_FLAVOR[r.response] ?? RESPONSE_FLAVOR.hesitate;
+      return `
+        <li class="vote-coord-row" data-response="${f.color}">
+          <span class="vote-coord-icon">${f.icon}</span>
+          <span class="vote-coord-name">${escapeHtml(r.name)}</span>
+          <span class="vote-coord-label">${f.label}</span>
+        </li>
+      `;
+    }).join("");
+
+    // Headline: synthesize the overall read.
+    const total = result.responses.length;
+    const fullAgree = result.agreeCount ?? 0;
+    const totalYes  = result.totalAgree ?? 0;
+    const rejects   = result.rejectCount ?? 0;
+    const leaks     = result.leakCount ?? 0;
+
+    let headline;
+    if (totalYes === total && rejects === 0 && leaks === 0) {
+      headline = `The room was with you. "${alliance.name}" is locked in on ${target.name}.`;
+    } else if (totalYes >= Math.ceil(total / 2) && rejects === 0) {
+      headline = `Most of "${alliance.name}" came along. You have a majority pointing at ${target.name}.`;
+    } else if (rejects >= 2) {
+      headline = `The pitch hit a wall. "${alliance.name}" is fracturing — multiple members refused to commit to ${target.name}.`;
+    } else if (leaks >= 1) {
+      headline = `The plan didn't stay in the room. Word about ${target.name} is going to travel.`;
+    } else if (fullAgree === 0) {
+      headline = `Nobody fully committed. The pitch landed somewhere between "maybe" and "not yet."`;
+    } else {
+      headline = `Mixed read. Some came along, some didn't. The plan is alive but not decided.`;
+    }
+
+    return `
+      <div class="vote-coord-card">
+        <p class="vote-coord-headline">${escapeHtml(headline)}</p>
+        <ul class="vote-coord-list">${rows}</ul>
+      </div>
+    `;
   }
 
   // Aggregates a one-line stability read from current alliance state.
@@ -1307,10 +1400,10 @@ function renderCampLifeScreen(container, state) {
   // tools will land here, without any clickable behavior yet. Marked with
   // a "coming soon" pill so the player isn't confused about availability.
   function buildAllianceShellPlannedHTML() {
-    // v5.26: membership management moved into the inspector flow above and
-    // is no longer a placeholder. Two planned-tools rows remain.
+    // v5.26: membership management moved into the inspector flow above.
+    // v5.27: vote planning also moved into the inspector. One placeholder
+    // row remains for the still-unbuilt preference-read feature.
     const items = [
-      { label: "Vote planning",    desc: "Lock in a name with your alliance heading into tribal." },
       { label: "Preference reads", desc: "See where each ally's head is at on the next vote." },
     ];
     const rows = items.map(it => `
