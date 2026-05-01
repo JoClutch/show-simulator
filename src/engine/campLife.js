@@ -134,66 +134,39 @@ const CAMP_ACTION_CATEGORIES = [
 
 const CAMP_ACTIONS = [
   {
-    id: "talk",
-    // v5.3: renamed to make the "spend time with another player" framing
-    // explicit. Engine logic is enhanced (rel momentum) but compatible.
-    // v5.21: tagged for future consolidation with "confide" under spendTime.
+    // v5.22: consolidates legacy "talk" + "confide". The dispatcher picks
+    // depth automatically — casual hangout when trust/rel are still
+    // forming, deeper opening-up when the foundation is there. Same
+    // engine functions (actionTalk / actionConfide) still power the
+    // outcomes; only the menu and routing changed.
+    id: "spendTime",
     label: "Spend time with someone",
-    detail: "Hang out, share stories, build a real bond over time.",
+    detail: "Hang out and build the bond. The conversation goes deep when the trust is already there.",
     needsTarget: true,
+    targetPrompt: "Who do you want to spend time with?",
     category: "social",
     consolidationGroup: "spendTime",
   },
   {
-    id: "confide",
-    label: "Open up to someone",
-    detail: "Share something real. The fastest way to build genuine trust.",
-    needsTarget: true,
-    category: "social",
-    consolidationGroup: "spendTime",
-  },
-  {
-    // v5.3: new — repair a strained relationship.
-    // v5.21: tagged for future consolidation with "checkIn" under repairBond.
-    id: "smoothOver",
-    label: "Smooth things over",
-    detail: "Try to repair a strained bond. Works best on small rifts.",
+    // v5.22: consolidates legacy "smoothOver" + "checkIn". The dispatcher
+    // detects whether there's a recent specific conflict to address vs.
+    // ambient strain to soften, and routes to the right engine path.
+    id: "mendBond",
+    label: "Mend things",
+    detail: "Reach out across friction. Works whether the rift is fresh or quietly cooling.",
     needsTarget: true,
     targetPrompt: "Who do you want to mend things with?",
     category: "social",
     consolidationGroup: "repairBond",
   },
   {
-    // v5.12: dedicated post-conflict repair. Distinct from "Smooth things
-    // over" — that action addresses ambient strain (a generally cool rel).
-    // Check In addresses RECENT, SPECIFIC friction: a bad conversation, a
-    // caught lie, an exposed agenda push. Repair is possible but not
-    // guaranteed; without a real recent conflict, the action mostly fizzles.
-    id: "checkIn",
-    label: "Check in after conflict",
-    detail: "Reach out after a recent rift. Acknowledging it can repair — or remind them it happened.",
-    needsTarget: true,
-    targetPrompt: "Who do you want to check in with?",
-    category: "social",
-    consolidationGroup: "repairBond",
-  },
-  {
-    // v5.3: new — observe social dynamics without doing anything yourself.
-    id: "observeCamp",
-    label: "Observe the camp",
-    detail: "Read the room. You'll notice what others are putting out there.",
-    needsTarget: false,
-    category: "social",
-    consolidationGroup: "readCamp",
-  },
-  {
-    // v5.11: broad mood/tempo read. Distinct from "Observe the camp"
-    // which surfaces specific concrete pairs. Read the Room gives an
-    // overall feel for what's happening — campaigning energy, tribe
-    // cohesion, who looks anxious. Always hedged.
-    id: "readRoom",
-    label: "Read the room",
-    detail: "Step back and feel the temperature. You'll get vibes more than facts.",
+    // v5.22: consolidates legacy "observeCamp" + "readRoom". A single
+    // observation action that returns vibe + concrete dynamics together,
+    // scaled by player.social — low-social players get the vibe read,
+    // higher-social players also get the specific pair signals.
+    id: "readCamp",
+    label: "Read the camp",
+    detail: "Step back and watch. You'll pick up the temperature and the dynamics that are visible.",
     needsTarget: false,
     category: "social",
     consolidationGroup: "readCamp",
@@ -312,13 +285,24 @@ function getActionsInGroup(group) {
 // (e.g. getCanonicalActionId("talk") → "spendTime") once a merged action
 // exists. Used by camp-role detection and any analytics layer that needs
 // to roll legacy + merged ids together.
+// v5.22: legacy → canonical id remap. AI dispatch still calls actionTalk /
+// actionConfide / etc. directly and recordCampAction logs the legacy id.
+// This map ensures role-detection rolls those legacy entries up under the
+// merged action's group bucket so cumulative behavior counts correctly.
+const CAMP_ACTION_LEGACY_MAP = {
+  talk:        "spendTime",
+  confide:     "spendTime",
+  smoothOver:  "mendBond",
+  checkIn:     "mendBond",
+  observeCamp: "readCamp",
+  readRoom:    "readCamp",
+};
+
 function getCanonicalActionId(actionId) {
+  if (CAMP_ACTION_LEGACY_MAP[actionId]) return CAMP_ACTION_LEGACY_MAP[actionId];
   const def = CAMP_ACTION_REGISTRY[actionId];
-  if (!def) return actionId;
-  // For now, the canonical id is just the action's own id. The future merged
-  // action will replace this mapping at the time of consolidation by
-  // returning the merged id when given any of its legacy ids.
-  return def.id;
+  if (def) return def.id;
+  return actionId;
 }
 
 // v5.21: group lookup. Returns the consolidationGroup for an action id, or
@@ -350,24 +334,82 @@ function executeAction(state, actionId, player, tribemates, target) {
   // v5.14: log every camp action against the actor for camp-role detection.
   recordCampAction(state, player.id, actionId);
   switch (actionId) {
-    case "talk":        return actionTalk(state, player, target);
+    // v5.22: consolidated social actions. Each merged id picks the legacy
+    // engine path based on context, preserving the depth of behavior the
+    // legacy actions implemented. AI continues to call actionTalk /
+    // actionConfide / etc. directly; only the player-facing dispatch is
+    // consolidated here.
+    case "spendTime":   return dispatchSpendTime(state, player, target);
+    case "mendBond":    return dispatchMendBond(state, player, target);
+    case "readCamp":    return dispatchReadCamp(state, player, tribemates);
+
     case "tendCamp":    return actionTendCamp(state, player, tribemates);
     case "searchidol":  return actionSearchIdol(state, player, tribemates);
     case "takeWalk":    return actionTakeWalk(state, player, tribemates);
     case "strategy":    return actionStrategy(state, player, target);
     case "askVote":     return actionAskVote(state, player, target, tribemates);
-    case "confide":     return actionConfide(state, player, target);
     case "lobby":       return actionLobby(state, player, tribemates, target);
     case "laylow":      return actionLayLow(state, player, tribemates);
     case "proposeAlliance": return actionProposeAlliance(state, player, target);
-    case "smoothOver":      return actionSmoothOver(state, player, target);
-    case "checkIn":         return actionCheckIn(state, player, target);
-    case "observeCamp":     return actionObserveCamp(state, player, tribemates);
     case "observePair":     return actionObservePair(state, player, tribemates, target);
-    case "readRoom":        return actionReadRoom(state, player, tribemates);
     case "compareNotes":    return actionCompareNotes(state, player, tribemates, target);
     default:            return { feedback: "Nothing happened.", hint: null };
   }
+}
+
+// ── v5.22: Consolidated-action dispatchers ───────────────────────────────────
+//
+// These are the canonical entry points the player menu now invokes. Each
+// dispatcher inspects current pair / camp context and routes to the
+// appropriate legacy engine function. The legacy functions remain in the
+// file (still called by AI directly) so the depth of v5.x behavior is
+// preserved end-to-end.
+
+// Spend time — picks depth based on existing trust + rel between the pair.
+// Trusted, established pairs naturally fall into "open up" mode (deeper
+// trust gain via actionConfide). New / cool pairs default to "hang out"
+// mode (rel momentum via actionTalk).
+function dispatchSpendTime(state, player, target) {
+  const trust = getTrust(state, player.id, target.id);
+  const rel   = getRelationship(state, player.id, target.id);
+  if (trust >= 5 && rel >= 5) {
+    return actionConfide(state, player, target);
+  }
+  return actionTalk(state, player, target);
+}
+
+// Mend things — picks repair mode by checking for a recent specific
+// conflict. If one exists (within 2 rounds) OR the target has built up
+// suspicion-memory of the player, the dispatcher routes to the
+// post-conflict check-in path. Otherwise the ambient-strain smoothing
+// path runs.
+function dispatchMendBond(state, player, target) {
+  const conflict = (typeof getRecentConflict === "function")
+    ? getRecentConflict(state, player.id, target.id) : null;
+  const memory   = (typeof getSuspicionMemory === "function")
+    ? getSuspicionMemory(state, target.id, player.id) : 0;
+  if (conflict || memory >= 1.5) {
+    return actionCheckIn(state, player, target);
+  }
+  return actionSmoothOver(state, player, target);
+}
+
+// Read the camp — combines vibe (readRoom) with concrete dynamics
+// (observeCamp). Low-social players get vibe-only; social ≥ 6 players also
+// get the specific pair / suspicion / isolation signals appended. Both
+// underlying actions are pure-information; running both is safe.
+function dispatchReadCamp(state, player, tribemates) {
+  const room = actionReadRoom(state, player, tribemates);
+  if ((player.social ?? 5) >= 6) {
+    const observe = actionObserveCamp(state, player, tribemates);
+    if (observe?.feedback) {
+      return {
+        feedback: room.feedback + "\n\n" + observe.feedback,
+        hint:     room.hint ?? observe.hint ?? null,
+      };
+    }
+  }
+  return room;
 }
 
 // ── v5.10: Conversation mood + truthfulness model ────────────────────────────
@@ -2740,12 +2782,17 @@ function clearCampTargets(state) {
 //   • drifter         — small natural suspicion drop each round (ambient
 //                       background presence reads as nonthreatening)
 
+// v5.22: role-category lists use CANONICAL action ids. Legacy ids logged
+// against AI behavior are resolved to canonical via getCanonicalActionId
+// inside computeCampRoleShares, so AI's direct calls to actionTalk /
+// actionConfide / etc. roll up to the same buckets as the player's
+// merged-action choices.
 const CAMP_ROLE_CATEGORIES = {
   provider:        ["tendCamp"],
   strategist:      ["strategy", "askVote", "observePair", "compareNotes"],
   schemer:         ["lobby", "searchidol"],
-  socialConnector: ["talk", "confide", "checkIn", "smoothOver", "proposeAlliance"],
-  drifter:         ["laylow", "takeWalk", "observeCamp", "readRoom"],
+  socialConnector: ["spendTime", "mendBond", "proposeAlliance"],
+  drifter:         ["laylow", "takeWalk", "readCamp"],
 };
 
 const CAMP_ROLE_LABELS = {
@@ -2773,8 +2820,23 @@ function getCampActionTotal(state, contestantId) {
 
 // Computes role shares for a contestant. Returns
 //   { totals: {role: count}, shares: {role: 0..1}, total }
+//
+// v5.22: history keys are passed through getCanonicalActionId so legacy
+// ids logged by AI behavior (actionTalk → "talk", etc.) roll up to their
+// merged canonical bucket ("spendTime"). Player history already records
+// the canonical id directly. This means the same role detection works
+// uniformly for both player and AI activity.
 function computeCampRoleShares(state, contestantId) {
-  const hist = state.actionHistory?.[contestantId] ?? {};
+  const rawHist = state.actionHistory?.[contestantId] ?? {};
+
+  // Build a canonicalized history: merge counts from legacy ids into their
+  // canonical equivalents.
+  const hist = {};
+  for (const id of Object.keys(rawHist)) {
+    const canonical = getCanonicalActionId(id);
+    hist[canonical] = (hist[canonical] ?? 0) + rawHist[id];
+  }
+
   const totals = {};
   let total = 0;
   for (const [role, actionIds] of Object.entries(CAMP_ROLE_CATEGORIES)) {
