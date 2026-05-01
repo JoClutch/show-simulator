@@ -121,17 +121,19 @@ function scoreVoteTarget(state, voter, c) {
     1 + (voter.social - 5) * 0.05 - (voter.strategy - 5) * 0.07
   ));
 
-  // v5.39: scale alliance protection by THIS voter's loyalty to THIS
-  // specific alliance. A formal pact-mate whose actual commitment has
-  // eroded (loyalty 2) protects their ally at ~0.7× the previous strength;
-  // a fully-loyal pact-mate (loyalty 9) protects at ~1.4×. Mid-range
-  // (loyalty 5) is a no-op (1.0×) so existing balance stays calibrated.
-  // This is the mechanism by which "formal alliance can exist while real
-  // loyalty erodes underneath" produces realistic vote behavior at tribal.
+  // v5.39 / v5.42: scale alliance protection by THIS voter's loyalty to
+  // THIS specific alliance. A formal pact-mate whose actual commitment has
+  // eroded (loyalty 2) protects at ~0.76× the previous strength; a fully-
+  // loyal pact-mate (loyalty 9) protects at ~1.32×. Loyalty 5 (neutral) is
+  // a no-op (1.0×).
+  // v5.42: range tightened from [0.5, 1.5] to [0.6, 1.4] — the earlier
+  // amplification combined with bondProtection, social capital, and inner-
+  // circle protection was over-shielding highly-loyal allies. Tighter
+  // range preserves the shape of the effect without dominating other layers.
   let voterLoyaltyMult = 1;
   if (sharedAlliance && typeof getAllianceLoyalty === "function") {
     const personalLoyalty = getAllianceLoyalty(state, sharedAlliance.id, voter.id);
-    voterLoyaltyMult = 0.5 + (personalLoyalty / 10);   // 0.5 .. 1.5
+    voterLoyaltyMult = 0.6 + (personalLoyalty / 12.5);   // 0.6 .. 1.4
   }
   const allianceProtection = baseAllianceProtection * loyalty * voterLoyaltyMult;
 

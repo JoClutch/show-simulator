@@ -722,14 +722,15 @@ function coordinateAllianceVote(state, allianceId, coordinatorId, targetId) {
     if (archetype === "paranoid") score -= 0.6;
     if (archetype === "socialButterfly") score += 0.3;
 
-    // v5.41: jury-aware members nudge their score UP toward agreement
-    // bands — they don't want to be remembered as the leaker / saboteur
-    // when the jury votes. Effect is small (~+0.5 at full awareness, +0.2
-    // at typical awareness) so it doesn't override real reasons to reject;
-    // it just softens the response.
+    // v5.41 / v5.42: jury-aware members nudge their score UP toward
+    // agreement bands — they don't want to be remembered as the leaker /
+    // saboteur when the jury votes. v5.42: nudge magnitude trimmed
+    // (0.5 → 0.35) so jury-aware members can still legitimately reject /
+    // leak when the underlying reasons are strong; the awareness nudge is
+    // a tilt, not a vetoes.
     if (typeof getJuryAwareness === "function") {
       const memberAware = getJuryAwareness(state, mid);
-      score += memberAware * 0.5;
+      score += memberAware * 0.35;
     }
 
     // Per-member jitter so equivalent contexts can break differently.

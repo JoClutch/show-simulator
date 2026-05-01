@@ -632,17 +632,19 @@ function pickConversationMood(state, player, target, ctx) {
     weights[k] = Math.max(0.1, weights[k] * (0.9 + Math.random() * 0.2));
   }
 
-  // v5.19 / v5.41: jury-aware softening. Once the jury exists, every active
-  // player is a future juror or a future juror-vote-recipient.
-  // v5.41: scales by the TARGET's jury-awareness. A jury-aware player is
-  // visibly managing their image — fewer tense exchanges, more warm /
-  // awkward ones. A non-aware player may still produce hostile-mood
-  // exchanges. Replaces v5.19's flat tilt.
+  // v5.19 / v5.41 / v5.42: jury-aware softening. Once the jury exists,
+  // every active player is a future juror or a future juror-vote-recipient.
+  // Scales by the TARGET's jury-awareness: a jury-aware player is visibly
+  // managing their image — fewer tense exchanges, more warm / awkward ones.
+  // v5.42: softening factors trimmed (tense 0.25→0.20, suspicious 0.20→0.15)
+  // — the earlier values combined with v5.15's already-low negative-mood
+  // baselines were producing late-game post-jury camp that read too polite.
+  // Tighter factors preserve the qualitative shift without flattening it.
   if (state.merged && (state.jury?.length ?? 0) >= 1) {
     const targetAware = (typeof getJuryAwareness === "function")
       ? getJuryAwareness(state, target.id) : 0.7;
-    weights.tense      *= (1 - targetAware * 0.25);
-    weights.suspicious *= (1 - targetAware * 0.20);
+    weights.tense      *= (1 - targetAware * 0.20);
+    weights.suspicious *= (1 - targetAware * 0.15);
     weights.warm       *= (1 + targetAware * 0.20);
     weights.awkward    *= (1 + targetAware * 0.15);
   }
@@ -2296,11 +2298,13 @@ function actionReadRoom(state, player, tribemates) {
         `Pitches against names are coming wrapped in apologies now. The room knows the next person out is a juror.`,
       ])});
 
-      // Self-read: if the player themselves are highly jury-aware, surface
-      // a hedged "you're doing the work" line. Subtle reinforcement.
+      // Self-read: if the player themselves are jury-aware, surface a
+      // hedged "you're doing the work" line. Subtle reinforcement.
+      // v5.42: threshold lowered (0.95 → 0.85) so the line can surface for
+      // typical-strategic players, not just the highest-awareness extremes.
       if (typeof getJuryAwareness === "function") {
         const playerAware = getJuryAwareness(state, player.id);
-        if (playerAware >= 0.95) {
+        if (playerAware >= 0.85) {
           candidates.push({ weight: 3, text: pickFrom([
             `You caught yourself softening a pitch today — adding the extra "I respect them" before the vote. The jury isn't here yet, but you're already speaking to them.`,
             `Your conversations had a careful layer to them. You're playing for the bench, not just the room. That's the right instinct at this stage.`,
@@ -3180,8 +3184,12 @@ function isScrambling(state, contestantId) {
       topRankFloor  = 4.0;
       topRankCutoff = 4;     // top-4 instead of top-3
     } else if (pos === "central" || pos === "influential") {
-      pressureFloor = 6.5;
-      topRankFloor  = 5.5;
+      // v5.42: central / influential delay tightened (6.5 → 6.2; 5.5 → 5.2).
+      // The bigger delay was occasionally letting central players sleep
+      // through real danger; smaller delay still differentiates them from
+      // peripheral but keeps the scramble system responsive.
+      pressureFloor = 6.2;
+      topRankFloor  = 5.2;
     }
   }
 
