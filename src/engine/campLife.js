@@ -632,14 +632,19 @@ function pickConversationMood(state, player, target, ctx) {
     weights[k] = Math.max(0.1, weights[k] * (0.9 + Math.random() * 0.2));
   }
 
-  // v5.19: jury-aware softening. Once the jury exists, every active player
-  // is a future juror or a future juror-vote-recipient. Conversations
-  // visibly soften — fewer tense exchanges, more warm/awkward ones.
+  // v5.19 / v5.41: jury-aware softening. Once the jury exists, every active
+  // player is a future juror or a future juror-vote-recipient.
+  // v5.41: scales by the TARGET's jury-awareness. A jury-aware player is
+  // visibly managing their image — fewer tense exchanges, more warm /
+  // awkward ones. A non-aware player may still produce hostile-mood
+  // exchanges. Replaces v5.19's flat tilt.
   if (state.merged && (state.jury?.length ?? 0) >= 1) {
-    weights.tense      *= 0.8;
-    weights.suspicious *= 0.85;
-    weights.warm       *= 1.15;
-    weights.awkward    *= 1.10;
+    const targetAware = (typeof getJuryAwareness === "function")
+      ? getJuryAwareness(state, target.id) : 0.7;
+    weights.tense      *= (1 - targetAware * 0.25);
+    weights.suspicious *= (1 - targetAware * 0.20);
+    weights.warm       *= (1 + targetAware * 0.20);
+    weights.awkward    *= (1 + targetAware * 0.15);
   }
 
   // Weighted pick.
@@ -2278,14 +2283,30 @@ function actionReadRoom(state, player, tribemates) {
     }
 
     // Jury-aware: once the jury has formed, surface a flavor line about
-    // people watching their own behavior more carefully.
+    // people watching their own behavior more carefully. v5.41: expanded
+    // variant pool + an additional self-line when the player's own
+    // jury-awareness is high (they're playing the long game visibly).
     const juryStarted = (state.jury?.length ?? 0) >= 1;
     if (juryStarted) {
       candidates.push({ weight: 2.5, text: pickFrom([
         `You can feel the jury in the air. People are saying less, choosing words more carefully. Everyone's playing for two audiences now.`,
         `The conversations have a layered quality post-jury — people aren't just talking to each other, they're talking through each other to the people on the bench.`,
         `Nobody's burning bridges loudly anymore. You can see them counting future jurors in their head as they speak.`,
+        `Today felt like a performance — softer apologies, longer eye contact after a vote. Everyone's auditioning for the people on the bench.`,
+        `Pitches against names are coming wrapped in apologies now. The room knows the next person out is a juror.`,
       ])});
+
+      // Self-read: if the player themselves are highly jury-aware, surface
+      // a hedged "you're doing the work" line. Subtle reinforcement.
+      if (typeof getJuryAwareness === "function") {
+        const playerAware = getJuryAwareness(state, player.id);
+        if (playerAware >= 0.95) {
+          candidates.push({ weight: 3, text: pickFrom([
+            `You caught yourself softening a pitch today — adding the extra "I respect them" before the vote. The jury isn't here yet, but you're already speaking to them.`,
+            `Your conversations had a careful layer to them. You're playing for the bench, not just the room. That's the right instinct at this stage.`,
+          ])});
+        }
+      }
     }
 
     // Late-game resume awareness: small remaining count.
@@ -3432,10 +3453,18 @@ function pickAIActionWeighted(state, ai, others) {
     }
 
     // Jury awareness: once the jury has started, soften hostile pitches
-    // against tribemates — players consider that everyone they cross is a
-    // future juror. Reduces lobby weight by 25%; observation/social up.
+    // against tribemates. v5.41: per-AI scaling instead of flat reduction —
+    // strategists, socialConnectors, and influential players manage
+    // perception more; peripheral / workhorses care less. Up to 40%
+    // lobby reduction at full awareness, scaled down for less-aware AIs.
     const juryStarted = (state.jury?.length ?? 0) >= 1;
-    if (juryStarted) {
+    if (juryStarted && typeof getJuryAwareness === "function") {
+      const aware = getJuryAwareness(state, ai.id);
+      for (const opt of options) {
+        if (opt.action === "lobby") opt.weight *= (1 - aware * 0.40);
+      }
+    } else if (juryStarted) {
+      // Fallback to v5.19 flat behavior if helper isn't available.
       for (const opt of options) {
         if (opt.action === "lobby") opt.weight *= 0.75;
       }

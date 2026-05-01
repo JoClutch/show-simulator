@@ -947,6 +947,68 @@ function getSocialPosition(state, contestantId) {
   };
 }
 
+// ── v5.41: Post-merge jury-awareness ────────────────────────────────────────
+//
+// Returns a per-contestant "how much do they care about jury perception"
+// factor in [0, 1.5], with 1.0 representing typical post-jury awareness.
+// Returns 0 entirely when no jury exists yet (pre-merge or pre-first-vote
+// post-merge), so the function is safe to call unconditionally.
+//
+// Scales by:
+//   • strategy stat       — strategic players manage perception more
+//   • camp role           — strategist / socialConnector lean in;
+//                           schemer overcompensates (they know the look
+//                           is bad and adjust); workhorse cares less
+//   • social position     — influential / central care most (future
+//                           finalists who need juror votes); peripheral /
+//                           expendable care less (survival-focused)
+//   • social capital      — low capital adds image-rehab urgency
+//   • jury size           — more jurors → deeper awareness (more votes
+//                           to manage)
+//
+// Used by:
+//   • AI lobby weight scaling (replaces v5.19's flat ×0.75)
+//   • Conversation mood softening (replaces v5.19's flat tilt)
+//   • Alliance vote-coord member responses (nudge toward soft-agree to
+//     avoid looking like the leaker / saboteur)
+function getJuryAwareness(state, contestantId) {
+  if (!state.merged) return 0;
+  const jurySize = state.jury?.length ?? 0;
+  if (jurySize === 0) return 0;
+
+  const c = findContestant(state, contestantId);
+  if (!c) return 0;
+
+  // Base scales 0.4 (strategy 0) to 1.0 (strategy 10).
+  let aware = 0.4 + (c.strategy ?? 5) * 0.06;
+
+  if (typeof getCampRole === "function") {
+    const role = (getCampRole(state, contestantId) || "").replace(/^leaning:/, "");
+    if      (role === "strategist")      aware += 0.15;
+    else if (role === "socialConnector") aware += 0.10;
+    else if (role === "schemer")         aware += 0.20;   // overcompensating
+    else if (role === "workhorse")       aware -= 0.15;
+  }
+
+  if (typeof getSocialPosition === "function") {
+    const pos = getSocialPosition(state, contestantId).position;
+    if      (pos === "influential")  aware += 0.20;
+    else if (pos === "central")      aware += 0.10;
+    else if (pos === "peripheral")   aware -= 0.15;
+    else if (pos === "expendable")   aware -= 0.20;
+  }
+
+  if (typeof getSocialCapital === "function") {
+    const cap = getSocialCapital(state, contestantId);
+    if (cap < 4) aware += 0.10;     // image-rehab urgency
+  }
+
+  // Jury size deepens awareness (more votes to manage). Caps at +0.20.
+  aware += Math.min(0.20, jurySize * 0.04);
+
+  return Math.max(0, Math.min(1.5, aware));
+}
+
 // ── v5.17: Rumors / information spread ───────────────────────────────────────
 //
 // Camp life is socially loud. People talk about each other when no one is in

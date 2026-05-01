@@ -722,6 +722,16 @@ function coordinateAllianceVote(state, allianceId, coordinatorId, targetId) {
     if (archetype === "paranoid") score -= 0.6;
     if (archetype === "socialButterfly") score += 0.3;
 
+    // v5.41: jury-aware members nudge their score UP toward agreement
+    // bands — they don't want to be remembered as the leaker / saboteur
+    // when the jury votes. Effect is small (~+0.5 at full awareness, +0.2
+    // at typical awareness) so it doesn't override real reasons to reject;
+    // it just softens the response.
+    if (typeof getJuryAwareness === "function") {
+      const memberAware = getJuryAwareness(state, mid);
+      score += memberAware * 0.5;
+    }
+
     // Per-member jitter so equivalent contexts can break differently.
     score += (Math.random() - 0.5) * 2;
 
