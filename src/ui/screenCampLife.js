@@ -943,16 +943,10 @@ function renderCampLifeScreen(container, state) {
     }
     actionArea.appendChild(grid);
 
-    // v5.25: forward-looking footer for the Alliances category.
-    // v5.26: planned-tools section now narrowed to vote planning + preference
-    // reads only — overview and membership management have moved into the
-    // inspector flow, so we no longer placeholder them.
-    if (categoryId === "alliances") {
-      const planned = document.createElement("div");
-      planned.className = "alliance-planned-section";
-      planned.innerHTML = buildAllianceShellPlannedHTML();
-      actionArea.appendChild(planned);
-    }
+    // v5.25–v5.28: the forward-looking "planned tools" section has now been
+    // fully implemented. Membership management, vote planning, and
+    // preference reads all live in the inspector. The placeholder section
+    // is no longer rendered.
   }
 
   // ── v5.26: Alliance inspector ─────────────────────────────────────────────
@@ -1077,6 +1071,17 @@ function renderCampLifeScreen(container, state) {
       onClick: () => { _allianceSubAction = "vote"; showActionButtons(); },
     }));
 
+    // v5.28: Read alliance preferences — asks every other member where
+    // their head is at on the next vote. No target picker; resolves
+    // immediately. Disabled if the player is alone.
+    const canRead = alliance.memberIds.length >= 2;
+    grid.appendChild(buildAllianceActionButton({
+      label: "Get a read on the alliance",
+      detail: "Ask everyone where their head's at. Some will be candid, some won't, and some may misdirect you.",
+      disabled: !canRead,
+      onClick: () => resolveAllianceAction("read", alliance, null),
+    }));
+
     // Leave — always enabled (the player can always walk away).
     grid.appendChild(buildAllianceActionButton({
       label: "Step away from this pact",
@@ -1173,6 +1178,8 @@ function renderCampLifeScreen(container, state) {
       result = leaveAlliance(state, alliance.id, player.id);
     } else if (kind === "vote") {
       result = coordinateAllianceVote(state, alliance.id, player.id, target.id);
+    } else if (kind === "read") {
+      result = readAlliancePreferences(state, alliance.id, player.id);
     } else {
       return;
     }
@@ -1192,6 +1199,7 @@ function renderCampLifeScreen(container, state) {
       kind === "invite" ? `Bring in · ${escapeHtml(target.name)}` :
       kind === "boot"   ? `Push out · ${escapeHtml(target.name)}` :
       kind === "vote"   ? `Vote plan · ${escapeHtml(target.name)}` :
+      kind === "read"   ? `Alliance read · ${escapeHtml(alliance.name)}` :
       "Step away from alliance";
     const entry = document.createElement("div");
     entry.className = "feedback-entry";
@@ -1202,6 +1210,14 @@ function renderCampLifeScreen(container, state) {
       entry.innerHTML = `
         <span class="feedback-action-tag">${labelText}</span>
         ${buildVoteCoordinationFeedbackHTML(result, target, alliance)}
+      `;
+    } else if (kind === "read") {
+      // v5.28: per-member preference read card. Same shape as the vote-
+      // coordination breakdown but surfaces what each member SAID rather
+      // than what they committed to.
+      entry.innerHTML = `
+        <span class="feedback-action-tag">${labelText}</span>
+        ${buildAlliancePreferenceReadHTML(result, alliance)}
       `;
     } else {
       entry.innerHTML = `
@@ -1273,6 +1289,87 @@ function renderCampLifeScreen(container, state) {
       headline = `Nobody fully committed. The pitch landed somewhere between "maybe" and "not yet."`;
     } else {
       headline = `Mixed read. Some came along, some didn't. The plan is alive but not decided.`;
+    }
+
+    return `
+      <div class="vote-coord-card">
+        <p class="vote-coord-headline">${escapeHtml(headline)}</p>
+        <ul class="vote-coord-list">${rows}</ul>
+      </div>
+    `;
+  }
+
+  // v5.28: builds the per-member preference-read card for an alliance read.
+  // Structurally mirrors the vote-coordination breakdown — headline + colored
+  // per-member rows. The headline reflects what the asker would BELIEVE
+  // (misleading reads count toward the named target on purpose).
+  function buildAlliancePreferenceReadHTML(result, alliance) {
+    if (result.error) {
+      return `<span class="feedback-text">${escapeHtml(result.error)}</span>`;
+    }
+    if (!result.reads || result.reads.length === 0) {
+      return `<span class="feedback-text">There was nobody else in "${escapeHtml(alliance.name)}" to read.</span>`;
+    }
+
+    const READ_FLAVOR = {
+      "aligned":     { icon: "✓", label: "candid",       color: "agree"     },
+      "hedged":      { icon: "~", label: "hinting",      color: "softagree" },
+      "uncommitted": { icon: "·", label: "no read yet",  color: "hesitate"  },
+      "vague":       { icon: "?", label: "evasive",      color: "hesitate"  },
+      "misleading":  { icon: "≈", label: "named someone",color: "mislead"   },
+      "silent":      { icon: "—", label: "wouldn't say", color: "reject"    },
+    };
+
+    const rows = result.reads.map(r => {
+      const f = READ_FLAVOR[r.kind] ?? READ_FLAVOR.vague;
+      const detail =
+          r.kind === "aligned"    ? `leaning ${r.target.name}`
+        : r.kind === "hedged"     ? `hinted at ${r.target.name}`
+        : r.kind === "misleading" ? `named ${r.target.name}`
+        : "";
+      return `
+        <li class="vote-coord-row" data-response="${f.color}">
+          <span class="vote-coord-icon">${f.icon}</span>
+          <span class="vote-coord-name">${escapeHtml(r.name)}${detail ? ` <span class="vote-coord-detail">— ${escapeHtml(detail)}</span>` : ""}</span>
+          <span class="vote-coord-label">${f.label}</span>
+        </li>
+      `;
+    }).join("");
+
+    // Headline synthesis. The dominant-target read CAN be a misleading read;
+    // we deliberately show what the player would believe based on what was
+    // said. The "(could be soft)" hedge fires when committed reads are mixed
+    // with misleading or silent ones, telegraphing that the read isn't clean.
+    const total       = result.total;
+    const committed   = result.committedCount;
+    const dominant    = result.dominantTargetName;
+    const dominantN   = result.dominantCount;
+    const distinct    = result.distinctTargets;
+    const silent      = result.silentCount;
+    const uncommitted = result.uncommittedCount;
+    const misleading  = result.misleadingCount;
+
+    let headline;
+    if (committed === 0 && uncommitted === total) {
+      headline = `No one's locked in. The alliance hasn't formed an opinion yet.`;
+    } else if (committed === 0) {
+      headline = `Nobody would give you a real name. The room closed up.`;
+    } else if (dominantN === total) {
+      headline = `The alliance reads aligned on ${dominant}.`;
+    } else if (dominantN >= Math.ceil(total / 2) && distinct === 1) {
+      headline = `Most of the alliance is leaning ${dominant}.`;
+    } else if (distinct >= 2) {
+      headline = `The alliance is split — different members named different people.`;
+    } else if (silent + uncommitted >= Math.ceil(total / 2)) {
+      headline = `The room was mostly quiet. ${dominant ? `${dominant}'s name came up — but only from one corner.` : "Hard to tell where the consensus lies."}`;
+    } else {
+      headline = `Mixed read. ${dominant ? `${dominant} surfaced, but the picture isn't clean.` : "Nobody's clearly committed."}`;
+    }
+
+    // Hedge if there's noise (mislead / silent) clouding the read.
+    const noisy = misleading + silent;
+    if (noisy >= Math.ceil(total / 2) && committed > 0) {
+      headline += " Take this with a grain of salt — too many people weren't being straight.";
     }
 
     return `
@@ -1399,27 +1496,11 @@ function renderCampLifeScreen(container, state) {
   // Each row is purely informational — it shows the player what kinds of
   // tools will land here, without any clickable behavior yet. Marked with
   // a "coming soon" pill so the player isn't confused about availability.
-  function buildAllianceShellPlannedHTML() {
-    // v5.26: membership management moved into the inspector flow above.
-    // v5.27: vote planning also moved into the inspector. One placeholder
-    // row remains for the still-unbuilt preference-read feature.
-    const items = [
-      { label: "Preference reads", desc: "See where each ally's head is at on the next vote." },
-    ];
-    const rows = items.map(it => `
-      <li class="alliance-planned-row">
-        <span class="alliance-planned-label">${it.label}</span>
-        <span class="alliance-planned-desc">${it.desc}</span>
-        <span class="alliance-planned-pill">Coming soon</span>
-      </li>
-    `).join("");
-    return `
-      <div class="alliance-planned-header">
-        <span class="alliance-planned-eyebrow">Planned tools</span>
-      </div>
-      <ul class="alliance-planned-list">${rows}</ul>
-    `;
-  }
+  // v5.28: buildAllianceShellPlannedHTML retired. All planned tools that
+  // were placeholdered in v5.25 (membership management, vote planning,
+  // preference reads) are now fully implemented in the alliance inspector.
+  // The function is preserved as a no-op shim for any orphan caller.
+  function buildAllianceShellPlannedHTML() { return ""; }
 
   // Helper: returns the actions in a given category that should currently
   // render (some are gated by season config — e.g. searchidol when idols are

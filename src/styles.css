@@ -2922,6 +2922,13 @@ button:disabled {
 .vote-coord-row[data-response="leak"]      .vote-coord-label { color: #e89a4a; }
 .vote-coord-row[data-response="reject"]    .vote-coord-icon  { color: #b85060; }
 .vote-coord-row[data-response="reject"]    .vote-coord-label { color: #b85060; }
+/* v5.28: inline "leaning X" / "hinted at Y" detail inside member-name slot.
+   Subdued so it reads as context, not as a primary label. */
+.vote-coord-detail {
+  color: var(--text-faint);
+  font-size: 0.7rem;
+  font-style: italic;
+}
 
 /* Planned-tools placeholder section beneath the action grid. Quiet,
    non-interactive, informational. */

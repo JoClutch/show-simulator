@@ -665,6 +665,175 @@ function coordinateAllianceVote(state, allianceId, coordinatorId, targetId) {
   };
 }
 
+// ── v5.28: Alliance preference reads ────────────────────────────────────────
+//
+// Asks every other alliance member where their head is at on the next vote.
+// Returns a per-member read with one of six kinds:
+//
+//   aligned     — they tell you their real campTarget honestly
+//   hedged      — they hint at a name without fully committing
+//   uncommitted — they don't have a target yet
+//   vague       — they have one but won't share specifics
+//   misleading  — they share a name that ISN'T their real intent
+//   silent      — they refuse to engage at all
+//
+// Candor per member is computed from trust + rel + alliance tier + asker's
+// social capital + archetype tilts + jitter, very similar to the v5.10 truth
+// model that drives one-on-one strategy talks. The aggregate output also
+// includes a dominant-target read (across "aligned" + "hedged" responses)
+// so the UI can summarize whether the alliance is actually pointing the
+// same direction.
+//
+// Pure information action — no rel/trust/suspicion mutation. The action
+// itself consumes one of the player's daily slots; the reads it returns
+// are otherwise free-of-cost intelligence.
+function readAlliancePreferences(state, allianceId, askerId) {
+  const alliance = (state.alliances ?? []).find(a => a.id === allianceId);
+  if (!alliance || alliance.status === "dissolved") {
+    return { reads: [], error: "That alliance is no longer in play." };
+  }
+  if (!alliance.memberIds.includes(askerId)) {
+    return { reads: [], error: "You aren't part of that pact." };
+  }
+
+  const tier = alliance.tier ?? (alliance.strength >= 7 ? "core" : alliance.strength >= 4 ? "loose" : "weakened");
+  const tierBonus =
+      tier === "core"     ?  2.0
+    : tier === "loose"    ?  0.5
+    :                       -0.5;
+
+  const askerCapital = (typeof getSocialCapital === "function")
+    ? getSocialCapital(state, askerId) : 5;
+
+  // Pool for picking misleading-target alternatives.
+  const asker = findContestant(state, askerId);
+  const pool = state.merged
+    ? (state.tribes?.merged || [])
+    : (state.tribes?.[asker?.tribe] || []);
+
+  const reads = [];
+  for (const mid of alliance.memberIds) {
+    if (mid === askerId) continue;
+    const member = findContestant(state, mid);
+    if (!member) continue;
+
+    const trust       = getTrust(state, mid, askerId);
+    const rel         = getRelationship(state, mid, askerId);
+    const memberSusp  = state.suspicionMemory?.[mid]?.[askerId] ?? 0;
+    const archetype   = member.archetype || "balanced";
+    const intent      = (typeof getCampTargetForContestant === "function")
+      ? getCampTargetForContestant(state, mid) : null;
+
+    // Candor score — how cleanly will they share?
+    let candor = 0;
+    candor += (trust - 3) * 1.0;
+    candor += rel * 0.10;
+    candor += tierBonus;
+    candor -= memberSusp * 0.50;
+    candor += (askerCapital - 5) * 0.15;
+    if (archetype === "loyal")            candor += 1.0;
+    if (archetype === "sneaky")           candor -= 1.5;
+    if (archetype === "paranoid")         candor -= 0.7;
+    if (archetype === "socialButterfly")  candor += 0.5;
+    candor += (Math.random() - 0.5) * 1.5;
+
+    // Helper: pick a random "misleading" target from the pool.
+    const pickFakeTarget = (excludeIds) => {
+      const cands = pool.filter(c =>
+        c.id !== member.id && !excludeIds.includes(c.id)
+      );
+      if (cands.length === 0) return null;
+      return cands[Math.floor(Math.random() * cands.length)];
+    };
+
+    let read;
+    if (!intent || intent.targetId == null) {
+      // No real intent yet. Most members say "uncommitted"; sneaky ones may
+      // pretend to have a target (planted seed) and silent ones evade.
+      if (archetype === "sneaky" && candor < 1 && Math.random() < 0.40) {
+        const fake = pickFakeTarget([askerId]);
+        read = fake
+          ? { kind: "misleading", target: fake }
+          : { kind: "uncommitted" };
+      } else if (candor < -1) {
+        read = { kind: "silent" };
+      } else {
+        read = { kind: "uncommitted" };
+      }
+    } else {
+      const realTarget = findContestant(state, intent.targetId);
+      if (!realTarget) {
+        read = { kind: "uncommitted" };
+      } else if (candor >= 4) {
+        read = { kind: "aligned", target: realTarget };
+      } else if (candor >= 2) {
+        read = { kind: "hedged", target: realTarget };
+      } else if (candor >= 0) {
+        if (archetype === "sneaky" && Math.random() < 0.40) {
+          const fake = pickFakeTarget([askerId, realTarget.id]);
+          read = fake
+            ? { kind: "misleading", target: fake }
+            : { kind: "vague" };
+        } else {
+          read = { kind: "vague" };
+        }
+      } else if (candor >= -2) {
+        if (archetype === "sneaky" && Math.random() < 0.50) {
+          const fake = pickFakeTarget([askerId, realTarget.id]);
+          read = fake
+            ? { kind: "misleading", target: fake }
+            : { kind: "silent" };
+        } else {
+          read = { kind: "silent" };
+        }
+      } else {
+        read = { kind: "silent" };
+      }
+    }
+
+    reads.push({
+      memberId: mid,
+      name:     member.name,
+      kind:     read.kind,
+      target:   read.target ? { id: read.target.id, name: read.target.name } : null,
+    });
+  }
+
+  // ── Aggregate: dominant-target detection across committed reads ─────
+  // "Committed" = aligned or hedged (members who named a real preference).
+  // "Misleading" reads ARE counted toward whatever target was named, so the
+  // player's aggregate read may itself be misled — that's intentional. The
+  // headline reflects what the asker would believe, not the underlying truth.
+  const counts = {};
+  let committedCount = 0;
+  for (const r of reads) {
+    if ((r.kind === "aligned" || r.kind === "hedged" || r.kind === "misleading") && r.target) {
+      counts[r.target.id] = (counts[r.target.id] ?? 0) + 1;
+      committedCount++;
+    }
+  }
+  let dominantTargetId = null, dominantCount = 0;
+  for (const [tid, count] of Object.entries(counts)) {
+    if (count > dominantCount) { dominantCount = count; dominantTargetId = tid; }
+  }
+
+  // Detect split: if 2+ targets each have committed reads, mark as split.
+  const distinctTargets = Object.keys(counts).length;
+
+  return {
+    reads,
+    dominantTargetId,
+    dominantTargetName: dominantTargetId ? findContestant(state, dominantTargetId)?.name : null,
+    dominantCount,
+    committedCount,
+    distinctTargets,
+    silentCount:      reads.filter(r => r.kind === "silent").length,
+    uncommittedCount: reads.filter(r => r.kind === "uncommitted").length,
+    misleadingCount:  reads.filter(r => r.kind === "misleading").length,
+    total:            reads.length,
+  };
+}
+
 // ── Round-end drift ───────────────────────────────────────────────────────────
 //
 // Once per round, each active alliance's strength drifts based on five
