@@ -1040,6 +1040,31 @@ function renderCampLifeScreen(container, state) {
     const tribePool = state.merged
       ? (state.tribes?.merged || [])
       : (state.tribes?.[player.tribe] || []);
+    // v5.29: button order goes from least-disruptive (information) to most
+    // (membership changes, exit). The flow reads as: "find out → decide →
+    // act → restructure → leave" so the player can navigate the inspector
+    // without having to scan every button each time.
+
+    // 1. Read alliance preferences — pure information, no consequences.
+    const canRead = alliance.memberIds.length >= 2;
+    grid.appendChild(buildAllianceActionButton({
+      label: "Get a read on the alliance",
+      detail: "Ask everyone where their head's at. Some will be candid, some won't, and some may misdirect you.",
+      disabled: !canRead,
+      onClick: () => resolveAllianceAction("read", alliance, null),
+    }));
+
+    // 2. Push a vote plan — coordinated strategic move.
+    const canCoordinate = alliance.memberIds.length >= 2 &&
+      tribePool.some(c => c.id !== player.id);
+    grid.appendChild(buildAllianceActionButton({
+      label: "Push a vote plan",
+      detail: "Pick a name and rally the alliance behind it. Some members will commit, some will hesitate, some may leak.",
+      disabled: !canCoordinate,
+      onClick: () => { _allianceSubAction = "vote"; showActionButtons(); },
+    }));
+
+    // 3. Bring someone new in — additive membership change.
     const inviteCandidates = tribePool.filter(c =>
       c.id !== player.id && !alliance.memberIds.includes(c.id)
     );
@@ -1050,7 +1075,7 @@ function renderCampLifeScreen(container, state) {
       onClick: () => { _allianceSubAction = "invite"; showActionButtons(); },
     }));
 
-    // Boot — only enabled if there's another member to push out.
+    // 4. Push someone out — disruptive membership change.
     const bootCandidates = alliance.memberIds.filter(id => id !== player.id);
     grid.appendChild(buildAllianceActionButton({
       label: "Push someone out",
@@ -1059,30 +1084,7 @@ function renderCampLifeScreen(container, state) {
       onClick: () => { _allianceSubAction = "boot"; showActionButtons(); },
     }));
 
-    // v5.27: Coordinate a vote — pushes a vote plan to all other members.
-    // Disabled if the player is alone in the alliance (nobody to coordinate
-    // with) or the camp pool has no valid vote target.
-    const canCoordinate = alliance.memberIds.length >= 2 &&
-      tribePool.some(c => c.id !== player.id);
-    grid.appendChild(buildAllianceActionButton({
-      label: "Push a vote plan",
-      detail: "Pick a name and rally the alliance behind it. Some members will commit, some will hesitate, some may leak.",
-      disabled: !canCoordinate,
-      onClick: () => { _allianceSubAction = "vote"; showActionButtons(); },
-    }));
-
-    // v5.28: Read alliance preferences — asks every other member where
-    // their head is at on the next vote. No target picker; resolves
-    // immediately. Disabled if the player is alone.
-    const canRead = alliance.memberIds.length >= 2;
-    grid.appendChild(buildAllianceActionButton({
-      label: "Get a read on the alliance",
-      detail: "Ask everyone where their head's at. Some will be candid, some won't, and some may misdirect you.",
-      disabled: !canRead,
-      onClick: () => resolveAllianceAction("read", alliance, null),
-    }));
-
-    // Leave — always enabled (the player can always walk away).
+    // 5. Step away — exit the alliance entirely.
     grid.appendChild(buildAllianceActionButton({
       label: "Step away from this pact",
       detail: "Walk out. Members will not take it well — and the camp will read you flaky.",
@@ -1496,11 +1498,9 @@ function renderCampLifeScreen(container, state) {
   // Each row is purely informational — it shows the player what kinds of
   // tools will land here, without any clickable behavior yet. Marked with
   // a "coming soon" pill so the player isn't confused about availability.
-  // v5.28: buildAllianceShellPlannedHTML retired. All planned tools that
-  // were placeholdered in v5.25 (membership management, vote planning,
-  // preference reads) are now fully implemented in the alliance inspector.
-  // The function is preserved as a no-op shim for any orphan caller.
-  function buildAllianceShellPlannedHTML() { return ""; }
+  // v5.28: planned-tools placeholder retired. All originally-placeholdered
+  // alliance tools — overview, membership management, vote planning, and
+  // preference reads — are now fully implemented in the alliance inspector.
 
   // Helper: returns the actions in a given category that should currently
   // render (some are gated by season config — e.g. searchidol when idols are

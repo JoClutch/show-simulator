@@ -627,18 +627,24 @@ function coordinateAllianceVote(state, allianceId, coordinatorId, targetId) {
   const leakCount   = responses.filter(r => r.response === "leak").length;
   const totalAgree  = agreeCount + softCount;
 
-  // Target gets a public-suspicion bump per agreement landed (the room is
-  // tilting on them).
+  // v5.29: target's public-suspicion bump capped at +2 per coordination so
+  // a large alliance pushing a name doesn't single-handedly drive someone
+  // into voted-out territory in one camp slot. Layers normally with other
+  // suspicion sources across rounds.
   if (totalAgree >= 1) {
-    adjustSuspicion(state, targetId, totalAgree);
+    adjustSuspicion(state, targetId, Math.min(2, totalAgree));
   }
 
-  // Alliance strength shifts based on outcome distribution.
+  // Alliance strength shifts. v5.29: reject-driven aggregate fracture
+  // capped — per-reject already deducts 0.5 each (so 3 rejects = 1.5 total).
+  // The aggregate fracture-fire only ADDS another 0.5 if rejects fully
+  // dominated, ensuring a single coordination action can't exceed about
+  // 2 strength of damage in one shot.
   if (responses.length > 0) {
     if (totalAgree >= Math.ceil(responses.length / 2) && rejectCount === 0) {
       adjustAllianceStrength(alliance, +0.5);
       alliance.lastReinforcedRound = state.round ?? 0;
-    } else if (rejectCount >= 2) {
+    } else if (rejectCount >= responses.length / 2 && rejectCount >= 2) {
       adjustAllianceStrength(alliance, -0.5);
     }
   }

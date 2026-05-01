@@ -2930,61 +2930,6 @@ button:disabled {
   font-style: italic;
 }
 
-/* Planned-tools placeholder section beneath the action grid. Quiet,
-   non-interactive, informational. */
-.alliance-planned-section {
-  margin-top: 0.95rem;
-  padding-top: 0.7rem;
-  border-top: 1px dashed var(--border-dim);
-}
-.alliance-planned-header {
-  margin-bottom: 0.4rem;
-}
-.alliance-planned-eyebrow {
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-faint);
-}
-.alliance-planned-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-.alliance-planned-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: baseline;
-  gap: 0.35rem 0.6rem;
-  padding: 0.35rem 0.5rem;
-  background: var(--bg-card);
-  border: 1px dashed var(--border-dim);
-  border-radius: 4px;
-}
-.alliance-planned-label {
-  font-size: 0.85rem;
-  color: var(--text-dim);
-}
-.alliance-planned-desc {
-  grid-column: 1 / -1;
-  font-size: 0.75rem;
-  color: var(--text-faint);
-  line-height: 1.35;
-}
-.alliance-planned-pill {
-  font-size: 0.65rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-faint);
-  border: 1px solid var(--border-dim);
-  border-radius: 9999px;
-  padding: 0.1rem 0.55rem;
-  white-space: nowrap;
-}
-
 /* ── Challenge Screen ── */
 .challenge-type-label {
   text-align: center;
