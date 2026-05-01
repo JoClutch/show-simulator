@@ -301,6 +301,45 @@ function pickVoteTarget(state, voter, tribe) {
     return { contestant: c, score };
   });
 
+  // v6.2: alliance consensus pull. After per-candidate scoring, voters who
+  // are part of an alliance bias their vote toward whatever name dominates
+  // among their alliance members' preferences. Strength of the pull scales
+  // with the voter's own loyalty — disengaged members deviate, committed
+  // ones stick to the plan. Models the camp-life-into-tribal flow where
+  // alliances coordinate before walking in.
+  const consensus = getAllianceConsensus(state, voter, others);
+  if (consensus && consensus.dominantId) {
+    const voterLoyaltyAvg = getAverageVoterAllianceLoyalty(state, voter);
+    // pullStrength: 0.0 at loyalty 0, 1.0 at loyalty 10
+    const pullStrength = Math.max(0, Math.min(1, voterLoyaltyAvg / 10));
+
+    // Idol fear of the consensus target weakens the pull — even a loyal
+    // voter may waver if they think the alliance is walking into an idol play.
+    let fearDampener = 1;
+    if (typeof getIdolFear === "function") {
+      const fear = getIdolFear(state, voter.id, consensus.dominantId);
+      if      (fear >= 7) fearDampener = 0.55;
+      else if (fear >= 5) fearDampener = 0.75;
+    }
+
+    // Apply pull: the consensus target's score gets a downward push (lower
+    // score = more attractive vote target). Magnitude up to ~−5 for fully
+    // loyal voters with no fear; ~−1.5 for low-loyalty voters or high-fear.
+    const pullMagnitude = 5.0 * pullStrength * fearDampener;
+    for (const result of scored) {
+      if (result.contestant.id === consensus.dominantId) {
+        result.score -= pullMagnitude;
+        if (VOTE_DEBUG) {
+          console.log(
+            `  [CONSENSUS] ${voter.name} pulled toward ${result.contestant.name}: ` +
+            `loyalty=${voterLoyaltyAvg.toFixed(1)} pull=${pullMagnitude.toFixed(1)} ` +
+            `fearDampener=${fearDampener.toFixed(2)}`
+          );
+        }
+      }
+    }
+  }
+
   scored.sort((a, b) => a.score - b.score);
 
   if (VOTE_DEBUG) {
@@ -308,6 +347,98 @@ function pickVoteTarget(state, voter, tribe) {
   }
 
   return scored[0].contestant;
+}
+
+// v6.2: alliance-consensus helper. For a given voter, returns the dominant
+// vote target preference across their alliance(s):
+//   { dominantId, dominantWeight, counts }
+//
+// For each alliance the voter is in:
+//   • Tier weight (core 1.5 / loose 1.0 / weakened 0.5) scales each member's
+//     contribution to the consensus vote.
+//   • Each other member's preferred target is determined by their campTarget
+//     (set during camp life via individual intent or coordinated vote plan)
+//     OR, if no intent is set, computed via their natural top scoreVoteTarget
+//     pick from the eligible pool.
+//   • The contribution is scaled by that member's own loyalty to the
+//     alliance — disengaged members count less toward the plan.
+//
+// Returns null if the voter is in no alliances. Self-preferences don't
+// count — the voter's own pick isn't part of "consensus".
+function getAllianceConsensus(state, voter, eligibleCandidates) {
+  if (typeof getAlliancesForMember !== "function") return null;
+  const alliances = getAlliancesForMember(state, voter.id);
+  if (!alliances || alliances.length === 0) return null;
+
+  const counts = {};
+
+  for (const a of alliances) {
+    if (a.status === "dissolved") continue;
+    const tier = a.tier ?? (a.strength >= 7 ? "core" : a.strength >= 4 ? "loose" : "weakened");
+    const tierWeight = tier === "core" ? 1.5 : tier === "loose" ? 1.0 : 0.5;
+
+    for (const mid of a.memberIds) {
+      if (mid === voter.id) continue;
+
+      const member = (typeof findContestant === "function")
+        ? findContestant(state, mid) : null;
+      if (!member) continue;
+
+      // Member's preferred target: campTarget if set, else natural top pick.
+      let preferredId = null;
+      if (typeof getCampTargetForContestant === "function") {
+        const intent = getCampTargetForContestant(state, mid);
+        if (intent && intent.targetId) preferredId = intent.targetId;
+      }
+      if (!preferredId) {
+        const memberCandidates = eligibleCandidates.filter(c => c.id !== mid);
+        if (memberCandidates.length === 0) continue;
+        let bestScore = Infinity, bestId = null;
+        for (const c of memberCandidates) {
+          const s = scoreVoteTarget(state, member, c);
+          if (s < bestScore) { bestScore = s; bestId = c.id; }
+        }
+        preferredId = bestId;
+      }
+      if (!preferredId) continue;
+
+      // Member's contribution scales with their own loyalty in this alliance.
+      let memberLoyalty = 5;
+      if (typeof getAllianceLoyalty === "function") {
+        memberLoyalty = getAllianceLoyalty(state, a.id, mid);
+      }
+      const confidence = Math.max(0.3, memberLoyalty / 10);
+
+      counts[preferredId] = (counts[preferredId] ?? 0) + tierWeight * confidence;
+    }
+  }
+
+  let dominantId = null, dominantWeight = 0;
+  for (const id of Object.keys(counts)) {
+    if (counts[id] > dominantWeight) {
+      dominantWeight = counts[id];
+      dominantId = id;
+    }
+  }
+  if (!dominantId) return null;
+
+  return { dominantId, dominantWeight, counts };
+}
+
+// Helper: averages a voter's loyalty across all alliances they're in.
+// Returns 5 (neutral) if they're in none.
+function getAverageVoterAllianceLoyalty(state, voter) {
+  if (typeof getAlliancesForMember !== "function" ||
+      typeof getAllianceLoyalty   !== "function") return 5;
+  const alliances = getAlliancesForMember(state, voter.id);
+  if (!alliances || alliances.length === 0) return 5;
+  let sum = 0, n = 0;
+  for (const a of alliances) {
+    if (a.status === "dissolved") continue;
+    sum += getAllianceLoyalty(state, a.id, voter.id);
+    n++;
+  }
+  return n > 0 ? sum / n : 5;
 }
 
 // ── Top vote targets (v5.7) ─────────────────────────────────────────────────
