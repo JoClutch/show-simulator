@@ -145,13 +145,30 @@ function isIdolAvailable(idol, state) {
 
 // ── Validity (playability) ────────────────────────────────────────────────────
 
+// v8.16: hard rule — Final 5 is the LAST tribal at which any idol can be
+// played. At Final 4 and beyond, idols are unusable regardless of status.
+// Exposed as a constant so UI / dev panel / future rules can share the
+// threshold instead of redefining it.
+const IDOL_PLAY_MIN_ACTIVE = 5;
+
+// Counts living players from state without depending on main.js's getAllActive
+// (idols.js is loaded before main.js and shouldn't reach back to a global).
+function countActivePlayers(state) {
+  return state.merged
+    ? state.tribes.merged.length
+    : state.tribes.A.length + state.tribes.B.length;
+}
+
 // Returns true if this idol can be played at a Tribal Council right now.
 //
 // An idol is playable when all of the following hold:
 //   1. Its status is "held" — someone has the idol in hand.
 //   2. The game is not yet in the Final Tribal Council phase.
 //      state.finalists being non-null means FTC has started; idols expire then.
-//   3. (Optional) The specific holder matches. Pass contestantId to confirm that
+//   3. v8.16: At least IDOL_PLAY_MIN_ACTIVE (5) players still in the game.
+//      Final 5 is the last tribal at which idols may be played; at Final 4
+//      and beyond all idols are dead weight.
+//   4. (Optional) The specific holder matches. Pass contestantId to confirm that
 //      the contestant trying to play the idol is actually its holder —
 //      prevents one player from claiming another's idol.
 //
@@ -160,6 +177,7 @@ function isIdolAvailable(idol, state) {
 function isIdolPlayable(idol, state, contestantId) {
   if (idol.status !== "held") return false;
   if (state.finalists !== null) return false;   // FTC has started — too late
+  if (countActivePlayers(state) < IDOL_PLAY_MIN_ACTIVE) return false;  // Final 4 or fewer
 
   // If a specific contestant is being checked, confirm they hold it.
   if (contestantId !== undefined && idol.holder !== contestantId) return false;

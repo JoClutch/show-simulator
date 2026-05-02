@@ -325,6 +325,16 @@ function advanceRound() {
 
   const remaining = getAllActive().length;
 
+  // v8.16: Final 5 is the last tribal at which idols may be played.
+  // Once the game has crossed below the threshold (i.e., remaining < 5),
+  // mark every still-held idol as expired. The isIdolPlayable() guard
+  // already blocks play attempts beyond this point, but explicitly
+  // expiring the inventory keeps state clean (UI / dev panel / save
+  // game state all see "expired" rather than "held but unusable").
+  if (remaining < IDOL_PLAY_MIN_ACTIVE) {
+    expireHeldIdols(gameState);
+  }
+
   // End of game — final count reached: begin Final Tribal Council.
   if (remaining <= SEASON_CONFIG.finalCount) {
     startFinalTribal();
