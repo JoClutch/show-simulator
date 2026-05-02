@@ -5407,3 +5407,401 @@ select:focus {
     inset: -1rem -1rem auto -1rem;
   }
 }
+
+/* ────────────────────────────────────────────────────────────────────────
+   v8.3 — Tribal Council atmospheric layer
+   ────────────────────────────────────────────────────────────────────────
+   Builds on the v8.1 night palette (body.scene-night). All rules below
+   are gated on body.scene-night so they NEVER bleed into Camp Life or
+   other day screens. Pushes Tribal toward firelit ceremony:
+
+     • Torch glow at the top of each Tribal screen (warm radial ember)
+     • Thicker shadows + carved-amber treatment on titles
+     • Charred-wood feel on contestant vote cards
+     • Embered reveal cards with stronger danger/decisive treatment
+     • Tally board reads like a stone tablet
+     • Tie / rocks cards lean into ceremonial dread
+     • Idol reveals carry brighter torch-flame glow
+
+   Functionality untouched. Pure CSS, no animations beyond existing
+   transitions / opacity reveals.
+   ──────────────────────────────────────────────────────────────────── */
+
+/* ── Torch glow layered on top of every Tribal screen wrapper ─────────── */
+/* Sits behind the content as an absolute pseudo-element on .screen.
+   In day mode the camp screen has its own dappled overlay (v8.2);
+   here we add an ember-torch glow at the top of the Tribal screen. */
+body.scene-night .screen {
+  position: relative;
+}
+body.scene-night .screen::before {
+  content: "";
+  position: absolute;
+  inset: -2rem -2rem auto -2rem;
+  height: 360px;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse 600px 300px at 50% 0%,
+      rgba(255, 145, 50, 0.10) 0%,
+      rgba(255, 145, 50, 0)    60%),
+    radial-gradient(ellipse 400px 240px at 50% 30%,
+      rgba(244, 180, 70, 0.06) 0%,
+      transparent 70%);
+}
+body.scene-night .screen > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Tribal headers: torchlit carved titles ───────────────────────────── */
+body.scene-night h2 {
+  text-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.7),
+    0 0 14px rgba(244, 180, 70, 0.20);
+  letter-spacing: 0.02em;
+}
+body.scene-night .screen-eyebrow {
+  letter-spacing: 0.18em;
+  color: var(--text-faint);
+}
+
+/* ── Tribal meta line + immunity note ─────────────────────────────────── */
+body.scene-night .tribal-meta {
+  color: var(--text-dim);
+  letter-spacing: 0.04em;
+}
+body.scene-night .tribal-immunity-note {
+  background:
+    radial-gradient(ellipse at 5% 50%,
+      rgba(244, 180, 70, 0.10) 0%,
+      transparent 60%),
+    var(--bg-card);
+  border-color: var(--gold-dim);
+  border-left-width: 3px;
+  box-shadow:
+    var(--shadow-low),
+    inset 0 1px 0 rgba(244, 180, 70, 0.08);
+}
+body.scene-night .immunity-icon {
+  color: var(--gold);
+  text-shadow: 0 0 10px rgba(244, 180, 70, 0.55);
+}
+
+/* ── Attendees ribbon: each chip a small carved bone tag ──────────────── */
+body.scene-night .tribal-attendees-eyebrow {
+  letter-spacing: 0.14em;
+  color: var(--text-muted);
+}
+body.scene-night .tribal-attendee-chip {
+  background:
+    linear-gradient(180deg,
+      rgba(244, 180, 70, 0.04) 0%,
+      transparent 100%),
+    var(--bg-card);
+  border-color: var(--border-mid);
+  box-shadow:
+    var(--shadow-low),
+    inset 0 1px 0 rgba(244, 180, 70, 0.05);
+}
+body.scene-night .tribal-attendee-chip.tribal-attendee-self {
+  border-color: var(--gold-dim);
+  box-shadow:
+    var(--shadow-low),
+    inset 0 1px 0 rgba(244, 180, 70, 0.10),
+    0 0 10px rgba(244, 180, 70, 0.15);
+}
+body.scene-night .tribal-attendee-chip.tribal-attendee-immune {
+  border-left-width: 3px;
+  border-left-color: var(--gold);
+}
+
+/* ── Tribal reading card: carved torchlit panel ───────────────────────── */
+body.scene-night .tribal-reading-card {
+  background:
+    radial-gradient(ellipse at 100% 100%,
+      rgba(244, 145, 50, 0.06) 0%,
+      transparent 55%),
+    var(--bg-card);
+  border-color: var(--gold-dim);
+  box-shadow:
+    var(--shadow-med),
+    inset 0 1px 0 rgba(244, 180, 70, 0.06);
+}
+body.scene-night .tribal-reading-eyebrow {
+  letter-spacing: 0.14em;
+}
+body.scene-night .tribal-reading-headline {
+  color: var(--text-primary);
+  font-style: italic;
+}
+
+/* ── Vote grid contestant cards: charred wood plaques ─────────────────── */
+/* These are the cards the player picks among. Push toward ceremonial:
+   warm ember edge, deeper shadow, gold glow on selected. */
+body.scene-night .contestant-card {
+  background:
+    linear-gradient(180deg,
+      rgba(244, 180, 70, 0.03) 0%,
+      transparent 100%),
+    var(--bg-card);
+  border-color: var(--border-mid);
+  box-shadow:
+    var(--shadow-low),
+    inset 0 1px 0 rgba(244, 180, 70, 0.04);
+  transition: border-color 180ms ease, transform 100ms ease, box-shadow 200ms ease;
+}
+body.scene-night .contestant-card:hover {
+  border-color: var(--gold-dim);
+  transform: translateY(-1px);
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(244, 180, 70, 0.08),
+    0 0 16px rgba(244, 145, 50, 0.12);
+}
+body.scene-night .contestant-card.selected {
+  border-color: var(--gold);
+  background:
+    linear-gradient(180deg,
+      rgba(244, 180, 70, 0.10) 0%,
+      rgba(244, 180, 70, 0.02) 100%),
+    var(--bg-card);
+  box-shadow:
+    0 6px 18px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(244, 180, 70, 0.15),
+    0 0 24px rgba(244, 145, 50, 0.25);
+}
+body.scene-night .card-name {
+  color: var(--text-primary);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.5);
+}
+
+/* ── Tally beat (between vote cast and reveal): centered host moment ──── */
+body.scene-night .tribal-host-line-centered {
+  color: var(--gold);
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.6),
+    0 0 18px rgba(244, 180, 70, 0.20);
+}
+
+/* ── Reveal cards: parchment slips with charred edges ─────────────────── */
+body.scene-night .reveal-card {
+  background:
+    linear-gradient(180deg,
+      rgba(244, 180, 70, 0.04) 0%,
+      transparent 100%),
+    var(--bg-card);
+  border-color: var(--border-mid);
+  box-shadow:
+    var(--shadow-low),
+    inset 0 1px 0 rgba(244, 180, 70, 0.04);
+}
+body.scene-night .reveal-card.reveal-card-danger {
+  background:
+    linear-gradient(180deg,
+      rgba(184, 80, 96, 0.10) 0%,
+      transparent 100%),
+    var(--bg-card);
+  border-color: #6e3a32;
+  box-shadow:
+    var(--shadow-low),
+    0 0 14px rgba(184, 80, 96, 0.18);
+}
+body.scene-night .reveal-card.reveal-card-decisive {
+  background:
+    linear-gradient(180deg,
+      rgba(244, 180, 70, 0.16) 0%,
+      rgba(244, 180, 70, 0.03) 100%),
+    var(--bg-card);
+  border-color: var(--gold);
+  box-shadow:
+    0 6px 18px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(244, 180, 70, 0.20),
+    0 0 28px rgba(244, 145, 50, 0.30);
+}
+body.scene-night .reveal-card-name {
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.6);
+}
+body.scene-night .reveal-card.reveal-card-decisive .reveal-card-name {
+  color: var(--gold);
+  text-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.6),
+    0 0 12px rgba(244, 180, 70, 0.45);
+}
+body.scene-night .reveal-card-void-badge {
+  color: var(--text-muted);
+  letter-spacing: 0.1em;
+}
+
+/* ── Reveal status caption (First vote / Next vote) ───────────────────── */
+body.scene-night .tribal-reveal-status {
+  color: var(--gold);
+  text-shadow: 0 0 10px rgba(244, 180, 70, 0.20);
+}
+
+/* ── Decisive line ("That's enough.") ─────────────────────────────────── */
+body.scene-night .tribal-decisive-line {
+  color: var(--gold);
+  text-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.6),
+    0 0 18px rgba(244, 180, 70, 0.30);
+  font-style: italic;
+}
+
+/* ── Tally board: stone-tablet read ───────────────────────────────────── */
+body.scene-night .tally-board {
+  background:
+    linear-gradient(180deg,
+      rgba(244, 180, 70, 0.02) 0%,
+      transparent 100%),
+    var(--bg-card);
+  border: 1px solid var(--border-mid);
+  border-radius: 4px;
+  padding: 0.7rem 1rem;
+  box-shadow:
+    var(--shadow-low),
+    inset 0 1px 0 rgba(244, 180, 70, 0.04);
+}
+body.scene-night .tally-name {
+  color: var(--text-primary);
+}
+body.scene-night .tally-pips {
+  color: var(--gold);
+  text-shadow: 0 0 6px rgba(244, 180, 70, 0.25);
+}
+body.scene-night .tally-count {
+  color: var(--gold);
+}
+
+/* ── Final tally summary + farewell lines (above finish button) ───────── */
+body.scene-night .tribal-tally-summary {
+  color: var(--text-primary);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.5);
+  letter-spacing: 0.06em;
+}
+body.scene-night .tribal-farewell-line {
+  color: var(--gold);
+  text-shadow: 0 0 14px rgba(244, 180, 70, 0.20);
+  font-style: italic;
+}
+body.scene-night .tribal-finish-btn {
+  margin-top: 0.6rem;
+}
+
+/* ── Tie / revote / rocks cards: ceremonial dread ─────────────────────── */
+body.scene-night .tribal-tie-card,
+body.scene-night .tribal-rocks-card {
+  background:
+    radial-gradient(ellipse at 50% 100%,
+      rgba(244, 145, 50, 0.08) 0%,
+      transparent 60%),
+    var(--bg-card);
+  border-color: var(--gold-dim);
+  box-shadow:
+    var(--shadow-med),
+    inset 0 1px 0 rgba(244, 180, 70, 0.08);
+}
+body.scene-night .tribal-tie-card-rocks,
+body.scene-night .tribal-rocks-card {
+  background:
+    radial-gradient(ellipse at 50% 100%,
+      rgba(184, 80, 96, 0.12) 0%,
+      transparent 65%),
+    var(--bg-card);
+  border-color: #6e3a32;
+  box-shadow:
+    0 8px 28px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(184, 80, 96, 0.10);
+}
+body.scene-night .tribal-tie-icon {
+  color: var(--gold);
+  text-shadow: 0 0 18px rgba(244, 180, 70, 0.50);
+}
+body.scene-night .tribal-tie-card-rocks .tribal-tie-icon,
+body.scene-night .tribal-rocks-card    .tribal-tie-icon {
+  color: #d68078;
+  text-shadow: 0 0 18px rgba(214, 128, 120, 0.50);
+}
+body.scene-night .tribal-tie-headline {
+  color: var(--text-primary);
+}
+body.scene-night .tribal-rocks-result strong {
+  color: var(--gold);
+  text-shadow: 0 0 14px rgba(244, 180, 70, 0.35);
+}
+
+/* ── Idol prompt + reveal cards: brighter torch-flame glow ────────────── */
+body.scene-night .idol-prompt-card {
+  background:
+    radial-gradient(ellipse at 50% 0%,
+      rgba(244, 145, 50, 0.10) 0%,
+      transparent 55%),
+    var(--bg-card);
+  border: 1px solid var(--gold-dim);
+  border-radius: 5px;
+  box-shadow:
+    var(--shadow-med),
+    inset 0 1px 0 rgba(244, 180, 70, 0.08);
+}
+body.scene-night .idol-prompt-icon {
+  color: var(--gold);
+  text-shadow: 0 0 22px rgba(244, 180, 70, 0.6);
+}
+body.scene-night .idol-reveal-card {
+  background:
+    radial-gradient(ellipse at 50% 50%,
+      rgba(244, 145, 50, 0.18) 0%,
+      transparent 65%),
+    var(--bg-card);
+  border-color: var(--gold);
+  box-shadow:
+    0 8px 28px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(244, 180, 70, 0.18),
+    0 0 32px rgba(244, 145, 50, 0.25);
+}
+body.scene-night .idol-reveal-icon {
+  color: var(--gold);
+  text-shadow: 0 0 28px rgba(244, 180, 70, 0.7);
+}
+body.scene-night .idol-reveal-headline {
+  color: var(--gold);
+  text-shadow: 0 0 14px rgba(244, 180, 70, 0.30);
+}
+
+/* ── Elimination screen: torch-snuff drama ────────────────────────────── */
+/* Elimination is the moment after the eliminated walks out. Push toward
+   subdued, ceremonial — the room is darker now that one fewer torch
+   burns. Uses scene-night palette already; this just adds atmospheric
+   weight to the screen container. */
+body.scene-night #elimination-screen,
+body.scene-night .elim-card,
+body.scene-night .elimination-card {
+  background:
+    radial-gradient(ellipse at 50% 100%,
+      rgba(244, 145, 50, 0.05) 0%,
+      transparent 55%),
+    var(--bg-card);
+  border: 1px solid var(--border-mid);
+  box-shadow:
+    var(--shadow-med),
+    inset 0 1px 0 rgba(244, 180, 70, 0.05);
+}
+body.scene-night .jury-panel {
+  background:
+    radial-gradient(ellipse at 50% 0%,
+      rgba(244, 180, 70, 0.05) 0%,
+      transparent 65%),
+    var(--bg-card);
+  border-color: var(--gold-dim);
+  box-shadow:
+    var(--shadow-med),
+    inset 0 1px 0 rgba(244, 180, 70, 0.06);
+}
+
+/* ── Mobile: keep the torch overlay tasteful at narrow widths ─────────── */
+@media (max-width: 720px) {
+  body.scene-night .screen::before {
+    height: 240px;
+    inset: -1rem -1rem auto -1rem;
+  }
+}
