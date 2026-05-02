@@ -5115,3 +5115,295 @@ select:focus {
   color: #aaa;
   background: transparent;
 }
+
+/* ────────────────────────────────────────────────────────────────────────
+   v8.2 — Camp Life atmospheric layer
+   ────────────────────────────────────────────────────────────────────────
+   Builds on the v8.1 day palette to push Camp Life into a more deeply
+   "on-the-island" feel. Adds:
+
+     • Dappled palm-shadow gradient on the screen container
+     • Wood-grain texture on category cards + tribe panel
+     • Carved-amber feel on action buttons
+     • Parchment surfaces on right-column cards
+     • Journal-like feedback log entries
+
+   Everything below targets Camp Life specifically (#camp-screen scope or
+   the .camp-* classes). Other day-scene screens (challenge, swap, merge,
+   results, setup) inherit the v8.1 palette but not these additional
+   layers — they read as quieter atmospheric beats by comparison.
+
+   All effects are pure CSS (no asset files). Heavy effects avoided to
+   keep the page snappy.
+   ──────────────────────────────────────────────────────────────────── */
+
+/* ── Camp screen wrapper: dappled palm-shadow overlay ─────────────────── */
+/* Adds two soft radial spots and a faint diagonal sweep across the camp
+   screen, suggesting sunlight filtering through palm fronds. Sits behind
+   all camp UI via a fixed pseudo-element so it doesn't affect layout. */
+#camp-screen {
+  position: relative;
+}
+#camp-screen::before {
+  content: "";
+  position: absolute;
+  inset: -1.5rem -1.5rem auto -1.5rem;
+  height: 280px;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse 480px 240px at 18% 0%,
+      rgba(255, 220, 140, 0.05) 0%, transparent 70%),
+    radial-gradient(ellipse 360px 220px at 88% 12%,
+      rgba(180, 220, 160, 0.03) 0%, transparent 70%);
+}
+#camp-screen > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Tribe panel: wood-plaque feel ────────────────────────────────────── */
+/* Subtle vertical wood-grain on the panel surface + warmer carved-name
+   typography on member rows. Border becomes rope-cord. */
+.camp-relationship-panel {
+  background:
+    var(--bg-card)
+    linear-gradient(90deg,
+      rgba(0, 0, 0, 0.04) 0%,
+      transparent 4%,
+      transparent 96%,
+      rgba(0, 0, 0, 0.04) 100%);
+  border-color: var(--border-mid);
+  box-shadow:
+    var(--shadow-low),
+    inset 0 1px 0 rgba(255, 220, 170, 0.05);
+}
+.camp-tribe-panel-title {
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--gold);
+  font-size: 0.78rem;
+}
+.camp-tribe-row {
+  background: var(--bg-raised);
+  border: 1px solid var(--border-dim);
+  border-radius: 3px;
+  padding: 0.4rem 0.6rem;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+.camp-tribe-row + .camp-tribe-row {
+  margin-top: 0.25rem;
+  border-top: 1px solid var(--border-dim);   /* keep visible separation */
+}
+.camp-tribe-row-self {
+  background:
+    linear-gradient(90deg,
+      rgba(232, 179, 70, 0.08) 0%,
+      transparent 60%),
+    var(--bg-raised);
+  border-left: 3px solid var(--gold);
+}
+.camp-tribe-name {
+  color: var(--text-primary);
+  letter-spacing: 0.01em;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
+}
+
+/* ── Category cards: weathered-wood signs with sunlit-amber hover ─────── */
+.category-card {
+  background:
+    linear-gradient(180deg,
+      rgba(255, 220, 170, 0.04) 0%,
+      transparent 100%),
+    var(--bg-card);
+  border-color: var(--border-mid);
+  border-left-width: 4px;
+  border-left-color: var(--gold-dim);
+  box-shadow: var(--shadow-low),
+              inset 0 1px 0 rgba(255, 220, 170, 0.05);
+  transition: border-color 180ms ease, background 180ms ease, transform 100ms ease;
+}
+.category-card:hover {
+  background:
+    linear-gradient(180deg,
+      rgba(255, 220, 170, 0.10) 0%,
+      rgba(255, 220, 170, 0.03) 100%),
+    var(--bg-raised);
+  border-color: var(--gold-dim);
+  border-left-color: var(--gold);
+  transform: translateY(-1px);
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 220, 170, 0.10),
+    0 0 18px rgba(232, 179, 70, 0.12);
+}
+.category-card-label {
+  letter-spacing: 0.02em;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.category-card-arrow {
+  color: var(--gold-dim);
+}
+
+/* ── Action buttons: carved sunlit signs ──────────────────────────────── */
+.action-btn {
+  background:
+    linear-gradient(180deg,
+      rgba(255, 220, 170, 0.04) 0%,
+      transparent 100%),
+    var(--bg-card);
+  border-color: var(--border-mid);
+  font-family: inherit;
+  box-shadow: var(--shadow-low),
+              inset 0 1px 0 rgba(255, 220, 170, 0.04);
+  transition: border-color 150ms ease, background 150ms ease, box-shadow 200ms ease;
+}
+.action-btn:hover {
+  background:
+    linear-gradient(180deg,
+      rgba(255, 220, 170, 0.10) 0%,
+      transparent 100%),
+    var(--bg-raised);
+  border-color: var(--gold-dim);
+  box-shadow:
+    0 3px 10px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 220, 170, 0.08),
+    0 0 14px rgba(232, 179, 70, 0.10);
+}
+.action-btn-label {
+  color: var(--text-primary);
+  letter-spacing: 0.01em;
+}
+.action-btn-detail {
+  color: var(--text-dim);
+}
+
+/* ── Right-column cards: warm parchment surfaces ──────────────────────── */
+/* alliance block, role card, strategic notes — give them a consistent
+   parchment-on-wood look so the right column reads as a coordinated
+   "field journal" stack. */
+.camp-alliance-card,
+.camp-role-card,
+.strategic-notes-card,
+.target-list-panel {
+  background:
+    linear-gradient(180deg,
+      rgba(255, 220, 170, 0.03) 0%,
+      transparent 100%),
+    var(--bg-card);
+  box-shadow: var(--shadow-low),
+              inset 0 1px 0 rgba(255, 220, 170, 0.05);
+}
+
+/* ── Idol badge: warm amber gem on a wood plaque ──────────────────────── */
+.camp-idol-badge {
+  background:
+    radial-gradient(ellipse at 12% 50%,
+      rgba(232, 179, 70, 0.18) 0%,
+      transparent 60%),
+    var(--bg-card);
+  border-color: var(--gold-dim);
+  box-shadow: var(--shadow-low),
+              inset 0 1px 0 rgba(255, 220, 170, 0.08);
+}
+.camp-idol-icon {
+  color: var(--gold);
+  text-shadow: 0 0 8px rgba(244, 180, 70, 0.5);
+}
+
+/* ── Mood pill: small seashell tag in the header ──────────────────────── */
+.camp-mood-pill {
+  background:
+    linear-gradient(180deg,
+      rgba(255, 220, 170, 0.06) 0%,
+      transparent 100%),
+    var(--bg-card);
+  border-color: var(--border-mid);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 220, 170, 0.06),
+    0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+/* ── Action counter: small carved tally tag ───────────────────────────── */
+.actions-counter {
+  background:
+    linear-gradient(180deg,
+      rgba(255, 220, 170, 0.04) 0%,
+      transparent 100%),
+    var(--bg-card);
+  border-color: var(--border-mid);
+  box-shadow: inset 0 1px 0 rgba(255, 220, 170, 0.05);
+}
+
+/* ── Feedback log entries: journal pages ──────────────────────────────── */
+/* Each entry feels like a parchment slip torn off and stacked. Subtle
+   warm gradient, slight border-left amber edge, tighter line-height. */
+.feedback-entry {
+  background:
+    linear-gradient(180deg,
+      rgba(255, 220, 170, 0.04) 0%,
+      transparent 100%),
+    var(--bg-card);
+  border: 1px solid var(--border-dim);
+  border-left: 3px solid var(--gold-dim);
+  border-radius: 3px;
+  box-shadow: var(--shadow-low);
+}
+.feedback-action-tag {
+  color: var(--gold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+.feedback-text {
+  color: var(--text-dim);
+  line-height: 1.55;
+}
+
+/* ── Camp grid: gentle outer glow so the play space "lifts" off the bg ─ */
+.camp-grid {
+  position: relative;
+}
+
+/* ── End-of-camp recap: featured parchment card ───────────────────────── */
+.camp-recap-card {
+  background:
+    linear-gradient(180deg,
+      rgba(255, 220, 170, 0.06) 0%,
+      rgba(255, 220, 170, 0.01) 100%),
+    var(--bg-card);
+  border-color: var(--gold-dim);
+  box-shadow: var(--shadow-med);
+}
+.camp-recap-title {
+  color: var(--gold);
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
+}
+
+/* ── Alliance shell rows: weathered wood plaques with sunlit hover ────── */
+.alliance-shell-row {
+  background:
+    linear-gradient(180deg,
+      rgba(255, 220, 170, 0.04) 0%,
+      transparent 100%),
+    var(--bg-raised);
+}
+.alliance-shell-row-clickable:hover {
+  background:
+    linear-gradient(180deg,
+      rgba(255, 220, 170, 0.10) 0%,
+      transparent 100%),
+    var(--bg-card);
+  border-color: var(--gold-dim);
+}
+
+/* ── Mobile pass: ensure the dappled overlay doesn't crowd at narrow ──── */
+@media (max-width: 720px) {
+  #camp-screen::before {
+    height: 200px;
+    inset: -1rem -1rem auto -1rem;
+  }
+}
