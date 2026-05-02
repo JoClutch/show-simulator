@@ -26,62 +26,66 @@
 /* ──────────────────────────────────────────────────────────────────────── */
 
 /* ──────────────────────────────────────────────────────────────────────── */
-/* v8.6 — Readability correction: BrantSteele-inspired navy foundation    */
+/* v8.7 — Day/Night theme split: brighter island daytime, dark Tribal     */
 /*                                                                        */
-/* The v8.1–v8.5 brown/charcoal palette was reading as too dark and too   */
-/* muddy, especially at Tribal Council where the near-black background   */
-/* crushed text contrast. This pass shifts the foundation to a readable */
-/* dark-navy / storm-blue base (closer to BrantSteele's presentation)   */
-/* while preserving the gold/ember accents and torch atmosphere.        */
-/*                                                                       */
-/* Key shifts:                                                          */
-/*   • Day base   #1c1810 (warm brown) → #1a2538 (dark twilight ocean)  */
-/*   • Night base #0e0a07 (near black) → #131c2a (deep storm navy)      */
-/*   • Surfaces lifted ~20% so panels visibly stand out from the page   */
-/*   • Body vignette softened (0.35 → 0.18 alpha)                       */
-/*   • Noise overlay reduced (0.06 → 0.035)                             */
-/*   • Gold accent unchanged — still the focal warm note                */
+/* The v8.6 navy foundation worked for Tribal Council but kept Camp Life */
+/* and other daytime screens too dark. This pass dramatically lifts the  */
+/* day palette toward "midday on a tropical island" — sunlit storm-blue */
+/* base, lighter parchment-tinted panels, sea-glass borders. Tribal     */
+/* Council is preserved as the darker special-case (still uses the v8.6 */
+/* deep storm-navy via body.scene-night).                               */
+/*                                                                      */
+/* Result: a clear day-vs-night contrast. Day screens feel readable and */
+/* outdoors-bright; Tribal feels distinctly darker and ceremonial.      */
+/*                                                                      */
+/* Key shifts (day side only — night untouched):                        */
+/*   • Day base   #1a2538 → #2d4365 (sunlit stormy-ocean blue)          */
+/*   • Day card   #243349 → #3a5276 (parchment-tinted lifted panel)     */
+/*   • Day raised #2e3f5a → #4a6388 (raised sunlit panel)               */
+/*   • Borders shift to sea-glass / palm tones                          */
+/*   • Body inner vignette gated to night only                          */
+/*   • Day noise overlay further softened                               */
 /* ──────────────────────────────────────────────────────────────────── */
 
 :root {
-  /* ── Surfaces ─ dark twilight ocean */
-  --bg-base:      #1a2538;   /* dark navy — twilight sky over ocean */
-  --bg-card:      #243349;   /* lifted navy panel surface */
-  --bg-raised:    #2e3f5a;   /* raised navy — clear separation from card */
-  --border-dim:   #3a4d6e;   /* muted blue-gray border */
-  --border-mid:   #586d92;   /* prominent blue-gray border */
+  /* ── Surfaces ─ sunlit ocean / parchment-tinted panels */
+  --bg-base:      #2d4365;   /* sunlit storm-ocean blue */
+  --bg-card:      #3a5276;   /* lifted panel — parchment-tinted */
+  --bg-raised:    #4a6388;   /* raised panel — clear separation */
+  --border-dim:   #5b78a0;   /* sea-glass border, muted */
+  --border-mid:   #7a99c0;   /* sea-glass border, prominent */
 
-  /* ── Text ─ warm parchment, high contrast on navy */
-  --text-primary: #f0e4cc;   /* warm cream — passes contrast easily */
-  --text-dim:     #d4c8aa;   /* slightly faded */
-  --text-muted:   #a8a08a;   /* parchment muted */
-  --text-faint:   #7e7868;   /* very faded label */
+  /* ── Text ─ warm parchment, very high contrast on lifted blue */
+  --text-primary: #f6edd2;   /* sunlit cream — ~10:1 on bg-base */
+  --text-dim:     #ddd1ae;   /* faded parchment */
+  --text-muted:   #b5ae93;   /* aged parchment muted */
+  --text-faint:   #847d68;   /* dust label */
 
-  /* ── Accent ─ torchlight gold */
+  /* ── Accent ─ torchlight gold (unchanged) */
   --gold:         #e8b346;
   --gold-dim:     #c89028;
 
-  /* ── Status colors ─ readable on navy */
-  --green-bg:     #1a2a22;
-  --green-border: #3a6a4c;
-  --green-text:   #88d09a;
+  /* ── Status colors ─ readable on lifted blue */
+  --green-bg:     #1f2e26;
+  --green-border: #4a7a5a;
+  --green-text:   #9be0a8;
 
-  --red-bg:       #2a1d22;
-  --red-border:   #7a3a4a;
-  --red-text:     #e08a90;
+  --red-bg:       #2e2026;
+  --red-border:   #88425a;
+  --red-text:     #ec949c;
 
-  /* ── Shadows ─ atmospheric depth, less crushing */
-  --shadow-low:   0 1px 2px rgba(0, 0, 0, 0.30);
-  --shadow-med:   0 4px 14px rgba(0, 0, 0, 0.35),
-                  inset 0 1px 0 rgba(220, 230, 250, 0.05);
-  --shadow-high:  0 10px 30px rgba(0, 0, 0, 0.45),
-                  inset 0 1px 0 rgba(220, 230, 250, 0.07);
+  /* ── Shadows ─ daytime panels lift gently, no crushing */
+  --shadow-low:   0 1px 2px rgba(15, 25, 40, 0.25);
+  --shadow-med:   0 4px 12px rgba(15, 25, 40, 0.28),
+                  inset 0 1px 0 rgba(255, 245, 220, 0.06);
+  --shadow-high:  0 8px 24px rgba(15, 25, 40, 0.35),
+                  inset 0 1px 0 rgba(255, 245, 220, 0.08);
 
-  /* ── Atmospheric overlay ─ very subtle warm overhead light */
+  /* ── Atmospheric overlay ─ subtle sunlit warmth from overhead */
   --scene-overlay: radial-gradient(
     ellipse at 50% 0%,
-    rgba(255, 215, 140, 0.04) 0%,
-    rgba(255, 215, 140, 0)    45%
+    rgba(255, 220, 150, 0.06) 0%,
+    rgba(255, 220, 150, 0)    50%
   );
 }
 
@@ -138,17 +142,25 @@ body {
   align-items: flex-start;
   padding: 2rem 1rem;
   position: relative;
-  /* v8.1 + v8.6: subtle vignette + atmospheric color wash. The overlay token
-     shifts between scenes (warm-overhead light for day, ember-from-below at
-     night). v8.6 softens the inner vignette from 0.35 → 0.18 alpha so page
-     edges don't crush against the navy base — the BrantSteele-inspired
-     readability target benefits from a flatter, brighter overall surface. */
+  /* v8.1 + v8.6 + v8.7: scene-aware atmospheric wash. The scene overlay
+     (warm-overhead light for day, ember-from-below at night) is always
+     present; the inner vignette that darkens page edges is gated to
+     night via the .scene-night override block below — daytime screens
+     read as open and bright, nighttime Tribal carries the darkening. */
+  background-image: var(--scene-overlay);
+  background-attachment: fixed;
+}
+
+/* v8.7: night-only vignette layer. Tribal screens get the page-edge
+   darkening that creates the firepit/chamber feeling. Day screens skip
+   this entirely so Camp Life and other daytime contexts feel outdoors-
+   bright. Overrides the body background-image to add the vignette. */
+body.scene-night {
   background-image:
     var(--scene-overlay),
     radial-gradient(ellipse at 50% 50%,
-      transparent 55%,
-      rgba(0, 0, 0, 0.18) 100%);
-  background-attachment: fixed;
+      transparent 50%,
+      rgba(0, 0, 0, 0.32) 100%);
 }
 
 /* v8.1: subtle film-grain texture overlay for "humid air" — sits between
@@ -161,9 +173,17 @@ body::before {
   inset: 0;
   pointer-events: none;
   z-index: 0;
-  opacity: 0.035;            /* v8.6: was 0.06 — softened so grain reads as atmosphere, not haze */
+  /* v8.7: day reduces grain further so daytime screens feel clean and bright;
+     night keeps a touch more grain for atmosphere. The base value here is
+     the day intensity; .scene-night overrides up. */
+  opacity: 0.025;
   mix-blend-mode: overlay;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 0.95  0 0 0 0 0.85  0 0 0 0.5 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/></svg>");
+}
+
+/* v8.7: night keeps a stronger noise grain for ceremonial atmosphere */
+body.scene-night::before {
+  opacity: 0.045;
 }
 
 /* Body content sits above the noise overlay */
