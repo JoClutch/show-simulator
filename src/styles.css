@@ -3211,6 +3211,68 @@ select:focus {
   margin: 1.25rem 0;
 }
 
+/* v8.11: tribe rosters on the Challenge screen.
+   Two side-by-side cards pre-merge, one centered card post-merge.
+   Player's tribe gets a subtle gold left-stripe; player's own name is bolded. */
+.challenge-roster-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin: 1rem 0 1.25rem;
+}
+.challenge-roster-grid-single {
+  grid-template-columns: minmax(0, 360px);
+  justify-content: center;
+}
+.challenge-roster {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-dim);
+  border-radius: 5px;
+  padding: 0.75rem 0.9rem 0.85rem;
+}
+.challenge-roster-mine {
+  border-left: 3px solid var(--gold);
+  padding-left: calc(0.9rem - 2px);
+}
+.challenge-roster-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-weight: bold;
+  font-size: 1rem;
+  margin-bottom: 0.45rem;
+}
+.challenge-roster-count {
+  color: var(--text-faint);
+  font-size: 0.72rem;
+  font-weight: normal;
+  letter-spacing: 0.05em;
+}
+.challenge-roster-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.challenge-roster-item {
+  font-size: 0.88rem;
+  color: var(--text-dim);
+  padding: 0.18rem 0;
+  border-bottom: 1px dotted var(--border-dim);
+}
+.challenge-roster-item:last-child {
+  border-bottom: none;
+}
+.challenge-roster-me {
+  color: var(--text-primary);
+  font-weight: bold;
+}
+.challenge-roster-you {
+  color: var(--gold);
+  font-weight: normal;
+  font-size: 0.78rem;
+  margin-left: 0.25rem;
+}
+
 .challenge-outcome-cell {
   border-radius: 5px;
   padding: 1.1rem 1rem;

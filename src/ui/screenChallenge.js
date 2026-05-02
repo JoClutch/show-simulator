@@ -13,6 +13,35 @@ function renderChallengeScreen(container, state) {
   }
 }
 
+// ── Roster helpers (v8.11) ────────────────────────────────────────────────────
+//
+// Renders the active members of a tribe as a small named card. Eliminated
+// players are not shown because state.tribes.* only ever holds active
+// contestants (removeFromTribes prunes them at elimination). The player's
+// own tribe gets a gold left-stripe and the player's own name is bolded —
+// subtle, theme-consistent highlights only.
+function buildTribeRosterHTML(tribeLabel, members, opts = {}) {
+  const { isPlayerTribe = false, playerId = null, color, name } = opts;
+  const items = members.map(m => {
+    const isMe = playerId != null && m.id === playerId;
+    return `
+      <li class="challenge-roster-item${isMe ? " challenge-roster-me" : ""}">
+        ${escapeHtml(m.name)}${isMe ? " <span class=\"challenge-roster-you\">(you)</span>" : ""}
+      </li>
+    `;
+  }).join("");
+
+  return `
+    <div class="challenge-roster${isPlayerTribe ? " challenge-roster-mine" : ""}">
+      <div class="challenge-roster-header" style="color:${color}">
+        ${escapeHtml(name)}
+        <span class="challenge-roster-count">${members.length}</span>
+      </div>
+      <ul class="challenge-roster-list">${items}</ul>
+    </div>
+  `;
+}
+
 // ── Pre-merge: tribal immunity ────────────────────────────────────────────────
 
 function renderTribalChallengeScreen(container, state) {
@@ -40,6 +69,20 @@ function renderTribalChallengeScreen(container, state) {
     ? "Head Back to Camp →"
     : "Return to Camp →";
 
+  // Tribe rosters — current active members of each tribe.
+  const rosterA = buildTribeRosterHTML("A", state.tribes.A, {
+    name:          SEASON_CONFIG.tribeNames.A,
+    color:         SEASON_CONFIG.tribeColors.A,
+    isPlayerTribe: playerTribeLabel === "A",
+    playerId:      state.player?.id,
+  });
+  const rosterB = buildTribeRosterHTML("B", state.tribes.B, {
+    name:          SEASON_CONFIG.tribeNames.B,
+    color:         SEASON_CONFIG.tribeColors.B,
+    isPlayerTribe: playerTribeLabel === "B",
+    playerId:      state.player?.id,
+  });
+
   container.innerHTML = `
     <div class="screen">
       <p class="screen-eyebrow">Episode ${state.round} · Day ${getDay(state) + DAY_OFFSETS.challenge}</p>
@@ -48,6 +91,11 @@ function renderTribalChallengeScreen(container, state) {
 
       <div class="event-log">
         <p>${description}</p>
+      </div>
+
+      <div class="challenge-roster-grid">
+        ${rosterA}
+        ${rosterB}
       </div>
 
       <div class="challenge-outcome-grid">
@@ -100,6 +148,14 @@ function renderIndividualChallengeScreen(container, state) {
     ? "Head Back to Camp →"
     : "Return to Camp →";
 
+  // Merged-tribe roster — single card listing every active player.
+  const mergedRoster = buildTribeRosterHTML("merged", members, {
+    name:          SEASON_CONFIG.mergeTribeName,
+    color:         SEASON_CONFIG.mergeTribeColor,
+    isPlayerTribe: true,           // post-merge, the merged tribe IS the player's tribe
+    playerId:      state.player?.id,
+  });
+
   container.innerHTML = `
     <div class="screen">
       <p class="screen-eyebrow">Episode ${state.round} · Day ${getDay(state) + DAY_OFFSETS.challenge}</p>
@@ -108,6 +164,10 @@ function renderIndividualChallengeScreen(container, state) {
 
       <div class="event-log">
         <p>${description}</p>
+      </div>
+
+      <div class="challenge-roster-grid challenge-roster-grid-single">
+        ${mergedRoster}
       </div>
 
       <div class="indiv-immunity-winner">
