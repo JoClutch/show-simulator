@@ -3249,9 +3249,12 @@ select:focus {
   letter-spacing: 0.05em;
 }
 .challenge-roster-list {
+  /* v8.12: switched markup from <ul><li> to <div>s. This block kept for
+     any leftover <ul> users; harmless on a <div>. */
   list-style: none;
   margin: 0;
   padding: 0;
+  display: block;
 }
 .challenge-roster-item {
   font-size: 0.88rem;

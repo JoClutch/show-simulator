@@ -22,22 +22,54 @@ function renderChallengeScreen(container, state) {
 // subtle, theme-consistent highlights only.
 function buildTribeRosterHTML(tribeLabel, members, opts = {}) {
   const { isPlayerTribe = false, playerId = null, color, name } = opts;
+
+  // Defensive: an empty tribe still renders the card with a placeholder so
+  // it's obvious at a glance that nobody's left, rather than silently empty.
+  if (!members || members.length === 0) {
+    return `
+      <div class="challenge-roster${isPlayerTribe ? " challenge-roster-mine" : ""}">
+        <div class="challenge-roster-header" style="color:${color}">
+          ${escapeHtml(name)}
+          <span class="challenge-roster-count">0</span>
+        </div>
+        <div class="challenge-roster-list">
+          <div class="challenge-roster-item" style="color:#888;font-style:italic">
+            No active members
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // v8.12: switched from <ul><li> to <div> so the markup is immune to any
+  // user-agent or global ul/li reset (the previous attempt rendered but the
+  // names were not visible — the most reliable hypothesis was list-style/
+  // ul-padding interaction, so we sidestep it entirely). Inline color +
+  // display fallbacks ensure names appear even if styles.css is stale-cached.
   const items = members.map(m => {
     const isMe = playerId != null && m.id === playerId;
+    const meClass = isMe ? " challenge-roster-me" : "";
+    const inlineStyle = isMe
+      ? "display:block;color:#f6edd2;font-weight:bold"
+      : "display:block;color:#ddd1ae";
+    const youTag = isMe
+      ? ` <span class="challenge-roster-you" style="color:#e8b346;font-size:0.78rem">(you)</span>`
+      : "";
     return `
-      <li class="challenge-roster-item${isMe ? " challenge-roster-me" : ""}">
-        ${escapeHtml(m.name)}${isMe ? " <span class=\"challenge-roster-you\">(you)</span>" : ""}
-      </li>
+      <div class="challenge-roster-item${meClass}" style="${inlineStyle}">
+        ${escapeHtml(m.name)}${youTag}
+      </div>
     `;
   }).join("");
 
   return `
-    <div class="challenge-roster${isPlayerTribe ? " challenge-roster-mine" : ""}">
-      <div class="challenge-roster-header" style="color:${color}">
-        ${escapeHtml(name)}
-        <span class="challenge-roster-count">${members.length}</span>
+    <div class="challenge-roster${isPlayerTribe ? " challenge-roster-mine" : ""}"
+         style="background:#2c3a1f;border:1px solid #5c7038;border-radius:5px;padding:0.75rem 0.9rem">
+      <div class="challenge-roster-header" style="color:${color};font-weight:bold;font-size:1rem;margin-bottom:0.45rem;display:flex;justify-content:space-between;align-items:baseline">
+        <span>${escapeHtml(name)}</span>
+        <span class="challenge-roster-count" style="color:#847d68;font-size:0.72rem;font-weight:normal">${members.length}</span>
       </div>
-      <ul class="challenge-roster-list">${items}</ul>
+      <div class="challenge-roster-list">${items}</div>
     </div>
   `;
 }
