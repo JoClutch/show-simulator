@@ -119,13 +119,13 @@ function renderTribalChallengeScreen(container, state) {
     <div class="screen">
       <p class="screen-eyebrow">Episode ${state.round} · Day ${getDay(state) + DAY_OFFSETS.challenge}</p>
       <h2>Immunity Challenge</h2>
-      <p class="challenge-type-label">${result.name}</p>
 
       <div class="challenge-roster-grid">
         ${rosterA}
         ${rosterB}
       </div>
 
+      <p class="challenge-type-label">${result.name}</p>
       <div class="event-log">
         <p>${description}</p>
       </div>
@@ -192,12 +192,12 @@ function renderIndividualChallengeScreen(container, state) {
     <div class="screen">
       <p class="screen-eyebrow">Episode ${state.round} · Day ${getDay(state) + DAY_OFFSETS.challenge}</p>
       <h2>Individual Immunity</h2>
-      <p class="challenge-type-label">${result.name}</p>
 
       <div class="challenge-roster-grid challenge-roster-grid-single">
         ${mergedRoster}
       </div>
 
+      <p class="challenge-type-label">${result.name}</p>
       <div class="event-log">
         <p>${description}</p>
       </div>
