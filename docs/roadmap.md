@@ -71,6 +71,7 @@ Goal: Complete season with a winner.
 - [x] v2.8: Contextual episode openers, tribal openers, elimination flavor lines
 - [x] v2.8: Varied vote reveal intros, jury join messages, FTC ceremony/winner text
 - [x] v2.8: Merge screen tribe survivor count breakdown
+- [x] v9.0: Episode Recap screen — start-of-round summary with previously voted-out + current rosters; new state field `lastVotedOutPlayerId`; `tests-recap.html` runner
 - [ ] Stats: challenges won, votes received, relationships
 
 ---

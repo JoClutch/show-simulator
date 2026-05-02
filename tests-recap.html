@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Episode Recap — Tests</title>
+  <link rel="stylesheet" href="src/styles.css" />
+  <style>
+    /* Test runner UI — minimal, results-focused. */
+    body { padding: 1.5rem; max-width: 1100px; margin: 0 auto; }
+    .test-suite { margin-bottom: 2rem; }
+    .test-suite h3 {
+      font-size: 1rem;
+      letter-spacing: 0.04em;
+      margin-bottom: 0.5rem;
+      color: var(--gold);
+    }
+    .test-row {
+      padding: 0.45rem 0.7rem;
+      border-bottom: 1px dotted var(--border-dim);
+      display: flex;
+      gap: 0.6rem;
+      align-items: baseline;
+      font-size: 0.88rem;
+    }
+    .test-row[data-status="pass"] .test-tag { color: #6dd17a; }
+    .test-row[data-status="fail"] .test-tag { color: #ff7e6e; font-weight: bold; }
+    .test-tag {
+      font-family: monospace;
+      font-size: 0.78rem;
+      width: 4ch;
+      flex-shrink: 0;
+    }
+    .test-name { color: var(--text-primary); }
+    .test-detail { color: var(--text-faint); font-family: monospace; font-size: 0.78rem; }
+    .test-summary {
+      padding: 0.85rem 1.1rem;
+      border-radius: 5px;
+      margin-bottom: 1.5rem;
+      background: var(--bg-card);
+      border-left: 3px solid var(--gold);
+    }
+    .test-summary.all-pass { border-left-color: #6dd17a; }
+    .test-summary.has-fail { border-left-color: #ff7e6e; }
+    .render-frame {
+      margin-top: 0.6rem;
+      padding: 0.8rem;
+      background: var(--bg-base);
+      border: 1px dashed var(--border-dim);
+      border-radius: 4px;
+    }
+    .render-frame h4 {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-faint);
+      margin-bottom: 0.4rem;
+    }
+  </style>
+</head>
+<body class="scene-day">
+
+<h1>Episode Recap — Test Suite</h1>
+<p class="muted" style="margin-bottom:1.5rem">
+  Standalone in-browser test runner for the v9.0 Episode Recap feature.
+  Tests run on load. Results render below.
+</p>
+
+<div id="test-summary" class="test-summary">Running…</div>
+<div id="test-results"></div>
+
+<!-- Visual smoke-renders so we can eyeball the recap in two scenarios. -->
+<div class="test-suite">
+  <h3>Visual smoke renders</h3>
+  <div class="render-frame">
+    <h4>Episode 1 — no prior boot</h4>
+    <div id="smoke-episode-1"></div>
+  </div>
+  <div class="render-frame">
+    <h4>Episode 4 — pre-merge, A lost a player</h4>
+    <div id="smoke-pre-merge"></div>
+  </div>
+  <div class="render-frame">
+    <h4>Episode 9 — post-merge, single tribe</h4>
+    <div id="smoke-post-merge"></div>
+  </div>
+  <div class="render-frame">
+    <h4>Other-tribe-lost — player tribe untouched, opposite tribe shrunk</h4>
+    <div id="smoke-other-tribe"></div>
+  </div>
+</div>
+
+<!-- ── Required app scripts (same load order as index.html) ─────────────── -->
+<script src="src/util.js"></script>
+<script src="src/data/contestants.js"></script>
+<script src="src/data/season.js"></script>
+<script src="src/data/flavor.js"></script>
+<script src="src/data/schema.js"></script>
+<script src="src/data/seasonPresets.js"></script>
+<script src="src/data/savedSetups.js"></script>
+<script src="src/data/setupIo.js"></script>
+<script src="src/engine/eventLog.js"></script>
+<script src="src/engine/idols.js"></script>
+<script src="src/engine/relationships.js"></script>
+<script src="src/engine/alliances.js"></script>
+<script src="src/engine/campLife.js"></script>
+<script src="src/engine/challenge.js"></script>
+<script src="src/engine/vote.js"></script>
+<script src="src/engine/jury.js"></script>
+<script src="src/engine/finalTribal.js"></script>
+<script src="src/ui/screenSelect.js"></script>
+<script src="src/ui/screenCastEditor.js"></script>
+<script src="src/ui/screenRulesEditor.js"></script>
+<script src="src/ui/screenSavedSetups.js"></script>
+<script src="src/ui/screenTemplates.js"></script>
+<script src="src/ui/screenSwap.js"></script>
+<script src="src/ui/screenMerge.js"></script>
+<script src="src/ui/screenCampLife.js"></script>
+<script src="src/ui/screenChallenge.js"></script>
+<script src="src/ui/screenEpisodeRecap.js"></script>
+<script src="src/ui/screenTribal.js"></script>
+<script src="src/ui/screenElimination.js"></script>
+<script src="src/ui/screenFinalTribal.js"></script>
+<script src="src/ui/screenResults.js"></script>
+<!-- Note: main.js NOT loaded — it auto-boots a real game on DOMContentLoaded.
+     We construct synthetic gameState objects in each test instead. -->
+
+<script>
+// ─── Tiny test harness ──────────────────────────────────────────────────────
+const TESTS = [];
+function test(suite, name, fn) { TESTS.push({ suite, name, fn }); }
+function assert(cond, msg) {
+  if (!cond) throw new Error(msg || "assertion failed");
+}
+function assertEqual(actual, expected, msg) {
+  if (actual !== expected) {
+    throw new Error(`${msg || "assertEqual"} — expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+  }
+}
+function assertContains(haystack, needle, msg) {
+  if (!String(haystack).includes(needle)) {
+    throw new Error(`${msg || "assertContains"} — expected to find "${needle}" in:\n${haystack}`);
+  }
+}
+function assertNotContains(haystack, needle, msg) {
+  if (String(haystack).includes(needle)) {
+    throw new Error(`${msg || "assertNotContains"} — found unexpected "${needle}"`);
+  }
+}
+
+// ─── Re-implement small main.js helpers (we don't load main.js to avoid
+//     its DOMContentLoaded boot). These mirror the live functions byte-for-byte. ─
+function getLastEliminated_test(state) {
+  if (state.lastVotedOutPlayerId) {
+    const c = state.eliminated.find(e => e.id === state.lastVotedOutPlayerId);
+    if (c) return c;
+  }
+  return state.eliminated.length > 0
+    ? state.eliminated[state.eliminated.length - 1]
+    : null;
+}
+// onEpisodeRecapDone / getPlayerTribeLabel are referenced from screenEpisodeRecap.js.
+// We provide minimal stubs so the renderer doesn't throw when binding the
+// continue button or computing the player-tribe highlight.
+function getPlayerTribeLabel() {
+  if (!window.gameState) return null;
+  if (window.gameState.merged) return "merged";
+  for (const label of ["A", "B"]) {
+    if (window.gameState.tribes[label].find(c => c.id === window.gameState.player?.id)) {
+      return label;
+    }
+  }
+  return null;
+}
+function getLastEliminated(state = window.gameState) {
+  return getLastEliminated_test(state);
+}
+let _episodeRecapDoneCalls = 0;
+function onEpisodeRecapDone() { _episodeRecapDoneCalls++; }
+
+// ─── Helpers for building synthetic game state ───────────────────────────────
+function buildFreshState() {
+  const state = createSeasonState();
+  // Use a deep clone of the cast so tests don't mutate the global CONTESTANTS.
+  const cast = JSON.parse(JSON.stringify(CONTESTANTS));
+  assignTribes(cast, state);
+  return state;
+}
+
+// Simulates an elimination at Tribal Council the same way main.js's
+// onTribalDone does, minus the engine side effects we don't need here.
+function simulateElimination(state, contestant) {
+  state.eliminated.push(contestant);
+  // Remove from whichever tribe they're in.
+  if (state.merged) {
+    state.tribes.merged = state.tribes.merged.filter(c => c.id !== contestant.id);
+  } else {
+    for (const label of ["A", "B"]) {
+      state.tribes[label] = state.tribes[label].filter(c => c.id !== contestant.id);
+    }
+  }
+  state.lastVotedOutPlayerId = contestant.id;
+}
+
+// ─── Suite: state factory ────────────────────────────────────────────────────
+
+test("state", "createSeasonState() initializes lastVotedOutPlayerId to null", () => {
+  const s = createSeasonState();
+  assertEqual(s.lastVotedOutPlayerId, null,
+    "lastVotedOutPlayerId should default to null on a fresh state");
+});
+
+test("state", "createSeasonState() initializes eliminated to []", () => {
+  const s = createSeasonState();
+  assert(Array.isArray(s.eliminated), "eliminated must be an array");
+  assertEqual(s.eliminated.length, 0, "eliminated must be empty");
+});
+
+// ─── Suite: getLastEliminated helper ─────────────────────────────────────────
+
+test("getLastEliminated", "returns null on a fresh state (Episode 1)", () => {
+  const s = buildFreshState();
+  assertEqual(getLastEliminated_test(s), null);
+});
+
+test("getLastEliminated", "returns the boot after one elimination", () => {
+  const s = buildFreshState();
+  const victim = s.tribes.A[0];
+  simulateElimination(s, victim);
+  const last = getLastEliminated_test(s);
+  assert(last, "should return a contestant");
+  assertEqual(last.id, victim.id);
+  assertEqual(s.lastVotedOutPlayerId, victim.id);
+});
+
+test("getLastEliminated", "tracks the most recent boot across multiple eliminations", () => {
+  const s = buildFreshState();
+  const v1 = s.tribes.A[0];
+  const v2 = s.tribes.B[0];
+  const v3 = s.tribes.A[1];
+  simulateElimination(s, v1);
+  simulateElimination(s, v2);
+  simulateElimination(s, v3);
+  const last = getLastEliminated_test(s);
+  assertEqual(last.id, v3.id, "should return the most recent boot");
+  assertEqual(s.eliminated.length, 3);
+});
+
+test("getLastEliminated", "falls back to eliminated array tail if id is unset", () => {
+  const s = buildFreshState();
+  const victim = s.tribes.A[0];
+  simulateElimination(s, victim);
+  s.lastVotedOutPlayerId = null;   // simulate a save without the explicit field
+  const last = getLastEliminated_test(s);
+  assertEqual(last.id, victim.id, "fallback should still find the boot");
+});
+
+// ─── Suite: Recap renderer ───────────────────────────────────────────────────
+
+function freshContainer() {
+  const div = document.createElement("div");
+  return div;
+}
+
+test("recap render", "Episode 1 shows the opener copy, no boot name", () => {
+  const s = buildFreshState();
+  s.player = s.tribes.A[0];
+  window.gameState = s;
+  const container = freshContainer();
+  renderEpisodeRecapScreen(container, s);
+  const html = container.innerHTML;
+  assertContains(html, "The adventure begins", "opener headline must appear");
+  assertContains(html, "All castaways remain", "opener subhead must appear");
+  assertNotContains(html, "Previously voted out", "no boot section in Ep 1");
+});
+
+test("recap render", "post-elim shows 'Previously voted out' + boot name", () => {
+  const s = buildFreshState();
+  s.player = s.tribes.A[0];
+  const victim = s.tribes.B[0];
+  simulateElimination(s, victim);
+  s.round = 2;
+  window.gameState = s;
+  const container = freshContainer();
+  renderEpisodeRecapScreen(container, s);
+  const html = container.innerHTML;
+  assertContains(html, "Previously voted out");
+  assertContains(html, victim.name, "boot's name must appear in center card");
+  assertNotContains(html, "All castaways remain", "opener copy must not appear");
+});
+
+test("recap render", "shows BOTH tribe rosters pre-merge (other-tribe-lost case)", () => {
+  // Player on A, B lost a player at Tribal Council. Player tribe is intact.
+  const s = buildFreshState();
+  s.player = s.tribes.A[0];
+  const victim = s.tribes.B[0];
+  simulateElimination(s, victim);
+  s.round = 2;
+  window.gameState = s;
+  const container = freshContainer();
+  renderEpisodeRecapScreen(container, s);
+  const html = container.innerHTML;
+  // Both tribe headers present.
+  assertContains(html, SEASON_CONFIG.tribeNames.A);
+  assertContains(html, SEASON_CONFIG.tribeNames.B);
+  // Player's name is bolded (rendered with the "(you)" tag).
+  assertContains(html, "(you)");
+  // The eliminated player should NOT appear in either roster.
+  assertNotContains(html, `>${victim.name}<`, "boot must not appear in active rosters");
+});
+
+test("recap render", "post-merge shows single merged roster", () => {
+  const s = buildFreshState();
+  // Merge: collapse both tribes.
+  const all = [...s.tribes.A, ...s.tribes.B];
+  for (const c of all) c.tribe = "merged";
+  s.tribes.merged = all;
+  s.tribes.A = [];
+  s.tribes.B = [];
+  s.merged = true;
+  s.player = all[0];
+  // Boot one player post-merge.
+  simulateElimination(s, all[1]);
+  s.round = 6;
+  window.gameState = s;
+  const container = freshContainer();
+  renderEpisodeRecapScreen(container, s);
+  const html = container.innerHTML;
+  assertContains(html, SEASON_CONFIG.mergeTribeName, "merged tribe name must appear");
+  assertContains(html, "Previously voted out");
+  assertContains(html, all[1].name);
+  assertNotContains(html, SEASON_CONFIG.tribeNames.A,
+    "pre-merge tribe A label must NOT appear post-merge");
+  assertNotContains(html, "recap-roster-cell-a",
+    "3-column class should not be in DOM post-merge");
+});
+
+test("recap render", "uses the boot's ORIGINAL tribe color in the center card", () => {
+  // A player swapped to B and was voted out. Card must show their original
+  // tribe (A) name/color, not their tribe-at-elimination (B).
+  const s = buildFreshState();
+  s.player = s.tribes.A[0];
+  const victim = s.tribes.A[1];
+  // Simulate swap: move victim to B.
+  victim.tribe = "B";
+  s.tribes.A = s.tribes.A.filter(c => c.id !== victim.id);
+  s.tribes.B.push(victim);
+  // Now eliminate from B.
+  simulateElimination(s, victim);
+  s.round = 3;
+  window.gameState = s;
+  const container = freshContainer();
+  renderEpisodeRecapScreen(container, s);
+  const html = container.innerHTML;
+  // Victim's originalTribe is "A" (set by assignTribes); recap should show A's color.
+  assertContains(html, SEASON_CONFIG.tribeColors.A,
+    "center card should use ORIGINAL tribe color");
+});
+
+test("recap render", "Continue button is present and wired to onEpisodeRecapDone", () => {
+  const s = buildFreshState();
+  s.player = s.tribes.A[0];
+  window.gameState = s;
+  const container = document.createElement("div");
+  document.body.appendChild(container);   // focus() requires being in the DOM
+  _episodeRecapDoneCalls = 0;
+  renderEpisodeRecapScreen(container, s);
+  const btn = container.querySelector("#episode-recap-continue-btn");
+  assert(btn, "continue button must exist");
+  btn.click();
+  assertEqual(_episodeRecapDoneCalls, 1, "continue must dispatch onEpisodeRecapDone exactly once");
+  document.body.removeChild(container);
+});
+
+test("recap render", "renderer does not mutate game state (read-only)", () => {
+  const s = buildFreshState();
+  s.player = s.tribes.A[0];
+  const before = JSON.stringify({
+    round: s.round,
+    eliminated: s.eliminated.map(e => e.id),
+    lastVotedOutPlayerId: s.lastVotedOutPlayerId,
+    tribesA: s.tribes.A.map(c => c.id),
+    tribesB: s.tribes.B.map(c => c.id),
+  });
+  window.gameState = s;
+  renderEpisodeRecapScreen(freshContainer(), s);
+  const after = JSON.stringify({
+    round: s.round,
+    eliminated: s.eliminated.map(e => e.id),
+    lastVotedOutPlayerId: s.lastVotedOutPlayerId,
+    tribesA: s.tribes.A.map(c => c.id),
+    tribesB: s.tribes.B.map(c => c.id),
+  });
+  assertEqual(after, before, "render must not mutate state");
+});
+
+// ─── Suite: state set-after-elimination ──────────────────────────────────────
+
+test("flow", "lastVotedOutPlayerId tracks each successive elimination", () => {
+  const s = buildFreshState();
+  const victims = [s.tribes.A[0], s.tribes.B[0], s.tribes.A[1]];
+  for (const v of victims) {
+    simulateElimination(s, v);
+    assertEqual(s.lastVotedOutPlayerId, v.id,
+      `lastVotedOutPlayerId should equal the most recent boot (${v.name})`);
+  }
+});
+
+test("flow", "rosters reflect current remaining players after elimination", () => {
+  const s = buildFreshState();
+  const victim = s.tribes.A[0];
+  const aLenBefore = s.tribes.A.length;
+  const bLenBefore = s.tribes.B.length;
+  simulateElimination(s, victim);
+  assertEqual(s.tribes.A.length, aLenBefore - 1);
+  assertEqual(s.tribes.B.length, bLenBefore);
+  assert(!s.tribes.A.some(c => c.id === victim.id), "victim must be removed from A");
+});
+
+// ─── Run ─────────────────────────────────────────────────────────────────────
+
+window.addEventListener("DOMContentLoaded", () => {
+  const resultsEl = document.getElementById("test-results");
+  const summaryEl = document.getElementById("test-summary");
+
+  // Group tests by suite.
+  const bySuite = {};
+  for (const t of TESTS) (bySuite[t.suite] ||= []).push(t);
+
+  let passed = 0, failed = 0;
+
+  for (const suiteName of Object.keys(bySuite)) {
+    const suiteEl = document.createElement("div");
+    suiteEl.className = "test-suite";
+    suiteEl.innerHTML = `<h3>${suiteName}</h3>`;
+    for (const t of bySuite[suiteName]) {
+      const row = document.createElement("div");
+      row.className = "test-row";
+      try {
+        t.fn();
+        row.dataset.status = "pass";
+        row.innerHTML = `<span class="test-tag">PASS</span>
+                         <span class="test-name">${t.name}</span>`;
+        passed++;
+      } catch (e) {
+        row.dataset.status = "fail";
+        row.innerHTML = `<span class="test-tag">FAIL</span>
+                         <span class="test-name">${t.name}</span>
+                         <span class="test-detail">${(e && e.message) || e}</span>`;
+        failed++;
+        console.error("[test failed]", t.suite, t.name, e);
+      }
+      suiteEl.appendChild(row);
+    }
+    resultsEl.appendChild(suiteEl);
+  }
+
+  summaryEl.textContent = `${passed} passed · ${failed} failed · ${TESTS.length} total`;
+  summaryEl.classList.add(failed === 0 ? "all-pass" : "has-fail");
+
+  // ─── Visual smoke renders ──────────────────────────────────────────────────
+  // Episode 1
+  {
+    const s = buildFreshState();
+    s.player = s.tribes.A[0];
+    window.gameState = s;
+    renderEpisodeRecapScreen(document.getElementById("smoke-episode-1"), s);
+  }
+  // Pre-merge with one boot
+  {
+    const s = buildFreshState();
+    s.player = s.tribes.A[0];
+    simulateElimination(s, s.tribes.A[2]);
+    simulateElimination(s, s.tribes.B[1]);
+    simulateElimination(s, s.tribes.A[3]);
+    s.round = 4;
+    window.gameState = s;
+    renderEpisodeRecapScreen(document.getElementById("smoke-pre-merge"), s);
+  }
+  // Post-merge
+  {
+    const s = buildFreshState();
+    const all = [...s.tribes.A, ...s.tribes.B];
+    for (const c of all) c.tribe = "merged";
+    s.tribes.merged = all;
+    s.tribes.A = []; s.tribes.B = [];
+    s.merged = true;
+    s.player = all[0];
+    simulateElimination(s, all[5]);
+    s.round = 9;
+    window.gameState = s;
+    renderEpisodeRecapScreen(document.getElementById("smoke-post-merge"), s);
+  }
+  // Other-tribe-lost
+  {
+    const s = buildFreshState();
+    s.player = s.tribes.A[0];   // I'm on A
+    simulateElimination(s, s.tribes.B[0]);   // B lost a member
+    s.round = 2;
+    window.gameState = s;
+    renderEpisodeRecapScreen(document.getElementById("smoke-other-tribe"), s);
+  }
+});
+</script>
+
+</body>
+</html>

@@ -88,8 +88,12 @@ function renderEpisodeRecapScreen(container, state) {
     </div>
   `;
 
-  container.querySelector("#episode-recap-continue-btn")
-    .addEventListener("click", onEpisodeRecapDone);
+  const continueBtn = container.querySelector("#episode-recap-continue-btn");
+  continueBtn.addEventListener("click", onEpisodeRecapDone);
+  // v9.0 a11y: focus the continue button so Enter/Space advances the
+  // recap from the keyboard, matching player expectations on a screen
+  // whose only interactive element is "Continue".
+  continueBtn.focus();
 }
 
 // ── Center card builders ──────────────────────────────────────────────────────
