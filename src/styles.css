@@ -26,37 +26,41 @@
 /* ──────────────────────────────────────────────────────────────────────── */
 
 /* ──────────────────────────────────────────────────────────────────────── */
-/* v8.7 — Day/Night theme split: brighter island daytime, dark Tribal     */
+/* v8.8 — Jungle-green palette shift                                       */
 /*                                                                        */
-/* The v8.6 navy foundation worked for Tribal Council but kept Camp Life */
-/* and other daytime screens too dark. This pass dramatically lifts the  */
-/* day palette toward "midday on a tropical island" — sunlit storm-blue */
-/* base, lighter parchment-tinted panels, sea-glass borders. Tribal     */
-/* Council is preserved as the darker special-case (still uses the v8.6 */
-/* deep storm-navy via body.scene-night).                               */
+/* The v8.7 navy/sea-glass palette read as "ocean simulator" rather than */
+/* "tropical island". This pass shifts the entire foundation toward      */
+/* jungle green — moss, foliage, leaf, sun-faded canvas, weathered      */
+/* camp materials. Gold/amber accents are preserved as torch and        */
+/* highlight notes; no neon greens, no fantasy-RPG saturation.          */
 /*                                                                      */
-/* Result: a clear day-vs-night contrast. Day screens feel readable and */
-/* outdoors-bright; Tribal feels distinctly darker and ceremonial.      */
+/* Day palette: humid daytime jungle — sunlit moss base, lifted leaf-   */
+/* green panels, sage / olive borders, warm parchment text.             */
 /*                                                                      */
-/* Key shifts (day side only — night untouched):                        */
-/*   • Day base   #1a2538 → #2d4365 (sunlit stormy-ocean blue)          */
-/*   • Day card   #243349 → #3a5276 (parchment-tinted lifted panel)     */
-/*   • Day raised #2e3f5a → #4a6388 (raised sunlit panel)               */
-/*   • Borders shift to sea-glass / palm tones                          */
-/*   • Body inner vignette gated to night only                          */
-/*   • Day noise overlay further softened                               */
+/* Night palette: deep jungle-night — green-black base, charcoal-moss   */
+/* panels, ember edges. Still distinctly darker and more dangerous     */
+/* than Camp Life day screens.                                         */
+/*                                                                     */
+/* Key shifts:                                                         */
+/*   • Day base   #2d4365 (storm-ocean blue) → #2a4030 (sunlit moss)  */
+/*   • Day card   #3a5276 → #345038 (lifted leaf panel)               */
+/*   • Day raised #4a6388 → #43623f (raised sunlit foliage)            */
+/*   • Night base #131c2a (storm navy) → #131e16 (deep jungle-night)   */
+/*   • Night card #1c2638 → #1a2820 (charcoal-moss panel)              */
+/*   • Borders shift to sage/olive (day) and ember-licked moss (night) */
+/*   • Status reds shift toward warm clay so they pop on green         */
 /* ──────────────────────────────────────────────────────────────────── */
 
 :root {
-  /* ── Surfaces ─ sunlit ocean / parchment-tinted panels */
-  --bg-base:      #2d4365;   /* sunlit storm-ocean blue */
-  --bg-card:      #3a5276;   /* lifted panel — parchment-tinted */
-  --bg-raised:    #4a6388;   /* raised panel — clear separation */
-  --border-dim:   #5b78a0;   /* sea-glass border, muted */
-  --border-mid:   #7a99c0;   /* sea-glass border, prominent */
+  /* ── Surfaces ─ humid daytime jungle */
+  --bg-base:      #2a4030;   /* sunlit moss — humid jungle floor */
+  --bg-card:      #345038;   /* lifted leaf panel */
+  --bg-raised:    #43623f;   /* raised sunlit foliage */
+  --border-dim:   #53704d;   /* sage / olive border, muted */
+  --border-mid:   #7a9472;   /* sage / olive border, prominent */
 
-  /* ── Text ─ warm parchment, very high contrast on lifted blue */
-  --text-primary: #f6edd2;   /* sunlit cream — ~10:1 on bg-base */
+  /* ── Text ─ warm parchment, very high contrast on green */
+  --text-primary: #f6edd2;   /* sun-faded canvas — ~10:1 on bg-base */
   --text-dim:     #ddd1ae;   /* faded parchment */
   --text-muted:   #b5ae93;   /* aged parchment muted */
   --text-faint:   #847d68;   /* dust label */
@@ -65,26 +69,29 @@
   --gold:         #e8b346;
   --gold-dim:     #c89028;
 
-  /* ── Status colors ─ readable on lifted blue */
-  --green-bg:     #1f2e26;
-  --green-border: #4a7a5a;
-  --green-text:   #9be0a8;
+  /* ── Status colors ─ readable on green
+     Green-text shifts to a brighter MINT so it stands apart from the
+     mossy backgrounds. Red-text shifts toward warm clay/coral — the
+     complementary opposite of green, pops without clashing. */
+  --green-bg:     #1c2e22;
+  --green-border: #4f8262;
+  --green-text:   #a6e6b6;
 
-  --red-bg:       #2e2026;
-  --red-border:   #88425a;
-  --red-text:     #ec949c;
+  --red-bg:       #2e1d18;
+  --red-border:   #8a4632;
+  --red-text:     #ed9a78;
 
-  /* ── Shadows ─ daytime panels lift gently, no crushing */
-  --shadow-low:   0 1px 2px rgba(15, 25, 40, 0.25);
-  --shadow-med:   0 4px 12px rgba(15, 25, 40, 0.28),
+  /* ── Shadows ─ daytime panels lift gently, jungle-floor green tinted */
+  --shadow-low:   0 1px 2px rgba(15, 25, 18, 0.25);
+  --shadow-med:   0 4px 12px rgba(15, 25, 18, 0.28),
                   inset 0 1px 0 rgba(255, 245, 220, 0.06);
-  --shadow-high:  0 8px 24px rgba(15, 25, 40, 0.35),
+  --shadow-high:  0 8px 24px rgba(15, 25, 18, 0.35),
                   inset 0 1px 0 rgba(255, 245, 220, 0.08);
 
-  /* ── Atmospheric overlay ─ subtle sunlit warmth from overhead */
+  /* ── Atmospheric overlay ─ subtle sunlit warmth filtering through canopy */
   --scene-overlay: radial-gradient(
     ellipse at 50% 0%,
-    rgba(255, 220, 150, 0.06) 0%,
+    rgba(255, 220, 150, 0.07) 0%,
     rgba(255, 220, 150, 0)    50%
   );
 }
@@ -92,18 +99,19 @@
 /* ──────────────────────────────────────────────────────────────────────── */
 /* NIGHT scene — Tribal Council / firelit / ceremonial                    */
 /* Activated by body.scene-night (set in main.js showScreen).             */
-/* v8.6: shifted from near-black to deep storm-navy. Tribal still feels  */
-/* darker and more dangerous than Camp Life, but text remains readable. */
+/* v8.8: shifted from storm-navy to deep jungle-night green. Tribal      */
+/* still feels darker and more dangerous than Camp Life, with the same  */
+/* tropical-island foundation as day — just at firelit-night intensity. */
 /* ──────────────────────────────────────────────────────────────────── */
 body.scene-night {
-  /* ── Surfaces ─ deep storm navy with ember edges */
-  --bg-base:      #131c2a;   /* deep storm navy — measurably darker than day */
-  --bg-card:      #1c2638;   /* navy with subtle warm cast */
-  --bg-raised:    #28344c;   /* raised navy — visible panel separation */
-  --border-dim:   #2c3a55;   /* deeper navy border */
-  --border-mid:   #4a5a7a;   /* ember-licked navy edge */
+  /* ── Surfaces ─ deep jungle-night with ember edges */
+  --bg-base:      #131e16;   /* deep jungle-night — green-black */
+  --bg-card:      #1a2820;   /* charcoal-moss panel */
+  --bg-raised:    #25342a;   /* raised — visible panel separation */
+  --border-dim:   #2c3d30;   /* deeper jungle border */
+  --border-mid:   #4a5e48;   /* ember-licked moss edge */
 
-  /* ── Text ─ warmer cream against deeper navy */
+  /* ── Text ─ warmer cream against jungle-night */
   --text-primary: #f4e8cc;
   --text-dim:     #d8caa4;
   --text-muted:   #9c947c;
@@ -113,11 +121,11 @@ body.scene-night {
   --gold:         #f4c542;
   --gold-dim:     #cc9528;
 
-  /* ── Status colors ─ readable on navy */
-  --green-text:   #7eba88;
-  --red-text:     #e88078;
+  /* ── Status colors ─ readable on jungle-night */
+  --green-text:   #88c08c;
+  --red-text:     #ec8870;
 
-  /* ── Shadows ─ slightly deeper at night, but less crushing */
+  /* ── Shadows ─ slightly deeper at night, jungle-floor green tinted */
   --shadow-med:   0 4px 18px rgba(0, 0, 0, 0.45),
                   inset 0 1px 0 rgba(244, 200, 120, 0.06);
   --shadow-high:  0 12px 36px rgba(0, 0, 0, 0.55),
@@ -890,7 +898,7 @@ select:focus {
 }
 
 .camp-tribe-row-self .camp-tribe-name {
-  color: #b8c9e8;
+  color: var(--gold);   /* v8.8: was #b8c9e8 (cool blue) — now warm-amber player marker */
   font-weight: bold;
 }
 
@@ -1023,9 +1031,12 @@ select:focus {
 }
 
 .camp-alliance-chip-you {
-  background: #1f2c4a;
-  border-color: #4a6a98;
-  color: #b8c9e8;
+  /* v8.8: shifted from navy "you" marker to warm-amber so it fits the
+     jungle palette — still a distinct player marker, just no longer
+     reading as ocean-blue. */
+  background: rgba(232, 179, 70, 0.18);
+  border-color: var(--gold-dim);
+  color: var(--gold);
   font-weight: bold;
 }
 
@@ -3846,8 +3857,9 @@ select:focus {
 }
 
 .swap-cast-chip-you {
-  border-color: #4a6a98;
-  background: #1f2c4a;
+  /* v8.8: warm-amber player marker instead of navy. */
+  border-color: var(--gold-dim);
+  background: rgba(232, 179, 70, 0.18);
 }
 
 .swap-cast-name {
@@ -3855,7 +3867,7 @@ select:focus {
 }
 
 .swap-cast-chip-you .swap-cast-name {
-  color: #b8c9e8;
+  color: var(--gold);   /* v8.8: was #b8c9e8 (cool blue) — now warm-amber player marker */
   font-weight: bold;
 }
 
