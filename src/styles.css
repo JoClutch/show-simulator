@@ -25,44 +25,62 @@
 /* migrate them as needed.                                                */
 /* ──────────────────────────────────────────────────────────────────────── */
 
+/* ──────────────────────────────────────────────────────────────────────── */
+/* v8.6 — Readability correction: BrantSteele-inspired navy foundation    */
+/*                                                                        */
+/* The v8.1–v8.5 brown/charcoal palette was reading as too dark and too   */
+/* muddy, especially at Tribal Council where the near-black background   */
+/* crushed text contrast. This pass shifts the foundation to a readable */
+/* dark-navy / storm-blue base (closer to BrantSteele's presentation)   */
+/* while preserving the gold/ember accents and torch atmosphere.        */
+/*                                                                       */
+/* Key shifts:                                                          */
+/*   • Day base   #1c1810 (warm brown) → #1a2538 (dark twilight ocean)  */
+/*   • Night base #0e0a07 (near black) → #131c2a (deep storm navy)      */
+/*   • Surfaces lifted ~20% so panels visibly stand out from the page   */
+/*   • Body vignette softened (0.35 → 0.18 alpha)                       */
+/*   • Noise overlay reduced (0.06 → 0.035)                             */
+/*   • Gold accent unchanged — still the focal warm note                */
+/* ──────────────────────────────────────────────────────────────────── */
+
 :root {
-  /* ── Surfaces ─ warm-dusk wood + sand */
-  --bg-base:      #1c1810;   /* deep warm shadow under palm canopy   */
-  --bg-card:      #2a2218;   /* weathered driftwood with sun warmth  */
-  --bg-raised:    #352a1e;   /* lighter wood surface, like a shelf   */
-  --border-dim:   #4a3a28;   /* rope cord, muted */
-  --border-mid:   #685038;   /* aged wood grain  */
+  /* ── Surfaces ─ dark twilight ocean */
+  --bg-base:      #1a2538;   /* dark navy — twilight sky over ocean */
+  --bg-card:      #243349;   /* lifted navy panel surface */
+  --bg-raised:    #2e3f5a;   /* raised navy — clear separation from card */
+  --border-dim:   #3a4d6e;   /* muted blue-gray border */
+  --border-mid:   #586d92;   /* prominent blue-gray border */
 
-  /* ── Text ─ warm parchment over wood */
-  --text-primary: #efe2c8;   /* sun-bleached cream */
-  --text-dim:     #d4c4a4;   /* slightly faded */
-  --text-muted:   #998b6f;   /* parchment-faded */
-  --text-faint:   #6f6450;   /* very faded, label use */
+  /* ── Text ─ warm parchment, high contrast on navy */
+  --text-primary: #f0e4cc;   /* warm cream — passes contrast easily */
+  --text-dim:     #d4c8aa;   /* slightly faded */
+  --text-muted:   #a8a08a;   /* parchment muted */
+  --text-faint:   #7e7868;   /* very faded label */
 
-  /* ── Accent ─ sunlit amber */
-  --gold:         #e8b346;   /* warmer than the v7 gold */
-  --gold-dim:     #c89028;   /* recessed amber for borders / dim use */
+  /* ── Accent ─ torchlight gold */
+  --gold:         #e8b346;
+  --gold-dim:     #c89028;
 
-  /* ── Status colors ─ tropical green / coral red */
-  --green-bg:     #182618;   /* dim leaf shadow */
-  --green-border: #3a6a3a;   /* fern border */
-  --green-text:   #88c088;   /* light leaf */
+  /* ── Status colors ─ readable on navy */
+  --green-bg:     #1a2a22;
+  --green-border: #3a6a4c;
+  --green-text:   #88d09a;
 
-  --red-bg:       #2a1a18;   /* clay / coral dark */
-  --red-border:   #6e3a32;   /* terracotta */
-  --red-text:     #d68078;   /* warm coral */
+  --red-bg:       #2a1d22;
+  --red-border:   #7a3a4a;
+  --red-text:     #e08a90;
 
-  /* ── Shadows ─ atmospheric depth */
-  --shadow-low:   0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-med:   0 4px 14px rgba(0, 0, 0, 0.5),
-                  inset 0 1px 0 rgba(255, 220, 170, 0.04);
-  --shadow-high:  0 10px 30px rgba(0, 0, 0, 0.6),
-                  inset 0 1px 0 rgba(255, 220, 170, 0.06);
+  /* ── Shadows ─ atmospheric depth, less crushing */
+  --shadow-low:   0 1px 2px rgba(0, 0, 0, 0.30);
+  --shadow-med:   0 4px 14px rgba(0, 0, 0, 0.35),
+                  inset 0 1px 0 rgba(220, 230, 250, 0.05);
+  --shadow-high:  0 10px 30px rgba(0, 0, 0, 0.45),
+                  inset 0 1px 0 rgba(220, 230, 250, 0.07);
 
-  /* ── Atmospheric overlay ─ subtle warmth gradient applied to body */
+  /* ── Atmospheric overlay ─ very subtle warm overhead light */
   --scene-overlay: radial-gradient(
     ellipse at 50% 0%,
-    rgba(255, 215, 140, 0.06) 0%,
+    rgba(255, 215, 140, 0.04) 0%,
     rgba(255, 215, 140, 0)    45%
   );
 }
@@ -70,39 +88,41 @@
 /* ──────────────────────────────────────────────────────────────────────── */
 /* NIGHT scene — Tribal Council / firelit / ceremonial                    */
 /* Activated by body.scene-night (set in main.js showScreen).             */
-/* ──────────────────────────────────────────────────────────────────────── */
+/* v8.6: shifted from near-black to deep storm-navy. Tribal still feels  */
+/* darker and more dangerous than Camp Life, but text remains readable. */
+/* ──────────────────────────────────────────────────────────────────── */
 body.scene-night {
-  /* ── Surfaces ─ deep jungle near-black with ember warmth */
-  --bg-base:      #0e0a07;   /* near black, slight warm undertone */
-  --bg-card:      #1a120c;   /* charcoal warmed by torchlight     */
-  --bg-raised:    #221610;   /* smoldering log surface            */
-  --border-dim:   #3a2418;   /* charred wood */
-  --border-mid:   #5a3a22;   /* ember-licked edge */
+  /* ── Surfaces ─ deep storm navy with ember edges */
+  --bg-base:      #131c2a;   /* deep storm navy — measurably darker than day */
+  --bg-card:      #1c2638;   /* navy with subtle warm cast */
+  --bg-raised:    #28344c;   /* raised navy — visible panel separation */
+  --border-dim:   #2c3a55;   /* deeper navy border */
+  --border-mid:   #4a5a7a;   /* ember-licked navy edge */
 
-  /* ── Text ─ warmer cream against deeper background */
-  --text-primary: #f4e6c8;
-  --text-dim:     #d8c498;
-  --text-muted:   #8a7858;
-  --text-faint:   #5a4e38;
+  /* ── Text ─ warmer cream against deeper navy */
+  --text-primary: #f4e8cc;
+  --text-dim:     #d8caa4;
+  --text-muted:   #9c947c;
+  --text-faint:   #6c6858;
 
-  /* ── Accent ─ torch flame, brighter + more saturated */
+  /* ── Accent ─ torch flame, slightly brighter */
   --gold:         #f4c542;
   --gold-dim:     #cc9528;
 
-  /* ── Status colors ─ muted at night */
-  --green-text:   #6ea073;
-  --red-text:     #e07868;
+  /* ── Status colors ─ readable on navy */
+  --green-text:   #7eba88;
+  --red-text:     #e88078;
 
-  /* ── Shadows ─ deeper, more contrast */
-  --shadow-med:   0 4px 18px rgba(0, 0, 0, 0.7),
-                  inset 0 1px 0 rgba(244, 180, 80, 0.06);
-  --shadow-high:  0 12px 36px rgba(0, 0, 0, 0.8),
-                  inset 0 1px 0 rgba(244, 180, 80, 0.08);
+  /* ── Shadows ─ slightly deeper at night, but less crushing */
+  --shadow-med:   0 4px 18px rgba(0, 0, 0, 0.45),
+                  inset 0 1px 0 rgba(244, 200, 120, 0.06);
+  --shadow-high:  0 12px 36px rgba(0, 0, 0, 0.55),
+                  inset 0 1px 0 rgba(244, 200, 120, 0.08);
 
-  /* Ember glow rising from below — torch is at the center of the room */
+  /* Ember glow rising from below — torch at the center of the firepit */
   --scene-overlay: radial-gradient(
     ellipse at 50% 100%,
-    rgba(244, 145, 50, 0.10) 0%,
+    rgba(244, 145, 50, 0.08) 0%,
     rgba(244, 145, 50, 0)    50%
   );
 }
@@ -118,15 +138,16 @@ body {
   align-items: flex-start;
   padding: 2rem 1rem;
   position: relative;
-  /* v8.1: subtle vignette + atmospheric color wash. The overlay token shifts
-     between scenes (warm-overhead light for day, ember-from-below at night)
-     while the noise overlay below adds a humid-air grain that softens the
-     digital flatness. */
+  /* v8.1 + v8.6: subtle vignette + atmospheric color wash. The overlay token
+     shifts between scenes (warm-overhead light for day, ember-from-below at
+     night). v8.6 softens the inner vignette from 0.35 → 0.18 alpha so page
+     edges don't crush against the navy base — the BrantSteele-inspired
+     readability target benefits from a flatter, brighter overall surface. */
   background-image:
     var(--scene-overlay),
     radial-gradient(ellipse at 50% 50%,
-      transparent 50%,
-      rgba(0, 0, 0, 0.35) 100%);
+      transparent 55%,
+      rgba(0, 0, 0, 0.18) 100%);
   background-attachment: fixed;
 }
 
@@ -140,7 +161,7 @@ body::before {
   inset: 0;
   pointer-events: none;
   z-index: 0;
-  opacity: 0.06;
+  opacity: 0.035;            /* v8.6: was 0.06 — softened so grain reads as atmosphere, not haze */
   mix-blend-mode: overlay;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 0.95  0 0 0 0 0.85  0 0 0 0.5 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/></svg>");
 }
