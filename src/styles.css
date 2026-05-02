@@ -296,7 +296,7 @@ select:focus {
 }
 
 .select-instructions {
-  color: #bbb;
+  color: var(--text-dim);   /* v8.5: was #bbb */
   font-size: 0.95rem;
   max-width: 520px;
   margin: 0 auto;
@@ -356,7 +356,7 @@ select:focus {
 }
 
 .contestant-card:hover {
-  border-color: #8899cc;
+  border-color: var(--gold-dim);   /* v8.5: was #8899cc (legacy navy theme) */
 }
 
 .contestant-card.selected {
@@ -2478,11 +2478,12 @@ select:focus {
 
 .tribe-chip {
   font-size: 0.78rem;
-  background-color: #1a2540;
+  /* v8.5: was #1a2540 / #aaa (legacy navy theme) */
+  background-color: var(--bg-raised);
   border: 1px solid var(--border-dim);
   border-radius: 3px;
   padding: 0.2rem 0.55rem;
-  color: #aaa;
+  color: var(--text-dim);
 }
 
 .tribe-chip-you {
@@ -2519,7 +2520,8 @@ select:focus {
 }
 
 .action-btn:hover {
-  border-color: #8899cc;
+  /* v8.5: base hover sets the token; v8.2 layer adds the warm gradient on top. */
+  border-color: var(--gold-dim);
   background-color: var(--bg-raised);
 }
 
@@ -2559,7 +2561,7 @@ select:focus {
 }
 
 .target-chip {
-  background-color: #1a2540;
+  background-color: var(--bg-raised);   /* v8.5: was #1a2540 */
   border: 1px solid var(--border-mid);
   border-radius: 4px;
   padding: 0.4rem 0.9rem;
@@ -3521,10 +3523,11 @@ select:focus {
 }
 
 .tribal-finish-btn {
-  background-color: var(--gold);
-  color: #1a1a2e;
-  border: none;
-  border-radius: 4px;
+  /* v8.5: warm gradient + dark-warm text to match the global button style. */
+  background: linear-gradient(180deg, var(--gold) 0%, var(--gold-dim) 100%);
+  color: #1a1208;
+  border: 1px solid var(--gold-dim);
+  border-radius: 5px;
   padding: 0.7rem 1.4rem;
   font-size: 1rem;
   font-family: Georgia, serif;
@@ -3620,8 +3623,8 @@ select:focus {
 
 .phase1-end-badge {
   display: inline-block;
-  background: var(--gold);
-  color: #1a1a2e;
+  background: linear-gradient(180deg, var(--gold) 0%, var(--gold-dim) 100%);
+  color: #1a1208;            /* v8.5: deep warm to match button text */
   font-size: 0.75rem;
   font-weight: bold;
   letter-spacing: 0.1em;
@@ -4456,7 +4459,7 @@ select:focus {
 }
 
 .ftc-speech-card:hover {
-  border-color: #8899cc;
+  border-color: var(--gold-dim);   /* v8.5: was #8899cc */
   background-color: var(--bg-raised);
 }
 
@@ -4490,10 +4493,11 @@ select:focus {
 
 /* Finish button (re-used by FTC reveal phase) */
 .ftc-finish-btn {
-  background-color: var(--gold);
-  color: #1a1a2e;
-  border: none;
-  border-radius: 4px;
+  /* v8.5: matches global button + tribal-finish-btn style. */
+  background: linear-gradient(180deg, var(--gold) 0%, var(--gold-dim) 100%);
+  color: #1a1208;
+  border: 1px solid var(--gold-dim);
+  border-radius: 5px;
   padding: 0.7rem 1.4rem;
   font-size: 1rem;
   font-family: Georgia, serif;
@@ -4633,7 +4637,7 @@ select:focus {
 /* Human player's row (non-winner) */
 .results-player-row:not(.results-winner-row) {
   background-color: var(--bg-raised);
-  border-left: 3px solid #8899cc;
+  border-left: 3px solid var(--gold-dim);   /* v8.5: was #8899cc */
 }
 
 .results-place {
@@ -5998,3 +6002,233 @@ body.scene-night .jury-panel {
    reads cleanly on its own — torchlight, ember glows, dappled shadow,
    and decisive halos all remain present, just without breath / pulse.
    This is the safest default: motion is opt-in via OS preference. */
+
+/* ────────────────────────────────────────────────────────────────────────
+   v8.5 — Consistency pass
+   ────────────────────────────────────────────────────────────────────────
+   Final unification across every screen so the app reads as one cohesive
+   island experience. Targets transition screens, results, FTC speech
+   selection, jury panel, setup/select screens — anywhere that didn't
+   pick up the v8.1–v8.4 atmospheric treatment automatically.
+
+   Every rule below either:
+     1. Applies the warm-token system to a surface that was still using
+        legacy hardcoded colors, OR
+     2. Adds a subtle parchment-on-wood gradient + inset highlight to
+        unify the surface treatment with the rest of the app
+
+   Pure additive — overrides existing rules where v8.1's tokens haven't
+   propagated. No JS or markup changes.
+   ──────────────────────────────────────────────────────────────────── */
+
+/* ── Unified surface treatment for any container that uses --bg-card ── */
+/* Apply the warm gradient + inset highlight to the canonical screen
+   surface classes so transition / results / setup screens match the
+   atmospheric depth of Camp Life and Tribal. */
+.contestant-card,
+.tribe-chip,
+.target-chip,
+.target-picker {
+  box-shadow: var(--shadow-low),
+              inset 0 1px 0 rgba(255, 220, 170, 0.04);
+}
+
+/* Contestant cards on Selection / Tribal vote grids — unified subtle
+   warm gradient overlay so the cards feel like wood plaques in both
+   day and night palettes. */
+.contestant-card {
+  background:
+    linear-gradient(180deg,
+      rgba(255, 220, 170, 0.03) 0%,
+      transparent 100%),
+    var(--bg-card);
+  transition: border-color 180ms ease, transform 100ms ease, box-shadow 200ms ease;
+}
+.contestant-card:hover {
+  background:
+    linear-gradient(180deg,
+      rgba(255, 220, 170, 0.08) 0%,
+      transparent 100%),
+    var(--bg-raised);
+  transform: translateY(-1px);
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 220, 170, 0.08),
+    0 0 14px rgba(232, 179, 70, 0.12);
+}
+
+/* ── Selection screen polish ─────────────────────────────────────────── */
+/* Home/select screen heading + cast cards. The screen is the player's
+   first impression — make it feel inviting and warm, like arriving on
+   the island. */
+.select-screen {
+  position: relative;
+}
+.select-screen h1 {
+  letter-spacing: 0.02em;
+}
+.select-instructions {
+  font-style: italic;
+  letter-spacing: 0.01em;
+}
+
+/* ── Setup screens (cast editor, rules editor, templates, saved) ─────── */
+/* These screens use a lot of small panels. Unify the surface so they
+   read as parchment field-notes rather than a settings dialog. */
+.setup-section,
+.template-card,
+.saved-setup-card,
+.cast-editor-row,
+.rules-editor-section {
+  background:
+    linear-gradient(180deg,
+      rgba(255, 220, 170, 0.03) 0%,
+      transparent 100%),
+    var(--bg-card);
+  border-color: var(--border-mid);
+  box-shadow: var(--shadow-low),
+              inset 0 1px 0 rgba(255, 220, 170, 0.04);
+}
+
+/* ── Transition screens (swap, merge, challenge) ─────────────────────── */
+/* Brief story-beat screens between gameplay phases. They share the
+   day palette but should carry a slight ceremonial weight without
+   competing with Tribal Council. */
+.swap-screen,
+.merge-screen,
+.challenge-screen {
+  position: relative;
+}
+.merge-screen h1,
+.swap-screen h1 {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5),
+               0 0 14px rgba(244, 180, 70, 0.15);
+}
+
+/* Challenge outcome cells inherit the warm card surface treatment. */
+.challenge-outcome-cell {
+  background:
+    linear-gradient(180deg,
+      rgba(255, 220, 170, 0.04) 0%,
+      transparent 100%),
+    var(--bg-card);
+  border: 1px solid var(--border-mid);
+  box-shadow: var(--shadow-low),
+              inset 0 1px 0 rgba(255, 220, 170, 0.05);
+}
+
+/* ── Results screen polish ───────────────────────────────────────────── */
+/* End-of-game results — should feel like a final ceremony summary,
+   parchment-and-flame celebratory but not gaudy. */
+.results-summary,
+.results-podium,
+.results-player-row {
+  background:
+    linear-gradient(180deg,
+      rgba(255, 220, 170, 0.04) 0%,
+      transparent 100%),
+    var(--bg-card);
+  border-color: var(--border-mid);
+  box-shadow: var(--shadow-low),
+              inset 0 1px 0 rgba(255, 220, 170, 0.05);
+}
+
+/* The winner row gets the strongest treatment — featured podium */
+.results-winner-row {
+  background:
+    linear-gradient(180deg,
+      rgba(244, 180, 70, 0.10) 0%,
+      rgba(244, 180, 70, 0.02) 100%),
+    var(--bg-card);
+  border-left: 3px solid var(--gold);
+  box-shadow:
+    var(--shadow-med),
+    inset 0 1px 0 rgba(244, 180, 70, 0.12),
+    0 0 24px rgba(244, 145, 50, 0.15);
+}
+
+/* ── FTC speech card unification ─────────────────────────────────────── */
+.ftc-speech-card {
+  background:
+    linear-gradient(180deg,
+      rgba(255, 220, 170, 0.04) 0%,
+      transparent 100%),
+    var(--bg-card);
+  box-shadow: var(--shadow-low),
+              inset 0 1px 0 rgba(255, 220, 170, 0.05);
+  transition: border-color 180ms ease, background 180ms ease, box-shadow 200ms ease;
+}
+.ftc-speech-card:hover {
+  box-shadow:
+    0 3px 10px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 220, 170, 0.08),
+    0 0 14px rgba(232, 179, 70, 0.12);
+}
+
+/* ── Jury panel polish (elimination + FTC) ──────────────────────────── */
+.jury-panel {
+  background:
+    linear-gradient(180deg,
+      rgba(244, 180, 70, 0.04) 0%,
+      transparent 100%),
+    var(--bg-card);
+  border-color: var(--gold-dim);
+  box-shadow: var(--shadow-med),
+              inset 0 1px 0 rgba(244, 180, 70, 0.06);
+}
+
+/* ── Buttons across all screens: unify finish-button variants ────────── */
+/* tribal-finish-btn and ftc-finish-btn migrate to inherit the global
+   button styling fully. Reset their padding/sizing to match. */
+.tribal-finish-btn,
+.ftc-finish-btn {
+  font-family: inherit;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: filter 180ms ease, transform 100ms ease, box-shadow 180ms ease;
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 240, 200, 0.4);
+}
+.tribal-finish-btn:hover,
+.ftc-finish-btn:hover {
+  filter: brightness(1.08);
+  box-shadow:
+    0 3px 8px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 240, 200, 0.5),
+    0 0 12px rgba(244, 180, 70, 0.25);
+}
+.tribal-finish-btn:active,
+.ftc-finish-btn:active {
+  transform: translateY(1px);
+}
+
+/* ── Headings: unify h2 treatment so every screen carries the carved
+   amber feel without redefining per-screen. */
+h2 {
+  color: var(--gold);
+}
+
+/* ── Mobile pass: ensure transition screens don't crowd at narrow ────── */
+@media (max-width: 720px) {
+  .results-summary,
+  .results-podium,
+  .results-player-row,
+  .merge-screen .merge-content,
+  .swap-screen .swap-content {
+    padding: 0.85rem 0.95rem;
+  }
+}
+
+/* ── Final touch: every focusable element shows a warm focus ring ────── */
+/* Replaces any browser-default blue focus ring with our amber treatment. */
+:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--gold-dim),
+              0 0 0 4px rgba(244, 180, 70, 0.18);
+}
+button:focus-visible,
+a:focus-visible {
+  border-color: var(--gold-dim);
+}
