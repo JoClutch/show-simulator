@@ -26,66 +26,64 @@
 /* ──────────────────────────────────────────────────────────────────────── */
 
 /* ──────────────────────────────────────────────────────────────────────── */
-/* v8.8 — Jungle-green palette shift                                       */
-/*                                                                        */
-/* The v8.7 navy/sea-glass palette read as "ocean simulator" rather than */
-/* "tropical island". This pass shifts the entire foundation toward      */
-/* jungle green — moss, foliage, leaf, sun-faded canvas, weathered      */
-/* camp materials. Gold/amber accents are preserved as torch and        */
-/* highlight notes; no neon greens, no fantasy-RPG saturation.          */
+/* v8.9 — TRUE warm-jungle correction                                      */
+/*                                                                         */
+/* The v8.8 jungle palette had hex values where Blue ≥ Red                */
+/* (e.g. #2a4030 = R42/G64/B48), which made the foundation read as a      */
+/* cool sea-green / blue-green rather than a warm forest green. This     */
+/* pass rebuilds the palette with G dominant and B much lower than R    */
+/* for every surface — pure foliage, moss, olive, canopy, bark.        */
 /*                                                                      */
-/* Day palette: humid daytime jungle — sunlit moss base, lifted leaf-   */
-/* green panels, sage / olive borders, warm parchment text.             */
-/*                                                                      */
-/* Night palette: deep jungle-night — green-black base, charcoal-moss   */
-/* panels, ember edges. Still distinctly darker and more dangerous     */
-/* than Camp Life day screens.                                         */
+/* Correctness rule applied to every surface token:                    */
+/*   GREEN dominant, RED close behind, BLUE clearly lowest.            */
+/*   (e.g. #2c3a1f = R44/G58/B31 reads as warm forest green;           */
+/*    avoid #2a4030 = R42/G64/B48 which reads as sea green.)           */
 /*                                                                     */
-/* Key shifts:                                                         */
-/*   • Day base   #2d4365 (storm-ocean blue) → #2a4030 (sunlit moss)  */
-/*   • Day card   #3a5276 → #345038 (lifted leaf panel)               */
-/*   • Day raised #4a6388 → #43623f (raised sunlit foliage)            */
-/*   • Night base #131c2a (storm navy) → #131e16 (deep jungle-night)   */
-/*   • Night card #1c2638 → #1a2820 (charcoal-moss panel)              */
-/*   • Borders shift to sage/olive (day) and ember-licked moss (night) */
-/*   • Status reds shift toward warm clay so they pop on green         */
-/* ──────────────────────────────────────────────────────────────────── */
+/* Day palette: humid sunlit jungle — deep canopy base, lifted leaf   */
+/* panels, sun-bleached olive borders, warm parchment text.           */
+/*                                                                    */
+/* Night palette: deep jungle-night — green-black canopy shadow,     */
+/* charcoal-moss panels, ember edges.                                */
+/*                                                                   */
+/* Both palettes use warm overhead light + ember-from-below overlays */
+/* to add humid tropical atmosphere on top of the foliage tones.    */
+/* ──────────────────────────────────────────────────────────────── */
 
 :root {
-  /* ── Surfaces ─ humid daytime jungle */
-  --bg-base:      #2a4030;   /* sunlit moss — humid jungle floor */
-  --bg-card:      #345038;   /* lifted leaf panel */
-  --bg-raised:    #43623f;   /* raised sunlit foliage */
-  --border-dim:   #53704d;   /* sage / olive border, muted */
-  --border-mid:   #7a9472;   /* sage / olive border, prominent */
+  /* ── Surfaces ─ true warm forest jungle (G dominant, B lowest) */
+  --bg-base:      #1f2a16;   /* deep canopy shadow   — R31/G42/B22 */
+  --bg-card:      #2c3a1f;   /* lifted leaf panel    — R44/G58/B31 */
+  --bg-raised:    #3e5028;   /* sunlit foliage       — R62/G80/B40 */
+  --border-dim:   #5c7038;   /* muted olive sage     — R92/G112/B56 */
+  --border-mid:   #7d9456;   /* sun-bleached olive   — R125/G148/B86 */
 
-  /* ── Text ─ warm parchment, very high contrast on green */
-  --text-primary: #f6edd2;   /* sun-faded canvas — ~10:1 on bg-base */
+  /* ── Text ─ warm parchment, very high contrast on warm green */
+  --text-primary: #f6edd2;   /* sun-faded canvas */
   --text-dim:     #ddd1ae;   /* faded parchment */
-  --text-muted:   #b5ae93;   /* aged parchment muted */
+  --text-muted:   #b5ae93;   /* aged parchment */
   --text-faint:   #847d68;   /* dust label */
 
   /* ── Accent ─ torchlight gold (unchanged) */
   --gold:         #e8b346;
   --gold-dim:     #c89028;
 
-  /* ── Status colors ─ readable on green
-     Green-text shifts to a brighter MINT so it stands apart from the
-     mossy backgrounds. Red-text shifts toward warm clay/coral — the
-     complementary opposite of green, pops without clashing. */
-  --green-bg:     #1c2e22;
-  --green-border: #4f8262;
-  --green-text:   #a6e6b6;
+  /* ── Status colors ─ readable on warm green
+     Green-text shifts to a brighter SUN-LEAF so it stands apart from
+     the warm-moss backgrounds. Red-text shifts toward warm clay/coral
+     — the complementary opposite of green, pops without clashing. */
+  --green-bg:     #1a2415;   /* deeper canopy */
+  --green-border: #4d7035;
+  --green-text:   #b8e090;   /* fresh sun-leaf */
 
   --red-bg:       #2e1d18;
-  --red-border:   #8a4632;
-  --red-text:     #ed9a78;
+  --red-border:   #8a4632;   /* terracotta */
+  --red-text:     #ed9a78;   /* warm clay */
 
   /* ── Shadows ─ daytime panels lift gently, jungle-floor green tinted */
-  --shadow-low:   0 1px 2px rgba(15, 25, 18, 0.25);
-  --shadow-med:   0 4px 12px rgba(15, 25, 18, 0.28),
+  --shadow-low:   0 1px 2px rgba(20, 25, 12, 0.25);
+  --shadow-med:   0 4px 12px rgba(20, 25, 12, 0.28),
                   inset 0 1px 0 rgba(255, 245, 220, 0.06);
-  --shadow-high:  0 8px 24px rgba(15, 25, 18, 0.35),
+  --shadow-high:  0 8px 24px rgba(20, 25, 12, 0.35),
                   inset 0 1px 0 rgba(255, 245, 220, 0.08);
 
   /* ── Atmospheric overlay ─ subtle sunlit warmth filtering through canopy */
@@ -99,17 +97,18 @@
 /* ──────────────────────────────────────────────────────────────────────── */
 /* NIGHT scene — Tribal Council / firelit / ceremonial                    */
 /* Activated by body.scene-night (set in main.js showScreen).             */
-/* v8.8: shifted from storm-navy to deep jungle-night green. Tribal      */
-/* still feels darker and more dangerous than Camp Life, with the same  */
-/* tropical-island foundation as day — just at firelit-night intensity. */
+/* v8.9: hex values rebuilt with G dominant and B clearly lowest, so     */
+/* the night palette reads as warm jungle-night green-black rather than */
+/* a cool sea-green-black. Tribal still feels darker and more dangerous */
+/* than Camp Life, with the same warm-foliage foundation as day.        */
 /* ──────────────────────────────────────────────────────────────────── */
 body.scene-night {
-  /* ── Surfaces ─ deep jungle-night with ember edges */
-  --bg-base:      #131e16;   /* deep jungle-night — green-black */
-  --bg-card:      #1a2820;   /* charcoal-moss panel */
-  --bg-raised:    #25342a;   /* raised — visible panel separation */
-  --border-dim:   #2c3d30;   /* deeper jungle border */
-  --border-mid:   #4a5e48;   /* ember-licked moss edge */
+  /* ── Surfaces ─ deep jungle-night, warm green-black (G > R > B) */
+  --bg-base:      #121a0e;   /* deep canopy shadow at night — R18/G26/B14 */
+  --bg-card:      #1c2616;   /* charcoal-moss panel        — R28/G38/B22 */
+  --bg-raised:    #283322;   /* raised charcoal-moss        — R40/G51/B34 */
+  --border-dim:   #2e3a22;   /* deeper jungle border        — R46/G58/B34 */
+  --border-mid:   #4d5e36;   /* ember-licked olive edge     — R77/G94/B54 */
 
   /* ── Text ─ warmer cream against jungle-night */
   --text-primary: #f4e8cc;
@@ -122,7 +121,7 @@ body.scene-night {
   --gold-dim:     #cc9528;
 
   /* ── Status colors ─ readable on jungle-night */
-  --green-text:   #88c08c;
+  --green-text:   #98c890;
   --red-text:     #ec8870;
 
   /* ── Shadows ─ slightly deeper at night, jungle-floor green tinted */
