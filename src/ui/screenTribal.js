@@ -213,7 +213,7 @@ function runVoteResolution(container, state, attendees, originalVotes, protected
       resolutionKind: "decided",
       protectedIds,
     };
-    renderRevealPhase(container, state, revealOrder, result.eliminated, protectedIds);
+    renderRevealPhase(container, state, revealOrder, result.eliminated, protectedIds, originalVotes);
     return;
   }
 
@@ -356,7 +356,7 @@ function finishRevote(container, state, attendees, originalVotes, tiedIds, revot
       protectedIds,
     };
     showRevoteResolvedBeat(container, state, () => {
-      renderRevealPhase(container, state, revealOrder, result.eliminated, new Set());
+      renderRevealPhase(container, state, revealOrder, result.eliminated, new Set(), revoteBallots);
     });
     return;
   }
@@ -706,7 +706,7 @@ function showNoIdolPlayedBeat(container, state, onContinue) {
 
 // ── Phase 2: Dramatic reveal ──────────────────────────────────────────────────
 
-function renderRevealPhase(container, state, revealOrder, eliminated, protectedIds = new Set()) {
+function renderRevealPhase(container, state, revealOrder, eliminated, protectedIds = new Set(), fullVotes = null) {
   const player     = state.player;
   const revealIntro = pickFlavor(REVEAL_INTROS);
 
@@ -823,12 +823,25 @@ function renderRevealPhase(container, state, revealOrder, eliminated, protectedI
   function showFinishButton() {
     const isElimPlayer = eliminated.id === player.id;
 
-    // v6.8: final tally summary line above the finish button. Synthesizes
-    // the visible counts into a short "X to Y" summary using a pooled
-    // template, so the player gets a host-style closing read on the math.
-    const sortedCounts = Object.values(liveTally)
-      .sort((a, b) => b.count - a.count)
-      .map(entry => entry.count);
+    // v6.8: final tally summary line above the finish button.
+    // v6.9 BUG FIX: when reveal stops early, the visible liveTally only
+    // reflects the read votes, not the actual final count. If fullVotes
+    // is provided, we compute the TRUE final tally (excluding voided
+    // idol-protected votes) so the host-voice summary line accurately
+    // reports the real outcome.
+    let sortedCounts;
+    if (fullVotes && fullVotes.length > 0) {
+      const trueCounts = {};
+      for (const v of fullVotes) {
+        if (protectedIds.has(v.target.id)) continue;   // voided
+        trueCounts[v.target.id] = (trueCounts[v.target.id] ?? 0) + 1;
+      }
+      sortedCounts = Object.values(trueCounts).sort((a, b) => b - a);
+    } else {
+      sortedCounts = Object.values(liveTally)
+        .sort((a, b) => b.count - a.count)
+        .map(entry => entry.count);
+    }
     if (sortedCounts.length > 0) {
       const countsStr = sortedCounts.join(" to ");
       const template  = pickFlavor(TRIBAL_TALLY_SUMMARY_LINES);

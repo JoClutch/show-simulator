@@ -817,72 +817,118 @@ function drawRocks(state, attendees, tiedIds) {
 //      exist) all eliminated votes are revealed sequentially — the drama
 //      is the revelation of unanimity itself.
 //
-// Returns the prefix of the full vote list that should actually be shown.
-// Hidden votes are not displayed — matching the real-show behavior of
-// "we don't need to read the rest."
-function buildRevealOrder(votes, eliminatedId) {
+// v6.5/v6.9: produces the prefix of the full vote list that should be
+// shown during the dramatic reveal. Three-step pipeline, separated for
+// clarity:
+//
+//   1. orderVotesForReveal   — produces the suspense ordering (alternates
+//                              between votes for the eliminated and votes
+//                              for others, leading with an "other" vote)
+//   2. clipRevealAtLockIn    — walks the ordered stream and stops once
+//                              the result is mathematically locked in
+//                              (no remaining vote, going to anyone, can
+//                              tie or overtake the leader)
+//   3. buildRevealOrder      — the public entry point that composes the
+//                              two steps. Existing callers unchanged.
+//
+// v6.9 BUG FIX: the previous early-stop logic used remainingOthers
+// (votes left in the OTHERS queue only), which mistakenly assumed
+// remaining "for-eliminated" votes can never go to the runner-up. That
+// produced premature stops on lopsided votes — an 8-vote 7-1 ballot
+// could end at 2-1 because the OTHERS queue was empty after one B-vote
+// even though 5 unread A-votes remained. The correct math counts ALL
+// unread ballots: `leader > runnerUp + totalRemaining`.
+
+function orderVotesForReveal(votes, eliminatedId) {
   const forEliminated = shuffleArray(votes.filter(v => v.target.id === eliminatedId));
   const forOthers     = shuffleArray(votes.filter(v => v.target.id !== eliminatedId));
 
-  // Unanimous reveal — show every eliminated vote, last one held as clincher.
-  if (forOthers.length === 0) {
-    return forEliminated;
-  }
+  // Unanimous: show every eliminated vote, no ordering acrobatics.
+  if (forOthers.length === 0) return forEliminated.slice();
 
-  // Build the alternating sequence with mathematical early-stop.
+  // Alternate, leading with an "other" vote so the count swings before
+  // the eliminated's lead emerges.
   const ordered = [];
-  let visibleEliminated = 0;
-  const visibleByTarget = {};   // for runner-up tracking
-  let visibleRunnerUp   = 0;
-
-  // Use copies we can shift from. Lead with an "other" vote (suspense start).
   const elimQueue   = [...forEliminated];
   const othersQueue = [...forOthers];
-
-  // Drama floor — read at least min(3, totalVotes) votes before allowing
-  // the early-stop. Prevents anticlimactic 1-vote reveals on lopsided
-  // ballots that only contain a couple of "for eliminated" votes.
-  const dramaFloor = Math.min(3, votes.length);
-
-  // Alternate, leading with "other".
   let nextIsOther = true;
 
   while (elimQueue.length > 0 || othersQueue.length > 0) {
-    let pickedFromElim = false;
     if (nextIsOther && othersQueue.length > 0) {
-      const v = othersQueue.shift();
-      ordered.push(v);
-      const t = v.target.id;
-      visibleByTarget[t] = (visibleByTarget[t] ?? 0) + 1;
-      if (visibleByTarget[t] > visibleRunnerUp) visibleRunnerUp = visibleByTarget[t];
+      ordered.push(othersQueue.shift());
     } else if (elimQueue.length > 0) {
-      const v = elimQueue.shift();
-      ordered.push(v);
-      visibleEliminated++;
-      pickedFromElim = true;
+      ordered.push(elimQueue.shift());
     } else if (othersQueue.length > 0) {
-      const v = othersQueue.shift();
-      ordered.push(v);
-      const t = v.target.id;
-      visibleByTarget[t] = (visibleByTarget[t] ?? 0) + 1;
-      if (visibleByTarget[t] > visibleRunnerUp) visibleRunnerUp = visibleByTarget[t];
+      ordered.push(othersQueue.shift());
     }
     nextIsOther = !nextIsOther;
+  }
+  return ordered;
+}
 
-    // Mathematical decisive check. The MAX possible final count for any
-    // other candidate is their currently-visible count plus all unread
-    // "other" votes (eliminated votes go to eliminated, not runners-up).
-    // If visibleEliminated exceeds that ceiling, the result is locked.
-    const remainingOthers = othersQueue.length;
-    const maxOtherFinal   = visibleRunnerUp + remainingOthers;
-    if (pickedFromElim &&
-        visibleEliminated > maxOtherFinal &&
-        ordered.length >= dramaFloor) {
-      break;
+function clipRevealAtLockIn(orderedVotes, eliminatedId) {
+  // Drama floor: always show at least min(3, totalVotes) cards even when
+  // the math locks in earlier — prevents anticlimactic 1- or 2-card
+  // reveals on lopsided opening sequences.
+  const dramaFloor = Math.min(3, orderedVotes.length);
+
+  const visibleByTarget = {};
+  let visibleEliminated = 0;
+  let visibleRunnerUp   = 0;
+  const result = [];
+
+  for (let i = 0; i < orderedVotes.length; i++) {
+    const v = orderedVotes[i];
+    result.push(v);
+
+    if (v.target.id === eliminatedId) {
+      visibleEliminated++;
+    } else {
+      const t = v.target.id;
+      visibleByTarget[t] = (visibleByTarget[t] ?? 0) + 1;
+      if (visibleByTarget[t] > visibleRunnerUp) {
+        visibleRunnerUp = visibleByTarget[t];
+      }
     }
+
+    // ── Mathematical lock-in condition ────────────────────────────────
+    // The leader's count must STRICTLY exceed the runner-up's count plus
+    // ALL remaining unread votes. This is the only safe stop condition:
+    // even if every remaining vote went to a single non-eliminated
+    // candidate, they couldn't catch the leader.
+    //
+    // Because the eliminated is always the target with the highest TOTAL
+    // count (resolved by tallyVotes upstream), they are always the
+    // intended leader. We only stop if eliminated currently leads AND
+    // the math holds.
+    const totalRemaining = orderedVotes.length - result.length;
+    const leaderIsEliminated = visibleEliminated > visibleRunnerUp;
+    const lockedIn = leaderIsEliminated &&
+      visibleEliminated > visibleRunnerUp + totalRemaining;
+
+    if (VOTE_DEBUG) {
+      console.log(
+        `  [REVEAL ${i + 1}] target=${v.target.name} ` +
+        `elim=${visibleEliminated} runnerUp=${visibleRunnerUp} ` +
+        `remaining=${totalRemaining} lockedIn=${lockedIn}`
+      );
+    }
+
+    if (lockedIn && result.length >= dramaFloor) break;
   }
 
-  return ordered;
+  return result;
+}
+
+function buildRevealOrder(votes, eliminatedId) {
+  const ordered = orderVotesForReveal(votes, eliminatedId);
+
+  // Unanimous reveal: show every vote — the drama IS the revelation of
+  // unanimity. Don't clip even though the math would lock in early.
+  const hasOthers = ordered.some(v => v.target.id !== eliminatedId);
+  if (!hasOthers) return ordered;
+
+  return clipRevealAtLockIn(ordered, eliminatedId);
 }
 
 // ── v6.6: Post-vote fallout ─────────────────────────────────────────────────
