@@ -286,75 +286,159 @@ const INDIVIDUAL_CHALLENGES = [
   },
 ];
 
+// ── Tunable balance constants (v9.2) ─────────────────────────────────────────
+//
+// Centralized so designers can tweak feel without hunting through math.
+// All multiplied by window.DEV_CONFIG?.challengeRandomness (default 1) so
+// dev panel can dial randomness up/down at runtime without code changes.
+//
+// TRIBE_NOISE_PER_MEMBER:
+//   Per-member random noise added to the tribe sum. With members=8 and
+//   the default 2.5, max noise per tribe is 8 * 2.5 = 20 — meaningful next
+//   to a base sum around 40–60, so upsets are possible but not common.
+//   Lower this to make skill more decisive; raise it for more variance.
+//
+// INDIVIDUAL_NOISE_RANGE:
+//   The flat ±range of noise added to each individual contestant's
+//   effective rating. With the rating on a 1–10 scale, a value of 4 means
+//   noise can add up to +4 — enough that a 6-rated player can occasionally
+//   beat a 9-rated one but won't usually.
+const TRIBE_NOISE_PER_MEMBER  = 2.5;
+const INDIVIDUAL_NOISE_RANGE  = 4;
+
+// Threshold for the "close finish" tag on tribe results — relative gap
+// below which the result reads as a near-miss rather than a blowout.
+const TRIBE_CLOSE_FINISH_RATIO    = 0.15;
+const INDIVIDUAL_CLOSE_FINISH_GAP = 1.5;
+
 // Returns a plain result object — no state is mutated here.
 //
-// result.winner      "A" | "B"   — tribe that wins immunity
-// result.loser       "A" | "B"   — tribe attending Tribal Council
-// result.wasClose    boolean     — true if scores were within ~15% of each other
-// result.name        string      — challenge name for display
-// result.description string      — one-sentence flavor description
+// result.winner          "A" | "B"   — tribe that wins immunity
+// result.loser           "A" | "B"   — tribe attending Tribal Council
+// result.wasClose        boolean     — scores within TRIBE_CLOSE_FINISH_RATIO
+// result.name            string      — challenge name for display
+// result.description     string      — one-sentence flavor description
+// result.challengeType   string      — "physical" | "mental" | "endurance" | "mixed"
+// result.topPerformer    contestant  — best effective-rating contestant in winning tribe
+// result.weakestPerformer contestant — worst effective-rating contestant in losing tribe
+//
+// v9.2: scoring now goes through getEffectiveChallengePerformance, so the
+// chosen challenge's per-skill weights drive the result. A tribe stacked
+// with mental specialists will reliably win Puzzle Race; an endurance-heavy
+// tribe will reliably win Endurance Hold.
 function runChallenge(tribes) {
   const challenge = CHALLENGES[Math.floor(Math.random() * CHALLENGES.length)];
 
-  const scoreA = calcTribeScore(tribes.A);
-  const scoreB = calcTribeScore(tribes.B);
+  const evalA = evaluateTribe(tribes.A, challenge);
+  const evalB = evaluateTribe(tribes.B, challenge);
 
-  const winner   = scoreA >= scoreB ? "A" : "B";
+  const winner   = evalA.score >= evalB.score ? "A" : "B";
   const loser    = winner === "A" ? "B" : "A";
-  const gap      = Math.abs(scoreA - scoreB);
-  const wasClose = gap / Math.max(scoreA, scoreB) < 0.15;
+  const gap      = Math.abs(evalA.score - evalB.score);
+  const wasClose = gap / Math.max(evalA.score, evalB.score) < TRIBE_CLOSE_FINISH_RATIO;
+
+  const winningEval = winner === "A" ? evalA : evalB;
+  const losingEval  = winner === "A" ? evalB : evalA;
 
   return {
     winner,
     loser,
     wasClose,
-    name:        challenge.name,
-    description: challenge.description,
+    name:             challenge.name,
+    description:      challenge.description,
+    challengeType:    challenge.challengeType,
+    topPerformer:     winningEval.top,        // for narrative hooks
+    weakestPerformer: losingEval.weakest,     // for narrative hooks
   };
 }
 
-// Sums the challenge stats of all tribe members, then adds bounded random noise.
-// Noise scales with tribe size so upset probability stays consistent.
-// Strong tribes still win most of the time; weaker tribes can pull off upsets.
+// Computes a tribe's aggregate score plus picks the best/worst performer
+// for narrative use. Pure: doesn't mutate, doesn't read state.
+//
+// Aggregate is the sum of effective ratings (each 1–10) plus per-member noise.
+// Sum (not average) because larger tribes legitimately have more total work
+// done — matters when tribes get uneven through swap/elimination.
+function evaluateTribe(members, challenge) {
+  if (!members || members.length === 0) {
+    return { score: 0, ratings: [], top: null, weakest: null };
+  }
+
+  const randomnessMul = window.DEV_CONFIG?.challengeRandomness ?? 1;
+
+  // Per-member effective ratings — useful for both aggregate and narrative.
+  const ratings = members.map(c => ({
+    contestant: c,
+    rating:     getEffectiveChallengePerformance(c, challenge),
+  }));
+
+  const base  = ratings.reduce((sum, r) => sum + r.rating, 0);
+  const noise = Math.random() * members.length * TRIBE_NOISE_PER_MEMBER * randomnessMul;
+
+  // Best / worst by effective rating (skill, not roll-affected). The tribe
+  // result tells you who carried it, regardless of who got lucky on noise.
+  const sorted  = [...ratings].sort((a, b) => b.rating - a.rating);
+  const top     = sorted[0]?.contestant ?? null;
+  const weakest = sorted[sorted.length - 1]?.contestant ?? null;
+
+  return { score: base + noise, ratings, top, weakest };
+}
+
+// Legacy helper — kept as a wrapper so any caller outside engine/challenge.js
+// that imported it still works. New code should use evaluateTribe directly.
 // challengeRandomness=0 makes the stronger tribe win every time.
-function calcTribeScore(members) {
-  const base  = members.reduce((total, c) => total + c.challenge, 0);
-  const noise = Math.floor(
-    Math.random() * members.length * 2.5
-    * (window.DEV_CONFIG?.challengeRandomness ?? 1)
-  );
-  return base + noise;
+function calcTribeScore(members, challenge) {
+  return evaluateTribe(members, challenge ?? null).score;
 }
 
 // ── Individual immunity (post-merge) ─────────────────────────────────────────
 
 // Returns a plain result object — no state is mutated here.
 //
-// result.winner      contestant — the player who wins the necklace
-// result.wasClose    boolean    — true if the top two scores were within 2 pts
-// result.name        string     — challenge name for display
-// result.description string     — one-sentence flavour description
+// result.winner          contestant — the player who wins the necklace
+// result.runnerUp        contestant — second place, for narrative hooks
+// result.wasClose        boolean    — top two within INDIVIDUAL_CLOSE_FINISH_GAP
+// result.name            string     — challenge name for display
+// result.description     string     — one-sentence flavour description
+// result.challengeType   string     — "physical" | "mental" | "endurance" | "mixed"
+// result.weakestPerformer contestant — lowest effective rating, for narrative
 //
-// Each player's score = challenge stat + random noise (0–4).
-// Higher challenge stat means more likely to win; upsets are possible.
+// v9.2: each player's score uses getEffectiveChallengePerformance against
+// the chosen challenge's weights, plus noise. Higher relevant skill = more
+// likely to win; upsets remain possible via the noise term.
 function runIndividualChallenge(members) {
   const challenge = INDIVIDUAL_CHALLENGES[
     Math.floor(Math.random() * INDIVIDUAL_CHALLENGES.length)
   ];
 
-  const scored = members.map(c => ({
-    contestant: c,
-    score: c.challenge + Math.random() * 4 * (window.DEV_CONFIG?.challengeRandomness ?? 1),
-  }));
+  const randomnessMul = window.DEV_CONFIG?.challengeRandomness ?? 1;
+
+  const scored = members.map(c => {
+    const rating = getEffectiveChallengePerformance(c, challenge);
+    return {
+      contestant: c,
+      rating,
+      score:      rating + Math.random() * INDIVIDUAL_NOISE_RANGE * randomnessMul,
+    };
+  });
   scored.sort((a, b) => b.score - a.score);
 
   const winner   = scored[0].contestant;
-  const wasClose = scored.length > 1 && (scored[0].score - scored[1].score) < 1.5;
+  const runnerUp = scored.length > 1 ? scored[1].contestant : null;
+  const wasClose = scored.length > 1 &&
+                   (scored[0].score - scored[1].score) < INDIVIDUAL_CLOSE_FINISH_GAP;
+
+  // Weakest performer (by skill, not by roll) for narrative — useful for
+  // "X never had a chance at this one" flavor in future copy.
+  const sortedByRating = [...scored].sort((a, b) => a.rating - b.rating);
+  const weakestPerformer = sortedByRating[0]?.contestant ?? null;
 
   return {
     winner,
+    runnerUp,
     wasClose,
-    name:        challenge.name,
-    description: challenge.description,
+    name:             challenge.name,
+    description:      challenge.description,
+    challengeType:    challenge.challengeType,
+    weakestPerformer,
   };
 }
