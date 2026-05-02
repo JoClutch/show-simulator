@@ -14,7 +14,12 @@ function renderResultsScreen(container, state) {
   const finalists  = state.finalists  ?? [];
   const eliminated = state.eliminated ?? [];
   const allVotes   = state.finalVotes ?? [];
-  const totalPlayers = SEASON_CONFIG.tribeSize * SEASON_CONFIG.tribesCount;  // 16
+  // v8.10: derive originalCastSize from live state, not config. tribeSize ×
+  // tribesCount drifts when custom templates / cast editor change the cast.
+  // At results time everyone is either a finalist or eliminated, so:
+  //   originalCastSize = finalists + eliminated
+  // This matches the elimination screen's canonical formula (active + elim).
+  const totalPlayers = (finalists?.length ?? 0) + eliminated.length;
 
   // Tally jury votes per finalist.
   const voteCounts = {};

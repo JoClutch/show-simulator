@@ -1,18 +1,101 @@
 // screenElimination.js — shown after every Tribal Council vote
 //
 // Flavor text (elimFlavor, jury join lines) sourced from src/data/flavor.js.
+//
+// Stat correctness contract (v8.10):
+// This screen renders POST-elimination state. By the time we get here,
+// onTribalDone() has already pushed the eliminated player onto state.eliminated
+// AND removed them from their tribe array. Every displayed stat is derived
+// from buildEliminationSummary() so we never mix pre- and post-elim values.
+
+// ── Canonical summary builder ────────────────────────────────────────────────
+//
+// Single source of truth for every stat shown on the elimination screen.
+// Reads ONLY the post-elimination game state — never computes counts from
+// SEASON_CONFIG.tribeSize / tribesCount, which can drift from the actual cast
+// after custom templates, cast-editor edits, or future cast-size changes.
+//
+// Definitions (per spec):
+//   originalCastSize   = active + eliminated (always correct, derived from
+//                        live state — no config dependency)
+//   eliminatedCount    = number eliminated SO FAR including the one we're
+//                        showing right now
+//   playersRemaining   = originalCastSize - eliminatedCount = active count
+//   placement          = playersRemaining + 1 (the just-eliminated's finish)
+//
+// Worked examples:
+//   16-player season, 1st boot   → active=15, elim=1, place=16th
+//   16-player season, 5th boot   → active=11, elim=5, place=12th
+//   16-player season, merge boot → active=9,  elim=7, place=10th  (merge@10)
+//   first juror (atMerge config) → same as merge boot, juror=true, jurorIdx=1
+//   final non-juror (final 4)    → active=3,  elim=13, place=4th
+//
+// The "just-eliminated" player is the LAST entry in state.eliminated.
+function buildEliminationSummary(state) {
+  const eliminated       = state.eliminated[state.eliminated.length - 1];
+  const eliminatedCount  = state.eliminated.length;
+  const activeList       = getAllActive();           // post-elim survivors
+  const playersRemaining = activeList.length;
+  const originalCastSize = playersRemaining + eliminatedCount;
+  const placement        = playersRemaining + 1;
+
+  // Defensive sanity checks — flag any internal inconsistency loudly during
+  // development. These are invariants the rest of the screen depends on.
+  if (eliminatedCount < 1) {
+    console.error("[buildEliminationSummary] eliminated list is empty — screen called too early?");
+  }
+  if (placement !== originalCastSize - eliminatedCount + 1) {
+    console.error("[buildEliminationSummary] placement formula drift",
+      { placement, originalCastSize, eliminatedCount, playersRemaining });
+  }
+  if (eliminated && state.eliminated.findIndex(e => e.id === eliminated.id) !== eliminatedCount - 1) {
+    console.error("[buildEliminationSummary] eliminated player is not at end of list");
+  }
+
+  // Jury status — the eliminated player is added to state.jury by onTribalDone
+  // BEFORE this screen renders, so checking membership is reliable.
+  const jurorEntry = state.jury.find(j => j.id === eliminated.id) || null;
+  const isJuror    = !!jurorEntry;
+  const juryNumber = jurorEntry ? jurorEntry.juryNumber : null;
+
+  // Tribe context — pre-merge shows A/B remaining; post-merge shows merged.
+  const isMerged = !!state.merged;
+
+  // Day / episode context — derived from the current round, not stored
+  // separately. The round counter has NOT advanced yet (advanceRound runs
+  // on Continue), so state.round is still the round of the just-finished tribal.
+  const tribalDay   = getDay(state) + DAY_OFFSETS.tribal;
+  const nextEpisode = state.round + 1;
+
+  return {
+    eliminated,
+    eliminatedCount,
+    originalCastSize,
+    playersRemaining,
+    placement,
+    isJuror,
+    juryNumber,
+    isMerged,
+    tribalDay,
+    episode: state.round,
+    nextEpisode,
+  };
+}
 
 function renderEliminationScreen(container, state) {
-  const eliminated   = state.eliminated[state.eliminated.length - 1];
-  const isPlayer     = eliminated.id === state.player.id;
-  const totalPlayers = 16;
-  const placement    = totalPlayers - state.eliminated.length + 1;
-  const remaining    = totalPlayers - state.eliminated.length;
-  const tribalDay    = getDay(state) + DAY_OFFSETS.tribal;
-  const nextEpisode  = state.round + 1;
+  const summary = buildEliminationSummary(state);
+  const {
+    eliminated,
+    placement,
+    playersRemaining,
+    isMerged,
+    tribalDay,
+    nextEpisode,
+  } = summary;
+  const isPlayer = eliminated.id === state.player.id;
 
   // Tribe display — post-merge uses merged tribe name/color.
-  const isMerged   = state.merged;
+  // (isMerged comes from buildEliminationSummary above.)
   const tribeName  = isMerged
     ? SEASON_CONFIG.mergeTribeName
     : SEASON_CONFIG.tribeNames[eliminated.tribe];
@@ -62,7 +145,7 @@ function renderEliminationScreen(container, state) {
 
   container.innerHTML = `
     <div class="screen">
-      <p class="screen-eyebrow">Episode ${state.round} · Day ${tribalDay}</p>
+      <p class="screen-eyebrow">Episode ${summary.episode} · Day ${tribalDay}</p>
       <h2>${headline}</h2>
 
       <div class="elim-card">
@@ -80,11 +163,11 @@ function renderEliminationScreen(container, state) {
       <div class="elim-status">
         <div class="elim-status-row">
           <span class="elim-status-label">Players remaining</span>
-          <span class="elim-status-value">${remaining}</span>
+          <span class="elim-status-value">${playersRemaining}</span>
         </div>
         <div class="elim-status-row">
           <span class="elim-status-label">Episode</span>
-          <span class="elim-status-value">${state.round}</span>
+          <span class="elim-status-value">${summary.episode}</span>
         </div>
         <div class="elim-status-row">
           <span class="elim-status-label">Day</span>
