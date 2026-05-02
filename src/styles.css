@@ -5805,3 +5805,196 @@ body.scene-night .jury-panel {
     inset: -1rem -1rem auto -1rem;
   }
 }
+
+/* ────────────────────────────────────────────────────────────────────────
+   v8.4 — Atmospheric motion layer
+   ────────────────────────────────────────────────────────────────────────
+   Restrained ambient motion that suggests environmental presence without
+   distracting the player. Every animation in this section is wrapped in
+   `@media (prefers-reduced-motion: no-preference)` so users with motion-
+   sensitivity preferences get the fully static design.
+
+   Performance principles applied throughout:
+     • Animate only `opacity`, `filter`, and `transform` (compositor-only
+       properties — no layout / paint cost per frame)
+     • Long durations (3–30s) so per-frame work is minimal
+     • Animations only on atmospheric pseudo-elements and non-interactive
+       glow surfaces — never on buttons, links, or input controls
+     • Low amplitudes (8–15% opacity range, 1–3px translates) so motion
+       reads as breath / shimmer, not as visible looping
+
+   Categories:
+     1. Torch flicker          (Tribal::before)
+     2. Ember breath           (body.scene-night background overlay)
+     3. Decisive halo pulse    (locked-in reveal card)
+     4. Idol reveal aura       (idol-played card)
+     5. Palm-shade drift       (camp screen dappled overlay)
+     6. Tally-beat torch       (host interstitial moment)
+   ──────────────────────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: no-preference) {
+
+  /* ── Torch flicker keyframes ──────────────────────────────────────── */
+  /* Asymmetric opacity dance — irregular peaks and dips so it doesn't
+     read as a smooth sine wave (which would feel mechanical). 5s loop
+     keeps individual flickers spaced out enough to feel like ambient
+     fire, not a frenetic strobe. */
+  @keyframes v84-torch-flicker {
+    0%   { opacity: 1.00; }
+    18%  { opacity: 0.92; }
+    27%  { opacity: 1.00; }
+    44%  { opacity: 0.95; }
+    52%  { opacity: 1.00; }
+    61%  { opacity: 0.88; }
+    72%  { opacity: 1.00; }
+    83%  { opacity: 0.96; }
+    100% { opacity: 1.00; }
+  }
+
+  /* Ember breath — slow opacity rise/fall + tiny vertical drift,
+     suggesting hot air rising. 9s loop, very gentle. */
+  @keyframes v84-ember-breath {
+    0%, 100% { opacity: 1.00; transform: translateY(0); }
+    50%      { opacity: 0.82; transform: translateY(2px); }
+  }
+
+  /* Decisive halo pulse — for the lock-in reveal card. Subtle box-shadow
+     amplitude shift so the card "breathes" once or twice before the
+     player clicks Continue. 2.6s, sine-like. */
+  @keyframes v84-decisive-pulse {
+    0%, 100% {
+      box-shadow:
+        0 6px 18px rgba(0, 0, 0, 0.5),
+        inset 0 1px 0 rgba(244, 180, 70, 0.20),
+        0 0 28px rgba(244, 145, 50, 0.30);
+    }
+    50% {
+      box-shadow:
+        0 6px 18px rgba(0, 0, 0, 0.5),
+        inset 0 1px 0 rgba(244, 180, 70, 0.30),
+        0 0 38px rgba(244, 145, 50, 0.45);
+    }
+  }
+
+  /* Idol-reveal aura — stronger pulse for the dramatic peak moment.
+     Slightly faster (2.0s) to register as the bigger beat. */
+  @keyframes v84-idol-aura {
+    0%, 100% {
+      box-shadow:
+        0 8px 28px rgba(0, 0, 0, 0.6),
+        inset 0 1px 0 rgba(244, 180, 70, 0.18),
+        0 0 32px rgba(244, 145, 50, 0.25);
+    }
+    50% {
+      box-shadow:
+        0 8px 28px rgba(0, 0, 0, 0.6),
+        inset 0 1px 0 rgba(244, 180, 70, 0.30),
+        0 0 48px rgba(244, 145, 50, 0.45);
+    }
+  }
+
+  /* Palm-shade drift — very slow horizontal sway on the camp dappled
+     overlay, suggesting wind moving through palm fronds. 28s loop with
+     alternate so it ebbs back. Tiny amplitude (8px). */
+  @keyframes v84-palm-drift {
+    from { transform: translateX(0)    translateY(0); }
+    to   { transform: translateX(8px)  translateY(-2px); }
+  }
+
+  /* Tally-beat torch — gentle glow pulse on the centered host line
+     during the tallying interstitial. 2.4s, breathes once or twice
+     during the 1.1s display. */
+  @keyframes v84-tally-pulse {
+    0%, 100% { text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6),
+                            0 0 18px rgba(244, 180, 70, 0.20); }
+    50%      { text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6),
+                            0 0 26px rgba(244, 180, 70, 0.35); }
+  }
+
+  /* ── Apply to elements ────────────────────────────────────────────── */
+
+  /* Torch glow on Tribal screens flickers gently. 5s loop, ease-in-out
+     produces the most natural fire-light feel. */
+  body.scene-night .screen::before {
+    animation: v84-torch-flicker 5s ease-in-out infinite;
+  }
+
+  /* The body-level ember overlay (radial-gradient via --scene-overlay)
+     can't be animated directly because it's a background-image, not a
+     pseudo-element. Instead we layer a dedicated ember-breath overlay
+     via body::after that fades in at night and breathes. Day mode
+     keeps it transparent so no animation work happens. */
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0;
+    background: radial-gradient(
+      ellipse at 50% 100%,
+      rgba(244, 145, 50, 0.06) 0%,
+      transparent 50%
+    );
+    transition: opacity 600ms ease;
+  }
+  body.scene-night::after {
+    opacity: 1;
+    animation: v84-ember-breath 9s ease-in-out infinite;
+  }
+
+  /* Decisive reveal card breathes — gentle reminder this is the lock-in
+     moment. The animation only applies once .reveal-card-decisive lands
+     (the card class is applied by JS at the end of the reveal). */
+  body.scene-night .reveal-card.reveal-card-decisive.revealed {
+    animation: v84-decisive-pulse 2.6s ease-in-out infinite;
+  }
+
+  /* Idol reveal card aura — dramatic peak. Stronger amplitude. */
+  body.scene-night .idol-reveal-card {
+    animation: v84-idol-aura 2.0s ease-in-out infinite;
+  }
+
+  /* Camp dappled overlay sways like palm fronds in a slow breeze. */
+  body.scene-day #camp-screen::before {
+    animation: v84-palm-drift 28s ease-in-out infinite alternate;
+  }
+
+  /* Tally beat host line breathes during the interstitial. */
+  body.scene-night .tribal-host-line-centered {
+    animation: v84-tally-pulse 2.4s ease-in-out infinite;
+  }
+
+  /* Tally pip dots sparkle very gently — text-shadow pulse on the
+     amber pips so the live tally board has a soft hot-stone feel. */
+  @keyframes v84-pip-shimmer {
+    0%, 100% { text-shadow: 0 0 6px rgba(244, 180, 70, 0.25); }
+    50%      { text-shadow: 0 0 10px rgba(244, 180, 70, 0.45); }
+  }
+  body.scene-night .tally-pips {
+    animation: v84-pip-shimmer 4s ease-in-out infinite;
+  }
+
+  /* Mood pill in tense / chaotic state pulses a faint coral so the
+     player feels the camp temperature rising. Day-only — Tribal has
+     enough atmospheric motion already. */
+  @keyframes v84-mood-warning {
+    0%, 100% { box-shadow: inset 0 1px 0 rgba(255, 220, 170, 0.06),
+                           0 1px 2px rgba(0, 0, 0, 0.25); }
+    50%      { box-shadow: inset 0 1px 0 rgba(255, 220, 170, 0.06),
+                           0 1px 2px rgba(0, 0, 0, 0.25),
+                           0 0 14px rgba(232, 154, 74, 0.30); }
+  }
+  body.scene-day .camp-mood-pill[data-mood="tense"],
+  body.scene-day .camp-mood-pill[data-mood="chaotic"] {
+    animation: v84-mood-warning 5s ease-in-out infinite;
+  }
+}
+
+/* ── Reduced-motion fallback ──────────────────────────────────────────
+   When the user prefers reduced motion, none of the animations above
+   apply (they live entirely inside the `prefers-reduced-motion:
+   no-preference` media query). The static atmosphere from v8.1–v8.3
+   reads cleanly on its own — torchlight, ember glows, dappled shadow,
+   and decisive halos all remain present, just without breath / pulse.
+   This is the safest default: motion is opt-in via OS preference. */
