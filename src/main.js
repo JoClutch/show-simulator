@@ -49,10 +49,21 @@ function onContestantSelected(contestant) {
   gameState.player = contestant;
   initRelationships(gameState);
 
-  // v5.6: AI takes their first camp actions before the player's first camp
-  // screen. The social fabric is already moving when the player walks in.
-  runAICampPhase(gameState);
+  // v9.0: every regular round begins with the Episode Recap. Episode 1
+  // is no exception — the recap screen handles the "no one has been
+  // voted out yet" case via lastVotedOutPlayerId === null.
+  // AI camp activity is now fired on leaving the recap, NOT here, so
+  // the social fabric is still moving when the player reaches camp.
+  showScreen("episodeRecap");
+}
 
+// v9.0: called when the player dismisses the Episode Recap screen.
+// AI takes their phase-1 camp actions here (moved from advanceRound /
+// onContestantSelected / onMergeDone / onSwapDone in the non-recap
+// paths) so AI timing relative to the player's first camp view is
+// preserved.
+function onEpisodeRecapDone() {
+  runAICampPhase(gameState);
   showScreen("campLife");
 }
 
@@ -234,6 +245,10 @@ function onTribalDone(eliminatedContestant) {
   gameState.eliminated.push(eliminatedContestant);
   removeFromTribes(eliminatedContestant);
 
+  // v9.0: record the most-recent boot for the next Episode Recap screen.
+  // Read by renderEpisodeRecapScreen at the start of the following round.
+  gameState.lastVotedOutPlayerId = eliminatedContestant.id;
+
   // Event log: every elimination is recorded. The player sees only their own
   // game-over (this stays out of dev panel as well-noised; AI-only eliminations
   // are still recorded so dev panel can show full history).
@@ -358,12 +373,12 @@ function advanceRound() {
     return;
   }
 
-  // v5.6: AI takes their phase-1 camp actions of the new round before the
-  // player's camp screen renders. The merge/swap branches above also wire
-  // this in their own onMergeDone / onSwapDone handlers.
-  runAICampPhase(gameState);
-
-  showScreen("campLife");
+  // v9.0: every regular round opens with the Episode Recap. AI phase-1
+  // camp activity has moved into onEpisodeRecapDone so the recap stays
+  // strictly informational (no engine mutation while it's showing).
+  // Merge / swap / FTC branches above are unchanged — they are their
+  // own episode openers and skip the recap by design.
+  showScreen("episodeRecap");
 }
 
 // ── Merge ─────────────────────────────────────────────────────────────────────
@@ -467,6 +482,7 @@ function showScreen(name) {
   //   Tribal Council, Final Tribal, and Elimination read as night/firelit
   //   (deep charcoal, ember glow). Every other screen uses the warm-dusk
   //   day palette (driftwood, sand, palm-shade tones).
+  // v9.0: episodeRecap is a daytime/morning screen → scene-day.
   const NIGHT_SCENES = new Set(["tribal", "finalTribal", "elimination"]);
   document.body.classList.toggle("scene-night", NIGHT_SCENES.has(name));
   document.body.classList.toggle("scene-day",   !NIGHT_SCENES.has(name));
@@ -479,6 +495,7 @@ function showScreen(name) {
     case "templates":    renderTemplatesScreen(app, gameState);    break;
     case "swap":         renderSwapScreen(app, gameState);         break;
     case "merge":        renderMergeScreen(app, gameState);        break;
+    case "episodeRecap": renderEpisodeRecapPlaceholder(app, gameState); break;
     case "campLife":     renderCampLifeScreen(app, gameState);     break;
     case "challenge":    renderChallengeScreen(app, gameState);    break;
     case "tribal":       renderTribalScreen(app, gameState);       break;
@@ -486,6 +503,38 @@ function showScreen(name) {
     case "finalTribal":  renderFinalTribalScreen(app, gameState);  break;
     case "results":      renderResultsScreen(app, gameState);      break;
   }
+}
+
+// v9.0: temporary placeholder for the Episode Recap screen.
+// This phase only WIRES the new state and routing — the real recap UI
+// (tribe rosters, "previously voted out" card, flavor copy) lands in
+// Phase 2 as renderEpisodeRecapScreen() in src/ui/screenEpisodeRecap.js.
+// The placeholder shows enough to verify the flow end-to-end:
+//   • the round number it's opening
+//   • the lastVotedOutPlayerId state (or "no prior boot" in Episode 1)
+//   • a Continue button that dispatches onEpisodeRecapDone()
+function renderEpisodeRecapPlaceholder(container, state) {
+  const last = getLastEliminated(state);
+  const lastLine = last
+    ? `Last voted out: ${escapeHtml(last.name)}`
+    : "The game begins. All castaways remain.";
+
+  container.innerHTML = `
+    <div class="screen">
+      <p class="screen-eyebrow">Episode ${state.round} · Day ${getDay(state)}</p>
+      <h2>Episode Recap</h2>
+      <p class="muted">${lastLine}</p>
+      <p class="muted" style="font-style:italic;font-size:0.85rem">
+        (Placeholder — Phase 2 will replace this with the real recap UI.)
+      </p>
+      <div class="spacer">
+        <button id="episode-recap-continue-btn">Continue →</button>
+      </div>
+    </div>
+  `;
+
+  container.querySelector("#episode-recap-continue-btn")
+    .addEventListener("click", onEpisodeRecapDone);
 }
 
 // ── Final Tribal Council ──────────────────────────────────────────────────────
@@ -528,6 +577,22 @@ function getPlayerTribeLabel() {
     }
   }
   return null;
+}
+
+// v9.0: returns the most-recently voted-out contestant (object), or null
+// if none — i.e., before the first Tribal Council. The Episode Recap UI
+// reads this when rendering "previously on…". Two sources of truth are
+// kept aligned: state.lastVotedOutPlayerId (explicit) and
+// state.eliminated[last] (history). This helper prefers the explicit
+// field, falling back to the array tail for safety.
+function getLastEliminated(state = gameState) {
+  if (state.lastVotedOutPlayerId) {
+    const c = state.eliminated.find(e => e.id === state.lastVotedOutPlayerId);
+    if (c) return c;
+  }
+  return state.eliminated.length > 0
+    ? state.eliminated[state.eliminated.length - 1]
+    : null;
 }
 
 // Returns all contestants who have not yet been eliminated.

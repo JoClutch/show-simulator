@@ -67,6 +67,18 @@ function createSeasonState() {
     eliminated: [],  // contestant objects in elimination order (all boots, pre- and post-merge)
     jury:       [],  // subset of eliminated: only post-merge boots, in jury-seat order
 
+    // ── Episode Recap (v9.0) ───────────────────────────────────────
+    // The id of the contestant voted out at the most recent Tribal
+    // Council. Read by the Episode Recap screen at the start of each
+    // round to highlight "previously on…". null in Episode 1 (no one
+    // has been voted out yet) and after the very last elimination is
+    // consumed by the recap.
+    //
+    // This is functionally derivable from `eliminated.at(-1)?.id`,
+    // but kept as an explicit field per spec so save/load of the
+    // recap context is unambiguous.
+    lastVotedOutPlayerId: null,
+
     // ── Round state ────────────────────────────────────────
     campPhase:      1,     // 1 = pre-challenge camp, 2 = post-challenge camp; reset each round
     immunityWon:    null,  // "A" | "B" — pre-merge: tribe that won immunity; reset each round
