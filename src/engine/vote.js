@@ -866,55 +866,79 @@ function orderVotesForReveal(votes, eliminatedId) {
   return ordered;
 }
 
-function clipRevealAtLockIn(orderedVotes, eliminatedId) {
-  // Drama floor: always show at least min(3, totalVotes) cards even when
-  // the math locks in earlier — prevents anticlimactic 1- or 2-card
-  // reveals on lopsided opening sequences.
-  const dramaFloor = Math.min(3, orderedVotes.length);
+// v6.10: canonical lock-in predicate, isolated as a single named helper so
+// the math is impossible to misread or accidentally couple to ordering
+// state. Use this helper everywhere the reveal needs to decide whether
+// it can stop early.
+//
+//   leaderVotes > runnerUpVotes + votesRemaining
+//
+// Strict inequality — even with every remaining ballot going to one
+// challenger, they couldn't tie or surpass the leader. Anything weaker
+// (>=, or comparing totals to N/2, or tracking only "OTHERS queue")
+// produces premature stops on lopsided votes.
+function isVoteLocked(leaderVotes, runnerUpVotes, votesRemaining) {
+  return leaderVotes > runnerUpVotes + votesRemaining;
+}
 
+function clipRevealAtLockIn(orderedVotes, eliminatedId) {
+  const totalVotes = orderedVotes.length;
+  // Drama floor — always show at least min(3, totalVotes) cards even when
+  // the math locks in earlier. Prevents anticlimactic 1- or 2-card reveals
+  // on lopsided opening sequences.
+  const dramaFloor = Math.min(3, totalVotes);
+
+  // Per-target running tally across ALL revealed votes (including the
+  // eliminated). We recompute leader / runner-up from this tally on every
+  // iteration, ensuring the math always uses fresh values.
   const visibleByTarget = {};
-  let visibleEliminated = 0;
-  let visibleRunnerUp   = 0;
   const result = [];
 
-  for (let i = 0; i < orderedVotes.length; i++) {
+  for (let i = 0; i < totalVotes; i++) {
     const v = orderedVotes[i];
     result.push(v);
 
-    if (v.target.id === eliminatedId) {
-      visibleEliminated++;
-    } else {
-      const t = v.target.id;
-      visibleByTarget[t] = (visibleByTarget[t] ?? 0) + 1;
-      if (visibleByTarget[t] > visibleRunnerUp) {
-        visibleRunnerUp = visibleByTarget[t];
-      }
-    }
+    const tid = v.target.id;
+    visibleByTarget[tid] = (visibleByTarget[tid] ?? 0) + 1;
 
-    // ── Mathematical lock-in condition ────────────────────────────────
-    // The leader's count must STRICTLY exceed the runner-up's count plus
-    // ALL remaining unread votes. This is the only safe stop condition:
-    // even if every remaining vote went to a single non-eliminated
-    // candidate, they couldn't catch the leader.
-    //
-    // Because the eliminated is always the target with the highest TOTAL
-    // count (resolved by tallyVotes upstream), they are always the
-    // intended leader. We only stop if eliminated currently leads AND
-    // the math holds.
-    const totalRemaining = orderedVotes.length - result.length;
-    const leaderIsEliminated = visibleEliminated > visibleRunnerUp;
-    const lockedIn = leaderIsEliminated &&
-      visibleEliminated > visibleRunnerUp + totalRemaining;
+    // ── Compute leader / runnerUp from the visible tally ─────────────
+    // Sort visible counts descending. leaderVotes is the highest total
+    // for any candidate; runnerUpVotes is the second-highest (or 0 when
+    // only one candidate has been named so far).
+    const sortedCounts = Object.values(visibleByTarget).sort((a, b) => b - a);
+    const leaderVotes   = sortedCounts[0] ?? 0;
+    const runnerUpVotes = sortedCounts[1] ?? 0;
+
+    // ── votesRemaining is derived from TOTAL ballots in this Tribal ─
+    // NOT from the number of distinct candidates with revealed votes.
+    // After revealing N cards, totalVotes − N ballots are still unread,
+    // any of which could go to any candidate.
+    const votesRemaining = totalVotes - result.length;
+
+    // ── Apply the canonical lock-in helper ───────────────────────────
+    const locked = isVoteLocked(leaderVotes, runnerUpVotes, votesRemaining);
+
+    // We additionally require that the eliminated player IS the visible
+    // leader (uniquely — a tie at the top doesn't lock). The eliminated
+    // is always the actual highest-count target per tallyVotes upstream;
+    // if the visible reveal hasn't yet shown them as the leader, we
+    // shouldn't stop early — even if some other target happens to look
+    // mathematically locked in their visible position.
+    const eliminatedCount = visibleByTarget[eliminatedId] ?? 0;
+    const eliminatedLeadsUniquely =
+      eliminatedCount === leaderVotes && leaderVotes > runnerUpVotes;
 
     if (VOTE_DEBUG) {
       console.log(
-        `  [REVEAL ${i + 1}] target=${v.target.name} ` +
-        `elim=${visibleEliminated} runnerUp=${visibleRunnerUp} ` +
-        `remaining=${totalRemaining} lockedIn=${lockedIn}`
+        `  [REVEAL ${i + 1}/${totalVotes}] ` +
+        `target=${v.target.name} ` +
+        `leader=${leaderVotes} runnerUp=${runnerUpVotes} ` +
+        `remaining=${votesRemaining} ` +
+        `locked=${locked} elimLeadsUniquely=${eliminatedLeadsUniquely}`
       );
     }
 
-    if (lockedIn && result.length >= dramaFloor) break;
+    if (locked && eliminatedLeadsUniquely && result.length >= dramaFloor) break;
   }
 
   return result;
