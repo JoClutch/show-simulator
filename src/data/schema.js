@@ -122,7 +122,14 @@ const SCHEMA_VERSION = 1;
  * @typedef {Object} ContestantSchema
  * @property {string}  id           Unique within the cast.
  * @property {string}  name
- * @property {number}  challenge    1–10.
+ * @property {number}  [physicalChallengeSkill]  1–10. v9.1 sub-skill — strength / speed.
+ * @property {number}  [mentalChallengeSkill]    1–10. v9.1 sub-skill — puzzles / memory.
+ * @property {number}  [enduranceChallengeSkill] 1–10. v9.1 sub-skill — sustained holds / will.
+ * @property {number}  [challenge]  1–10. Legacy/derived stored field. When the three
+ *                                  sub-skills are present this field is recomputed at
+ *                                  boot as round(avg). When only `challenge` is present
+ *                                  (older templates), normalizeContestantStats backfills
+ *                                  the three sub-skills from it.
  * @property {number}  social       1–10.
  * @property {number}  strategy     1–10.
  * @property {string}  [description]Optional flavor.
@@ -160,7 +167,37 @@ function validateContestant(c) {
   if (typeof c.id !== "string" || c.id.trim() === "") errors.push("id is required");
   if (typeof c.name !== "string" || c.name.trim() === "") errors.push("name is required");
 
-  for (const stat of ["challenge", "social", "strategy"]) {
+  // v9.1: a contestant must have either the three new challenge sub-skills
+  // OR the legacy `challenge` field (or both). normalizeContestantStats
+  // will reconcile them downstream.
+  const hasNum = (v) => typeof v === "number" && !Number.isNaN(v);
+  const hasNewSkills =
+    hasNum(c.physicalChallengeSkill) &&
+    hasNum(c.mentalChallengeSkill)   &&
+    hasNum(c.enduranceChallengeSkill);
+  const hasLegacy = hasNum(c.challenge);
+  if (!hasNewSkills && !hasLegacy) {
+    errors.push("must define physicalChallengeSkill+mentalChallengeSkill+enduranceChallengeSkill (or legacy challenge)");
+  }
+
+  // Validate every present numeric stat. social and strategy remain required.
+  const skillFields = [
+    "physicalChallengeSkill",
+    "mentalChallengeSkill",
+    "enduranceChallengeSkill",
+    "challenge",     // legacy; may be derived but must be in-range when present
+    "social",
+    "strategy",
+  ];
+  for (const stat of skillFields) {
+    if (c[stat] === undefined) {
+      // social and strategy are still required; skill fields are optional
+      // individually because of the dual-format rule above.
+      if (stat === "social" || stat === "strategy") {
+        errors.push(`${stat} must be a number`);
+      }
+      continue;
+    }
     const v = c[stat];
     if (typeof v !== "number" || Number.isNaN(v)) {
       errors.push(`${stat} must be a number`);

@@ -40,7 +40,7 @@ function renderFTCCeremony(container, state) {
           ${escapeHtml(f.name)}${isPlayer ? " <span class=\"ftc-you-tag\">(you)</span>" : ""}
         </div>
         <div class="ftc-finalist-origin" style="color:${origColor}">${escapeHtml(origName)}</div>
-        <div class="ftc-finalist-stats">
+        <div class="ftc-finalist-stats" title="Challenge avg (Physical / Mental / Endurance) · Social · Strategy">
           <span>Chal&nbsp;${f.challenge}</span>
           <span>Soc&nbsp;${f.social}</span>
           <span>Str&nbsp;${f.strategy}</span>

@@ -5,6 +5,92 @@
 //   runIndividualChallenge(members)   — post-merge individual immunity; returns winner contestant
 //
 // Neither function mutates state — they compute and return result objects.
+//
+// v9.1 — Per-contestant challenge skill is split into three sub-skills:
+//   physicalChallengeSkill, mentalChallengeSkill, enduranceChallengeSkill.
+// The legacy `challenge` field is preserved as a derived stored value
+// (round of the average of the three) so any reader that hasn't been
+// migrated keeps working unchanged. Phase 3 will tag every CHALLENGES /
+// INDIVIDUAL_CHALLENGES entry with a `type` and route the resolution math
+// through `getChallengeSkillForType(c, type)`.
+
+// ── Skill helpers (v9.1) ──────────────────────────────────────────────────────
+
+// Returns the overall composite of a contestant's three challenge sub-skills,
+// or falls back to the legacy `challenge` field if the new fields haven't
+// been populated yet (e.g. during a partial mid-load state).
+//
+// Returned as a float in [1, 10]; UI / rounding is the caller's choice.
+function getOverallChallengeSkill(c) {
+  if (!c) return 5;
+  const p = c.physicalChallengeSkill;
+  const m = c.mentalChallengeSkill;
+  const e = c.enduranceChallengeSkill;
+  if (typeof p === "number" && typeof m === "number" && typeof e === "number") {
+    return (p + m + e) / 3;
+  }
+  return c.challenge ?? 5;
+}
+
+// Returns the relevant sub-skill for a given challenge type. "mixed" averages
+// either a relevant pair or all three; until Phase 3 tags challenges, the
+// function returns the overall composite for unknown types.
+//
+// Phase 3 will pass type values like "physical" / "mental" / "endurance" /
+// "mixed" from CHALLENGES entries.
+function getChallengeSkillForType(c, type) {
+  if (!c) return 5;
+  const fallback = c.challenge ?? 5;
+  switch (type) {
+    case "physical":  return c.physicalChallengeSkill  ?? fallback;
+    case "mental":    return c.mentalChallengeSkill    ?? fallback;
+    case "endurance": return c.enduranceChallengeSkill ?? fallback;
+    case "mixed":
+    default:          return getOverallChallengeSkill(c);
+  }
+}
+
+// Backfills missing skill fields and recomputes the legacy `challenge`
+// field to equal the rounded average of the three sub-skills. Idempotent —
+// safe to call repeatedly. Run once per contestant at the boot / template-
+// apply boundary; everywhere else can read `c.challenge` (legacy) or
+// `getOverallChallengeSkill(c)` (modern) and get a coherent number.
+//
+// Migration rules:
+//   • If the three sub-skills are already present, recompute legacy
+//     `challenge` from them. The sub-skills are the source of truth.
+//   • If only legacy `challenge` is present, mirror it to all three sub-
+//     skills (preserves existing balance until the user specializes).
+//   • If nothing is present, default everything to 5.
+function normalizeContestantStats(c) {
+  if (!c) return c;
+  const has = (v) => typeof v === "number" && !Number.isNaN(v);
+  const legacy = has(c.challenge) ? c.challenge : null;
+
+  if (!has(c.physicalChallengeSkill))  c.physicalChallengeSkill  = legacy ?? 5;
+  if (!has(c.mentalChallengeSkill))    c.mentalChallengeSkill    = legacy ?? 5;
+  if (!has(c.enduranceChallengeSkill)) c.enduranceChallengeSkill = legacy ?? 5;
+
+  // Clamp every sub-skill to [1, 10] integer (matches social/strategy domain).
+  const clamp = (n) => Math.max(1, Math.min(10, Math.round(n)));
+  c.physicalChallengeSkill  = clamp(c.physicalChallengeSkill);
+  c.mentalChallengeSkill    = clamp(c.mentalChallengeSkill);
+  c.enduranceChallengeSkill = clamp(c.enduranceChallengeSkill);
+
+  // Recompute legacy `challenge` as round(avg). Stored, not derived-on-read,
+  // so any consumer that touches `c.challenge` directly gets a coherent
+  // value with zero call-site changes.
+  c.challenge = clamp(
+    (c.physicalChallengeSkill + c.mentalChallengeSkill + c.enduranceChallengeSkill) / 3
+  );
+  return c;
+}
+
+// Convenience: normalize an array of contestants in place.
+function normalizeAllContestants(list) {
+  for (const c of list) normalizeContestantStats(c);
+  return list;
+}
 
 // ── Tribal challenges (pre-merge) ─────────────────────────────────────────────
 

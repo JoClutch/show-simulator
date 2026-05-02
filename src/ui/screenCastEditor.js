@@ -52,6 +52,11 @@ function renderCastEditorScreen(container, state) {
   _workingCast = CONTESTANTS.map(c => ({
     id:          c.id,
     name:        c.name,
+    // v9.1: editor exposes the three sub-skills as the source of truth.
+    // Legacy `challenge` is recomputed from them on Save via normalizeContestantStats.
+    physicalChallengeSkill:  c.physicalChallengeSkill,
+    mentalChallengeSkill:    c.mentalChallengeSkill,
+    enduranceChallengeSkill: c.enduranceChallengeSkill,
     challenge:   c.challenge,
     social:      c.social,
     strategy:    c.strategy,
@@ -170,7 +175,7 @@ function renderRow(c) {
       <div class="cast-row-main">
         <div class="cast-row-name">${escapeHtml(c.name) || "(unnamed)"}</div>
         <div class="cast-row-stats">
-          <span>Chal ${c.challenge}</span>
+          <span title="Physical / Mental / Endurance">Chal ${c.physicalChallengeSkill ?? c.challenge ?? "?"}/${c.mentalChallengeSkill ?? c.challenge ?? "?"}/${c.enduranceChallengeSkill ?? c.challenge ?? "?"}</span>
           <span>Soc ${c.social}</span>
           <span>Str ${c.strategy}</span>
         </div>
@@ -198,6 +203,9 @@ function wireFooter(container) {
     _workingCast = BUNDLED_DEFAULT_CAST.map(c => ({
       id:          c.id,
       name:        c.name,
+      physicalChallengeSkill:  c.physicalChallengeSkill,
+      mentalChallengeSkill:    c.mentalChallengeSkill,
+      enduranceChallengeSkill: c.enduranceChallengeSkill,
       challenge:   c.challenge,
       social:      c.social,
       strategy:    c.strategy,
@@ -305,12 +313,21 @@ function openModal(container, contestant) {
   const draft = isNew ? {
     id:          generateNewId(),
     name:        "",
+    physicalChallengeSkill:  5,
+    mentalChallengeSkill:    5,
+    enduranceChallengeSkill: 5,
     challenge:   5,
     social:      5,
     strategy:    5,
     tribe:       null,
     description: "",
   } : { ...contestant };
+
+  // v9.1 safety: if we're editing an older draft that lacks the sub-skills,
+  // backfill from legacy `challenge` so the form renders sensible values.
+  if (typeof draft.physicalChallengeSkill  !== "number") draft.physicalChallengeSkill  = draft.challenge ?? 5;
+  if (typeof draft.mentalChallengeSkill    !== "number") draft.mentalChallengeSkill    = draft.challenge ?? 5;
+  if (typeof draft.enduranceChallengeSkill !== "number") draft.enduranceChallengeSkill = draft.challenge ?? 5;
 
   const overlay = container.querySelector("#cast-modal-overlay");
   const panel   = container.querySelector("#cast-modal-panel");
@@ -337,9 +354,11 @@ function openModal(container, contestant) {
       </div>
 
       <div class="cast-form-stats">
-        ${renderStatInput("form-challenge", "Challenge", draft.challenge)}
-        ${renderStatInput("form-social",    "Social",    draft.social)}
-        ${renderStatInput("form-strategy",  "Strategy",  draft.strategy)}
+        ${renderStatInput("form-physical",   "Physical",  draft.physicalChallengeSkill)}
+        ${renderStatInput("form-mental",     "Mental",    draft.mentalChallengeSkill)}
+        ${renderStatInput("form-endurance",  "Endurance", draft.enduranceChallengeSkill)}
+        ${renderStatInput("form-social",     "Social",    draft.social)}
+        ${renderStatInput("form-strategy",   "Strategy",  draft.strategy)}
       </div>
 
       <div class="cast-form-row">
@@ -395,15 +414,21 @@ function renderStatInput(id, label, value) {
 
 function readModalForm(panel) {
   const tribeSel = panel.querySelector("#form-tribe").value;
-  return {
+  const draft = {
     id:          _editingContestantId ?? generateNewId(),
     name:        panel.querySelector("#form-name").value.trim(),
-    challenge:   clampInt(panel.querySelector("#form-challenge").value),
+    physicalChallengeSkill:  clampInt(panel.querySelector("#form-physical").value),
+    mentalChallengeSkill:    clampInt(panel.querySelector("#form-mental").value),
+    enduranceChallengeSkill: clampInt(panel.querySelector("#form-endurance").value),
     social:      clampInt(panel.querySelector("#form-social").value),
     strategy:    clampInt(panel.querySelector("#form-strategy").value),
     tribe:       tribeSel === "" ? null : tribeSel,
     description: panel.querySelector("#form-description").value.trim(),
   };
+  // v9.1: recompute legacy `challenge` from the three sub-skills so the
+  // draft is internally consistent before validation.
+  normalizeContestantStats(draft);
+  return draft;
 }
 
 // Inserts (new) or replaces (edit) the draft in _workingCast.

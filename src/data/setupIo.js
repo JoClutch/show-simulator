@@ -30,9 +30,16 @@
 //   finalTribal: { finalists }
 //   idols:       { enabled }
 //   pacing:      { campActionsPerRound }
-//   cast:        [{ id, name, challenge, social, strategy, description?, tribe? }, ...]
+//   cast:        [{ id, name,
+//                    physicalChallengeSkill, mentalChallengeSkill, enduranceChallengeSkill,
+//                    challenge,           // v9.1: legacy/derived; optional in new files
+//                    social, strategy,
+//                    description?, tribe? }, ...]
 //
-// Stat fields (challenge, social, strategy) are integers 1–10.
+// Stat fields (the three challenge sub-skills, social, strategy) are
+// integers 1–10. Legacy `challenge` is also accepted in 1–10 range; when
+// new files omit it, it's recomputed at apply-template time from the
+// three sub-skills (round of average).
 // Colors are CSS color strings (e.g. "#e87c2b").
 // Tribe labels are "A" or "B" in the current architecture.
 //

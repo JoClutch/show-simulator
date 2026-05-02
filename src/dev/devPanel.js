@@ -496,7 +496,7 @@ window.DEV_CONFIG = {
           <td>${c.name}${isMe ? " ★" : ""}</td>
           <td>${origin}</td>
           <td class="${sCls}">${susp.toFixed(1)}</td>
-          <td class="dev-dim">${c.challenge}·${c.social}·${c.strategy}</td>
+          <td class="dev-dim" title="Physical/Mental/Endurance · Social · Strategy">${c.physicalChallengeSkill}/${c.mentalChallengeSkill}/${c.enduranceChallengeSkill}·${c.social}·${c.strategy}</td>
         </tr>`;
     }).join("");
 

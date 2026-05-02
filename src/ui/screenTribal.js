@@ -300,10 +300,13 @@ function runRevotePhase(container, state, attendees, originalVotes, tiedIds, pro
       <div class="card-name">${escapeHtml(c.name)}</div>
       <div class="card-stats">
         <div class="stat-row">
-          <span class="stat-label">Challenge</span>
+          <span class="stat-label" title="Avg of Physical / Mental / Endurance">Challenge</span>
           <span class="stat-value">${c.challenge}</span>
         </div>
         <div class="stat-bar"><div class="stat-bar-fill" style="width:${c.challenge * 10}%"></div></div>
+        <div class="stat-substats" title="Physical · Mental · Endurance">
+          P ${c.physicalChallengeSkill} · M ${c.mentalChallengeSkill} · E ${c.enduranceChallengeSkill}
+        </div>
         <div class="stat-row">
           <span class="stat-label">Social</span>
           <span class="stat-value">${c.social}</span>
@@ -495,10 +498,13 @@ function buildVotingGrid(container, eligible, getVote, setVote) {
       <div class="card-name">${escapeHtml(c.name)}</div>
       <div class="card-stats">
         <div class="stat-row">
-          <span class="stat-label">Challenge</span>
+          <span class="stat-label" title="Avg of Physical / Mental / Endurance">Challenge</span>
           <span class="stat-value">${c.challenge}</span>
         </div>
         <div class="stat-bar"><div class="stat-bar-fill" style="width:${c.challenge * 10}%"></div></div>
+        <div class="stat-substats" title="Physical · Mental · Endurance">
+          P ${c.physicalChallengeSkill} · M ${c.mentalChallengeSkill} · E ${c.enduranceChallengeSkill}
+        </div>
         <div class="stat-row">
           <span class="stat-label">Social</span>
           <span class="stat-value">${c.social}</span>

@@ -181,10 +181,20 @@ function buildCard(contestant, tribeColor) {
     <div class="card-name">${escapeHtml(contestant.name)}</div>
     <div class="card-stats">
       <div class="stat-row">
-        <span class="stat-label">Challenge</span>
-        <span class="stat-value">${contestant.challenge}</span>
+        <span class="stat-label">Physical</span>
+        <span class="stat-value">${contestant.physicalChallengeSkill}</span>
       </div>
-      <div class="stat-bar"><div class="stat-bar-fill" style="width:${contestant.challenge * 10}%"></div></div>
+      <div class="stat-bar"><div class="stat-bar-fill" style="width:${contestant.physicalChallengeSkill * 10}%"></div></div>
+      <div class="stat-row">
+        <span class="stat-label">Mental</span>
+        <span class="stat-value">${contestant.mentalChallengeSkill}</span>
+      </div>
+      <div class="stat-bar"><div class="stat-bar-fill" style="width:${contestant.mentalChallengeSkill * 10}%"></div></div>
+      <div class="stat-row">
+        <span class="stat-label">Endurance</span>
+        <span class="stat-value">${contestant.enduranceChallengeSkill}</span>
+      </div>
+      <div class="stat-bar"><div class="stat-bar-fill" style="width:${contestant.enduranceChallengeSkill * 10}%"></div></div>
       <div class="stat-row">
         <span class="stat-label">Social</span>
         <span class="stat-value">${contestant.social}</span>

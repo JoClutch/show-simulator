@@ -604,6 +604,12 @@ window.addEventListener("DOMContentLoaded", () => {
   // swap in a different template by calling applyTemplate(...) before boot.
   applyTemplate(DEFAULT_SEASON_TEMPLATE);
 
+  // v9.1 safety net: applyTemplate normalizes contestant stats, but if a
+  // template path ever skips that, this guarantees the runtime cast has
+  // the three sub-skills + a coherent legacy `challenge` before any
+  // engine code reads them.
+  normalizeAllContestants(CONTESTANTS);
+
   gameState = createSeasonState();
   assignTribes(CONTESTANTS, gameState);
   initIdols(gameState);      // places one idol per tribal camp + one for merge

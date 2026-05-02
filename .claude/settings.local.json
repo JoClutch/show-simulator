@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -e ' *)",
+      "PowerShell($files = 'src/engine/challenge.js','src/data/contestants.js','src/data/seasonPresets.js','src/data/schema.js','src/ui/screenCastEditor.js','src/ui/screenSelect.js','src/ui/screenTribal.js','src/ui/screenFinalTribal.js','src/dev/devPanel.js','src/main.js'; foreach \\($f in $files\\) { $src = Get-Content -Raw -Path $f; $err = $null; try { [void][System.Management.Automation.Language.Parser]::ParseInput\\($src, [ref]$null, [ref]$err\\) } catch {}; \"$f $\\($src.Length\\) chars\" })"
+    ]
+  }
+}

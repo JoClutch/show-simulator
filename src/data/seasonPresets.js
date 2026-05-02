@@ -41,6 +41,12 @@
 const BUNDLED_DEFAULT_CAST = CONTESTANTS.map(c => ({
   id:        c.id,
   name:      c.name,
+  // v9.1: write all four challenge fields. The three sub-skills are the
+  // source of truth; legacy `challenge` is included so older readers
+  // (and external tooling) still see a coherent value.
+  physicalChallengeSkill:  c.physicalChallengeSkill,
+  mentalChallengeSkill:    c.mentalChallengeSkill,
+  enduranceChallengeSkill: c.enduranceChallengeSkill,
   challenge: c.challenge,
   social:    c.social,
   strategy:  c.strategy,
@@ -287,9 +293,15 @@ function applyTemplate(template) {
   // shuffle runs (matching the original behavior).
   CONTESTANTS.length = 0;
   for (const c of template.cast) {
-    CONTESTANTS.push({
+    const fresh = {
       id:        c.id,
       name:      c.name,
+      // v9.1: copy the three challenge sub-skills if present; legacy
+      // `challenge` is also copied so normalizeContestantStats has a
+      // fallback when a template predates the split.
+      physicalChallengeSkill:  c.physicalChallengeSkill,
+      mentalChallengeSkill:    c.mentalChallengeSkill,
+      enduranceChallengeSkill: c.enduranceChallengeSkill,
       challenge: c.challenge,
       social:    c.social,
       strategy:  c.strategy,
@@ -298,7 +310,12 @@ function applyTemplate(template) {
       active:    true,
       suspicion: 0,
       ...(c.description !== undefined ? { description: c.description } : {}),
-    });
+    };
+    // v9.1: backfill missing sub-skills from legacy `challenge` (or 5),
+    // and recompute legacy `challenge` from the three sub-skills.
+    // Idempotent — safe whether the template has the new fields or not.
+    normalizeContestantStats(fresh);
+    CONTESTANTS.push(fresh);
   }
 
   _activeTemplate = template;
