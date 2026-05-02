@@ -5,30 +5,111 @@
   padding: 0;
 }
 
-/* ── Design tokens ── */
+/* ──────────────────────────────────────────────────────────────────────── */
+/* v8.1 — Visual design system foundation                                 */
+/*                                                                         */
+/* Two scene palettes:                                                    */
+/*   • DAY (default :root) — Camp Life: weathered driftwood, warm sand,   */
+/*     palm shadow, sun-glazed wood, woven cord. Warm-dusk dark mode      */
+/*     with cream text on amber-tinted dark surfaces. Feels like sitting */
+/*     under a shade structure on the beach late in the afternoon.        */
+/*                                                                        */
+/*   • NIGHT (body.scene-night) — Tribal Council: firelit charcoal,       */
+/*     ember red-orange, smoke, deep jungle. Used for Tribal Council and  */
+/*     Final Tribal screens. Pushes toward black with torch-amber glow.   */
+/*                                                                        */
+/* All existing screens read these tokens by name (--bg-card, --gold,     */
+/* etc.) so the palette swap propagates without per-screen CSS surgery.   */
+/* Hardcoded hex values remaining in older CSS will still render but      */
+/* won't shift between scenes — that's OK as a first pass; v8.x can       */
+/* migrate them as needed.                                                */
+/* ──────────────────────────────────────────────────────────────────────── */
+
 :root {
-  --bg-base:      #1a1a2e;
-  --bg-card:      #16213e;
-  --bg-raised:    #1e2d50;
-  --border-dim:   #2e4070;
-  --border-mid:   #3a5080;
-  --text-primary: #e0d7c6;
-  --text-dim:     #c8c0b0;
-  --text-muted:   #888;
-  --text-faint:   #555;
+  /* ── Surfaces ─ warm-dusk wood + sand */
+  --bg-base:      #1c1810;   /* deep warm shadow under palm canopy   */
+  --bg-card:      #2a2218;   /* weathered driftwood with sun warmth  */
+  --bg-raised:    #352a1e;   /* lighter wood surface, like a shelf   */
+  --border-dim:   #4a3a28;   /* rope cord, muted */
+  --border-mid:   #685038;   /* aged wood grain  */
+
+  /* ── Text ─ warm parchment over wood */
+  --text-primary: #efe2c8;   /* sun-bleached cream */
+  --text-dim:     #d4c4a4;   /* slightly faded */
+  --text-muted:   #998b6f;   /* parchment-faded */
+  --text-faint:   #6f6450;   /* very faded, label use */
+
+  /* ── Accent ─ sunlit amber */
+  --gold:         #e8b346;   /* warmer than the v7 gold */
+  --gold-dim:     #c89028;   /* recessed amber for borders / dim use */
+
+  /* ── Status colors ─ tropical green / coral red */
+  --green-bg:     #182618;   /* dim leaf shadow */
+  --green-border: #3a6a3a;   /* fern border */
+  --green-text:   #88c088;   /* light leaf */
+
+  --red-bg:       #2a1a18;   /* clay / coral dark */
+  --red-border:   #6e3a32;   /* terracotta */
+  --red-text:     #d68078;   /* warm coral */
+
+  /* ── Shadows ─ atmospheric depth */
+  --shadow-low:   0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-med:   0 4px 14px rgba(0, 0, 0, 0.5),
+                  inset 0 1px 0 rgba(255, 220, 170, 0.04);
+  --shadow-high:  0 10px 30px rgba(0, 0, 0, 0.6),
+                  inset 0 1px 0 rgba(255, 220, 170, 0.06);
+
+  /* ── Atmospheric overlay ─ subtle warmth gradient applied to body */
+  --scene-overlay: radial-gradient(
+    ellipse at 50% 0%,
+    rgba(255, 215, 140, 0.06) 0%,
+    rgba(255, 215, 140, 0)    45%
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────────────── */
+/* NIGHT scene — Tribal Council / firelit / ceremonial                    */
+/* Activated by body.scene-night (set in main.js showScreen).             */
+/* ──────────────────────────────────────────────────────────────────────── */
+body.scene-night {
+  /* ── Surfaces ─ deep jungle near-black with ember warmth */
+  --bg-base:      #0e0a07;   /* near black, slight warm undertone */
+  --bg-card:      #1a120c;   /* charcoal warmed by torchlight     */
+  --bg-raised:    #221610;   /* smoldering log surface            */
+  --border-dim:   #3a2418;   /* charred wood */
+  --border-mid:   #5a3a22;   /* ember-licked edge */
+
+  /* ── Text ─ warmer cream against deeper background */
+  --text-primary: #f4e6c8;
+  --text-dim:     #d8c498;
+  --text-muted:   #8a7858;
+  --text-faint:   #5a4e38;
+
+  /* ── Accent ─ torch flame, brighter + more saturated */
   --gold:         #f4c542;
-  --gold-dim:     #e0b030;
-  --green-bg:     #14231a;
-  --green-border: #2a5a38;
-  --green-text:   #7dba8f;
-  --red-bg:       #1a1525;
-  --red-border:   #5a2a3a;
-  --red-text:     #c07080;
+  --gold-dim:     #cc9528;
+
+  /* ── Status colors ─ muted at night */
+  --green-text:   #6ea073;
+  --red-text:     #e07868;
+
+  /* ── Shadows ─ deeper, more contrast */
+  --shadow-med:   0 4px 18px rgba(0, 0, 0, 0.7),
+                  inset 0 1px 0 rgba(244, 180, 80, 0.06);
+  --shadow-high:  0 12px 36px rgba(0, 0, 0, 0.8),
+                  inset 0 1px 0 rgba(244, 180, 80, 0.08);
+
+  /* Ember glow rising from below — torch is at the center of the room */
+  --scene-overlay: radial-gradient(
+    ellipse at 50% 100%,
+    rgba(244, 145, 50, 0.10) 0%,
+    rgba(244, 145, 50, 0)    50%
+  );
 }
 
 /* ── Base ── */
 body {
-  font-family: Georgia, serif;
+  font-family: Georgia, "Iowan Old Style", "Palatino Linotype", serif;
   background-color: var(--bg-base);
   color: var(--text-primary);
   min-height: 100vh;
@@ -36,20 +117,61 @@ body {
   justify-content: center;
   align-items: flex-start;
   padding: 2rem 1rem;
+  position: relative;
+  /* v8.1: subtle vignette + atmospheric color wash. The overlay token shifts
+     between scenes (warm-overhead light for day, ember-from-below at night)
+     while the noise overlay below adds a humid-air grain that softens the
+     digital flatness. */
+  background-image:
+    var(--scene-overlay),
+    radial-gradient(ellipse at 50% 50%,
+      transparent 50%,
+      rgba(0, 0, 0, 0.35) 100%);
+  background-attachment: fixed;
+}
+
+/* v8.1: subtle film-grain texture overlay for "humid air" — sits between
+   body bg and content. Pure CSS via SVG noise data URL so no asset is
+   needed. Opacity is intentionally very low so the grain reads as
+   atmosphere, not as visual noise. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.06;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 0.95  0 0 0 0 0.85  0 0 0 0.5 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/></svg>");
+}
+
+/* Body content sits above the noise overlay */
+body > * {
+  position: relative;
+  z-index: 1;
 }
 
 /* ── Typography ── */
+/* v8.1: headings use a slightly heavier serif weight + warm gold color
+   suggestive of carved/torchlit lettering. Letter-spacing tightened so
+   they read as titles, not labels. */
 h1 {
-  font-size: 2rem;
+  font-size: 2.1rem;
   color: var(--gold);
   margin-bottom: 0.5rem;
   text-align: center;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 h2 {
-  font-size: 1.4rem;
+  font-size: 1.45rem;
   color: var(--gold);
   margin-bottom: 0.35rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.4);
 }
 
 h3 {
@@ -64,37 +186,84 @@ p {
 }
 
 /* Small all-caps label shown above a screen's main heading.
-   Provides episode/day context at a glance on every gameplay screen. */
+   v8.1: warmed letterspacing — feels like a carved label on a wood plank. */
 .screen-eyebrow {
   font-size: 0.7rem;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.16em;
   color: var(--text-faint);
   margin-bottom: 0.3rem;
   margin-top: 0;
 }
 
 /* ── Buttons ── */
+/* v8.1: warm gold button with subtle wood-grain edge + recessed shadow.
+   Feels like a carved sign or amber torch glow rather than a flat
+   web-app button. Uses gradient for depth without being skeuomorphic. */
 button {
-  background-color: var(--gold);
-  color: #1a1a2e;
-  border: none;
-  border-radius: 4px;
-  padding: 0.7rem 1.4rem;
+  background: linear-gradient(180deg, var(--gold) 0%, var(--gold-dim) 100%);
+  color: #1a1208;
+  border: 1px solid var(--gold-dim);
+  border-radius: 5px;
+  padding: 0.65rem 1.4rem;
   font-size: 1rem;
-  font-family: Georgia, serif;
+  font-family: inherit;
+  font-weight: 600;
+  letter-spacing: 0.02em;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: filter 180ms ease, transform 100ms ease, box-shadow 180ms ease;
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 240, 200, 0.4);
 }
 
-button:hover {
-  background-color: var(--gold-dim);
+button:hover:not(:disabled) {
+  filter: brightness(1.08);
+  box-shadow:
+    0 3px 8px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 240, 200, 0.5),
+    0 0 12px rgba(244, 180, 70, 0.25);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 240, 200, 0.3);
 }
 
 button:disabled {
-  background-color: #444;
-  color: #777;
+  background: var(--bg-raised);
+  color: var(--text-faint);
+  border-color: var(--border-dim);
   cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* v8.1: input + textarea + select base styling. Aged-parchment feel —
+   wood-bordered, warm-cream text, no harsh focus ring. */
+input[type="text"],
+input[type="number"],
+input[type="search"],
+textarea,
+select {
+  background: var(--bg-raised);
+  color: var(--text-primary);
+  border: 1px solid var(--border-mid);
+  border-radius: 4px;
+  padding: 0.5rem 0.7rem;
+  font-family: inherit;
+  font-size: 0.95rem;
+  transition: border-color 180ms ease, box-shadow 180ms ease;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--gold-dim);
+  box-shadow: 0 0 0 1px var(--gold-dim),
+              inset 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 /* ── App shell ── */

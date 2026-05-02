@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Design Test — Survivor Simulator v8.1</title>
+  <link rel="stylesheet" href="src/styles.css">
+  <style>
+    /* Page-only helpers — only used here. */
+    .dt-page {
+      width: 100%;
+      max-width: 980px;
+    }
+    .dt-section {
+      margin-bottom: 2.5rem;
+      padding: 1.5rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border-mid);
+      border-left: 3px solid var(--gold);
+      border-radius: 5px;
+      box-shadow: var(--shadow-med);
+    }
+    .dt-section-title {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      color: var(--text-muted);
+      margin-bottom: 0.4rem;
+    }
+    .dt-swatch-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 0.6rem;
+      margin-top: 0.85rem;
+    }
+    .dt-swatch {
+      border: 1px solid var(--border-dim);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .dt-swatch-color {
+      height: 60px;
+    }
+    .dt-swatch-meta {
+      padding: 0.4rem 0.6rem;
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      background: var(--bg-raised);
+      border-top: 1px solid var(--border-dim);
+    }
+    .dt-swatch-name { display: block; color: var(--text-primary); font-weight: bold; }
+    .dt-swatch-hex  { display: block; color: var(--text-faint); font-family: monospace; font-size: 0.68rem; margin-top: 0.15rem; }
+    .dt-row {
+      display: flex;
+      gap: 0.7rem;
+      flex-wrap: wrap;
+      margin-top: 0.6rem;
+    }
+    .dt-card {
+      background: var(--bg-raised);
+      border: 1px solid var(--border-mid);
+      border-radius: 4px;
+      padding: 0.85rem 1rem;
+      flex: 1;
+      min-width: 220px;
+    }
+    .dt-mode-toggle {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+      justify-content: center;
+    }
+    .dt-mode-toggle button {
+      font-size: 0.85rem;
+      padding: 0.5rem 1.1rem;
+    }
+    .dt-shadow-demo {
+      height: 72px;
+      background: var(--bg-card);
+      border-radius: 5px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-dim);
+      font-size: 0.8rem;
+      margin-top: 0.6rem;
+    }
+    .dt-shadow-demo.low  { box-shadow: var(--shadow-low); }
+    .dt-shadow-demo.med  { box-shadow: var(--shadow-med); }
+    .dt-shadow-demo.high { box-shadow: var(--shadow-high); }
+  </style>
+</head>
+<body class="scene-day">
+
+<div class="dt-page">
+
+  <!-- Scene toggle ─ flip between day (Camp Life) and night (Tribal) -->
+  <div class="dt-mode-toggle">
+    <button id="dt-day">Day · Camp Life</button>
+    <button id="dt-night">Night · Tribal Council</button>
+  </div>
+
+  <h1>Visual Design System</h1>
+  <p class="screen-eyebrow">v8.1 · Foundation Review</p>
+
+  <!-- Palette ─ surfaces -->
+  <section class="dt-section">
+    <div class="dt-section-title">Surface Tokens</div>
+    <h2>Surfaces</h2>
+    <p>Warmed-dusk wood + sand by day; charcoal + ember by night.</p>
+    <div class="dt-swatch-grid">
+      <div class="dt-swatch">
+        <div class="dt-swatch-color" style="background:var(--bg-base)"></div>
+        <div class="dt-swatch-meta"><span class="dt-swatch-name">--bg-base</span><span class="dt-swatch-hex">deep shade / near black</span></div>
+      </div>
+      <div class="dt-swatch">
+        <div class="dt-swatch-color" style="background:var(--bg-card)"></div>
+        <div class="dt-swatch-meta"><span class="dt-swatch-name">--bg-card</span><span class="dt-swatch-hex">driftwood / smoldering</span></div>
+      </div>
+      <div class="dt-swatch">
+        <div class="dt-swatch-color" style="background:var(--bg-raised)"></div>
+        <div class="dt-swatch-meta"><span class="dt-swatch-name">--bg-raised</span><span class="dt-swatch-hex">shelf / log surface</span></div>
+      </div>
+      <div class="dt-swatch">
+        <div class="dt-swatch-color" style="background:var(--border-dim)"></div>
+        <div class="dt-swatch-meta"><span class="dt-swatch-name">--border-dim</span><span class="dt-swatch-hex">rope / charred wood</span></div>
+      </div>
+      <div class="dt-swatch">
+        <div class="dt-swatch-color" style="background:var(--border-mid)"></div>
+        <div class="dt-swatch-meta"><span class="dt-swatch-name">--border-mid</span><span class="dt-swatch-hex">aged grain / ember edge</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Palette ─ text -->
+  <section class="dt-section">
+    <div class="dt-section-title">Text Tokens</div>
+    <h2>Text</h2>
+    <div class="dt-swatch-grid">
+      <div class="dt-swatch">
+        <div class="dt-swatch-color" style="background:var(--text-primary)"></div>
+        <div class="dt-swatch-meta"><span class="dt-swatch-name">--text-primary</span><span class="dt-swatch-hex">sun-bleached cream</span></div>
+      </div>
+      <div class="dt-swatch">
+        <div class="dt-swatch-color" style="background:var(--text-dim)"></div>
+        <div class="dt-swatch-meta"><span class="dt-swatch-name">--text-dim</span><span class="dt-swatch-hex">slightly faded</span></div>
+      </div>
+      <div class="dt-swatch">
+        <div class="dt-swatch-color" style="background:var(--text-muted)"></div>
+        <div class="dt-swatch-meta"><span class="dt-swatch-name">--text-muted</span><span class="dt-swatch-hex">parchment</span></div>
+      </div>
+      <div class="dt-swatch">
+        <div class="dt-swatch-color" style="background:var(--text-faint)"></div>
+        <div class="dt-swatch-meta"><span class="dt-swatch-name">--text-faint</span><span class="dt-swatch-hex">dust label</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Accent + status -->
+  <section class="dt-section">
+    <div class="dt-section-title">Accent + Status</div>
+    <h2>Amber, leaf, coral</h2>
+    <div class="dt-swatch-grid">
+      <div class="dt-swatch">
+        <div class="dt-swatch-color" style="background:var(--gold)"></div>
+        <div class="dt-swatch-meta"><span class="dt-swatch-name">--gold</span><span class="dt-swatch-hex">sunlit / torch amber</span></div>
+      </div>
+      <div class="dt-swatch">
+        <div class="dt-swatch-color" style="background:var(--gold-dim)"></div>
+        <div class="dt-swatch-meta"><span class="dt-swatch-name">--gold-dim</span><span class="dt-swatch-hex">recessed amber</span></div>
+      </div>
+      <div class="dt-swatch">
+        <div class="dt-swatch-color" style="background:var(--green-text)"></div>
+        <div class="dt-swatch-meta"><span class="dt-swatch-name">--green-text</span><span class="dt-swatch-hex">light leaf</span></div>
+      </div>
+      <div class="dt-swatch">
+        <div class="dt-swatch-color" style="background:var(--red-text)"></div>
+        <div class="dt-swatch-meta"><span class="dt-swatch-name">--red-text</span><span class="dt-swatch-hex">warm coral</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Typography -->
+  <section class="dt-section">
+    <div class="dt-section-title">Typography</div>
+    <h1>The torch goes out tonight.</h1>
+    <h2>Episode 6 · Day 18</h2>
+    <h3>Your alliance "The Driftwood Pact"</h3>
+    <p class="screen-eyebrow">All-caps eyebrow label</p>
+    <p>Body copy in the warmed serif stack reads cleanly on the new surfaces.
+       Long passages stay legible at the dim text tone, headers carry the
+       carved-amber feel. Italics are reserved for host voice — <em>"It's
+       time to vote."</em></p>
+  </section>
+
+  <!-- Buttons -->
+  <section class="dt-section">
+    <div class="dt-section-title">Buttons</div>
+    <h2>Actions</h2>
+    <div class="dt-row">
+      <button>Cast My Vote</button>
+      <button>Continue →</button>
+      <button disabled>Disabled</button>
+    </div>
+    <div class="dt-row" style="margin-top:1rem">
+      <input type="text" placeholder="Type something here…" style="flex:1">
+      <input type="text" value="Filled input">
+    </div>
+  </section>
+
+  <!-- Cards / surfaces -->
+  <section class="dt-section">
+    <div class="dt-section-title">Surface Composition</div>
+    <h2>Layered cards</h2>
+    <div class="dt-row">
+      <div class="dt-card">
+        <strong style="color:var(--gold)">Default card</strong>
+        <p style="margin:0.4rem 0 0;font-size:0.88rem;color:var(--text-dim)">
+          Raised surface with warm border + cream text. Used for inspector
+          panels, alliance blocks, recap cards.
+        </p>
+      </div>
+      <div class="dt-card" style="border-left:3px solid var(--gold)">
+        <strong style="color:var(--text-primary)">Featured card</strong>
+        <p style="margin:0.4rem 0 0;font-size:0.88rem;color:var(--text-dim)">
+          Same surface with a gold left-stripe — used for immunity notes,
+          tribal reading cards, alliance shells.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Shadows -->
+  <section class="dt-section">
+    <div class="dt-section-title">Depth + Shadows</div>
+    <h2>Atmospheric depth</h2>
+    <div class="dt-shadow-demo low">--shadow-low</div>
+    <div class="dt-shadow-demo med">--shadow-med</div>
+    <div class="dt-shadow-demo high">--shadow-high</div>
+  </section>
+
+  <p class="screen-eyebrow" style="text-align:center;margin-top:2rem">
+    Toggle the scene buttons at the top to compare day / night palettes.
+  </p>
+
+</div>
+
+<script>
+  document.getElementById("dt-day").addEventListener("click", () => {
+    document.body.classList.add("scene-day");
+    document.body.classList.remove("scene-night");
+  });
+  document.getElementById("dt-night").addEventListener("click", () => {
+    document.body.classList.add("scene-night");
+    document.body.classList.remove("scene-day");
+  });
+</script>
+
+</body>
+</html>

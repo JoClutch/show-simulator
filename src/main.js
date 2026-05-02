@@ -453,6 +453,14 @@ function showScreen(name) {
   const app = document.getElementById("app");
   app.innerHTML   = "";
 
+  // v8.1: scene class drives the visual palette swap (day vs. night).
+  //   Tribal Council, Final Tribal, and Elimination read as night/firelit
+  //   (deep charcoal, ember glow). Every other screen uses the warm-dusk
+  //   day palette (driftwood, sand, palm-shade tones).
+  const NIGHT_SCENES = new Set(["tribal", "finalTribal", "elimination"]);
+  document.body.classList.toggle("scene-night", NIGHT_SCENES.has(name));
+  document.body.classList.toggle("scene-day",   !NIGHT_SCENES.has(name));
+
   switch (name) {
     case "select":       renderSelectScreen(app, gameState);       break;
     case "castEditor":   renderCastEditorScreen(app, gameState);   break;
