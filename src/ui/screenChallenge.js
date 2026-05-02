@@ -116,7 +116,7 @@ function renderTribalChallengeScreen(container, state) {
   });
 
   container.innerHTML = `
-    <div class="screen">
+    <div class="screen" data-render-version="v8.15-tribal">
       <p class="screen-eyebrow">Episode ${state.round} · Day ${getDay(state) + DAY_OFFSETS.challenge}</p>
       <h2>Immunity Challenge</h2>
 
@@ -152,6 +152,9 @@ function renderTribalChallengeScreen(container, state) {
       </div>
     </div>
   `;
+
+  enforceChallengeOrder(container);
+  console.log("[screenChallenge] v8.15 tribal render — DOM order:", domOrderTrace(container));
 
   container.querySelector("#continue-btn").addEventListener("click", () => {
     onChallengeResolved(result.loser);
@@ -189,7 +192,7 @@ function renderIndividualChallengeScreen(container, state) {
   });
 
   container.innerHTML = `
-    <div class="screen">
+    <div class="screen" data-render-version="v8.15-individual">
       <p class="screen-eyebrow">Episode ${state.round} · Day ${getDay(state) + DAY_OFFSETS.challenge}</p>
       <h2>Individual Immunity</h2>
 
@@ -218,7 +221,53 @@ function renderIndividualChallengeScreen(container, state) {
     </div>
   `;
 
+  enforceChallengeOrder(container);
+  console.log("[screenChallenge] v8.15 individual render — DOM order:", domOrderTrace(container));
+
   container.querySelector("#continue-btn").addEventListener("click", () => {
     onIndividualChallengeResolved(result.winner.id);
   });
+}
+
+// ── Post-render order enforcement (v8.15) ────────────────────────────────────
+//
+// Belt-and-braces: regardless of how the markup string above was authored,
+// this pass physically reorders the live DOM so the rosters always sit
+// immediately below the <h2>, with the type label + description following.
+// Any later browser/cache weirdness can't put the description above the
+// rosters because we move them ourselves after innerHTML is parsed.
+function enforceChallengeOrder(container) {
+  const screen = container.querySelector(".screen");
+  if (!screen) return;
+
+  const h2          = screen.querySelector("h2");
+  const rosterGrid  = screen.querySelector(".challenge-roster-grid");
+  const typeLabel   = screen.querySelector(".challenge-type-label");
+  const description = screen.querySelector(".event-log");
+
+  if (!h2 || !rosterGrid || !description) return;
+
+  // Place rosters immediately after the <h2>.
+  if (h2.nextElementSibling !== rosterGrid) {
+    h2.insertAdjacentElement("afterend", rosterGrid);
+  }
+  // Place type label after rosters (if present).
+  if (typeLabel && rosterGrid.nextElementSibling !== typeLabel) {
+    rosterGrid.insertAdjacentElement("afterend", typeLabel);
+  }
+  // Place description after type label (or rosters if no label).
+  const beforeDesc = typeLabel || rosterGrid;
+  if (beforeDesc.nextElementSibling !== description) {
+    beforeDesc.insertAdjacentElement("afterend", description);
+  }
+}
+
+// Returns a short string of the screen's child class names in order, for the
+// console trace. Lets you verify at a glance that the live DOM order is right.
+function domOrderTrace(container) {
+  const screen = container.querySelector(".screen");
+  if (!screen) return "(no .screen)";
+  return Array.from(screen.children)
+    .map(el => el.tagName.toLowerCase() + (el.className ? "." + el.className.split(" ")[0] : ""))
+    .join(" → ");
 }
