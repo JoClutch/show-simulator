@@ -3211,6 +3211,91 @@ select:focus {
   margin: 1.25rem 0;
 }
 
+/* v9.0: Episode Recap screen.
+   Pre-merge: 3-column grid with tribeA · centered prev-boot card · tribeB.
+   Post-merge: stacked — center card on top, single merged roster below.
+   On narrow viewports, pre-merge collapses to a single column with the
+   center card at the top so the recap headline always reads first. */
+.recap-roster-grid {
+  display: grid;
+  grid-template-columns: 1fr minmax(220px, 1.1fr) 1fr;
+  gap: 1rem;
+  align-items: start;
+  margin: 1rem 0 1.25rem;
+}
+.recap-roster-grid-single {
+  grid-template-columns: minmax(0, 360px);
+  justify-content: center;
+}
+.recap-center-row {
+  display: flex;
+  justify-content: center;
+  margin: 1rem 0 1.25rem;
+}
+.recap-roster-cell {
+  min-width: 0;   /* let the inner roster card shrink correctly */
+}
+
+/* The "Previously voted out" / opener card. Sits centered between the
+   two tribe rosters pre-merge, or above the merged roster post-merge.
+   Styled like a wood-burned memorial plaque — gold left + right stripe,
+   raised surface, centered text. */
+.recap-prev-boot-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-mid);
+  border-left: 3px solid var(--gold);
+  border-right: 3px solid var(--gold);
+  border-radius: 5px;
+  padding: 1.25rem 1rem;
+  text-align: center;
+  box-shadow: var(--shadow-med);
+}
+.recap-prev-boot-eyebrow {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text-faint);
+  margin-bottom: 0.5rem;
+}
+.recap-prev-boot-name {
+  font-size: 1.4rem;
+  font-weight: bold;
+  color: var(--text-primary);
+  line-height: 1.2;
+  margin-bottom: 0.35rem;
+}
+.recap-prev-boot-tribe {
+  font-size: 0.85rem;
+  font-weight: bold;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.6rem;
+}
+.recap-prev-boot-sub {
+  font-size: 0.82rem;
+  color: var(--text-dim);
+  font-style: italic;
+}
+.recap-opener-card {
+  /* Episode 1 variant — slightly softer, no boot info. */
+}
+.recap-opener-headline {
+  font-size: 1.25rem;
+  font-weight: bold;
+  color: var(--gold);
+  margin-bottom: 0.5rem;
+}
+
+/* Mobile: stack to a single column, center card first so the recap
+   headline always reads before the rosters. */
+@media (max-width: 720px) {
+  .recap-roster-grid {
+    grid-template-columns: 1fr;
+  }
+  .recap-roster-cell-center { order: -1; }   /* float the boot card to top */
+  .recap-roster-cell-a      { order:  0; }
+  .recap-roster-cell-b      { order:  1; }
+}
+
 /* v8.11: tribe rosters on the Challenge screen.
    Two side-by-side cards pre-merge, one centered card post-merge.
    Player's tribe gets a subtle gold left-stripe; player's own name is bolded. */

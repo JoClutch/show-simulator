@@ -495,7 +495,7 @@ function showScreen(name) {
     case "templates":    renderTemplatesScreen(app, gameState);    break;
     case "swap":         renderSwapScreen(app, gameState);         break;
     case "merge":        renderMergeScreen(app, gameState);        break;
-    case "episodeRecap": renderEpisodeRecapPlaceholder(app, gameState); break;
+    case "episodeRecap": renderEpisodeRecapScreen(app, gameState);    break;
     case "campLife":     renderCampLifeScreen(app, gameState);     break;
     case "challenge":    renderChallengeScreen(app, gameState);    break;
     case "tribal":       renderTribalScreen(app, gameState);       break;
@@ -503,38 +503,6 @@ function showScreen(name) {
     case "finalTribal":  renderFinalTribalScreen(app, gameState);  break;
     case "results":      renderResultsScreen(app, gameState);      break;
   }
-}
-
-// v9.0: temporary placeholder for the Episode Recap screen.
-// This phase only WIRES the new state and routing — the real recap UI
-// (tribe rosters, "previously voted out" card, flavor copy) lands in
-// Phase 2 as renderEpisodeRecapScreen() in src/ui/screenEpisodeRecap.js.
-// The placeholder shows enough to verify the flow end-to-end:
-//   • the round number it's opening
-//   • the lastVotedOutPlayerId state (or "no prior boot" in Episode 1)
-//   • a Continue button that dispatches onEpisodeRecapDone()
-function renderEpisodeRecapPlaceholder(container, state) {
-  const last = getLastEliminated(state);
-  const lastLine = last
-    ? `Last voted out: ${escapeHtml(last.name)}`
-    : "The game begins. All castaways remain.";
-
-  container.innerHTML = `
-    <div class="screen">
-      <p class="screen-eyebrow">Episode ${state.round} · Day ${getDay(state)}</p>
-      <h2>Episode Recap</h2>
-      <p class="muted">${lastLine}</p>
-      <p class="muted" style="font-style:italic;font-size:0.85rem">
-        (Placeholder — Phase 2 will replace this with the real recap UI.)
-      </p>
-      <div class="spacer">
-        <button id="episode-recap-continue-btn">Continue →</button>
-      </div>
-    </div>
-  `;
-
-  container.querySelector("#episode-recap-continue-btn")
-    .addEventListener("click", onEpisodeRecapDone);
 }
 
 // ── Final Tribal Council ──────────────────────────────────────────────────────
