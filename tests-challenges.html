@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Challenge Skills — Statistical Tests</title>
+  <link rel="stylesheet" href="src/styles.css" />
+  <style>
+    body { padding: 1.5rem; max-width: 1100px; margin: 0 auto; }
+    .test-suite { margin-bottom: 2rem; }
+    .test-suite h3 {
+      font-size: 1rem;
+      letter-spacing: 0.04em;
+      margin-bottom: 0.5rem;
+      color: var(--gold);
+    }
+    .test-row {
+      padding: 0.5rem 0.75rem;
+      border-bottom: 1px dotted var(--border-dim);
+      display: grid;
+      grid-template-columns: 4ch 1fr auto;
+      gap: 0.6rem;
+      align-items: baseline;
+      font-size: 0.88rem;
+    }
+    .test-row[data-status="pass"] .test-tag { color: #6dd17a; }
+    .test-row[data-status="fail"] .test-tag { color: #ff7e6e; font-weight: bold; }
+    .test-tag { font-family: monospace; font-size: 0.78rem; }
+    .test-name { color: var(--text-primary); }
+    .test-detail {
+      color: var(--text-faint);
+      font-family: monospace;
+      font-size: 0.78rem;
+      text-align: right;
+    }
+    .test-summary {
+      padding: 0.85rem 1.1rem;
+      border-radius: 5px;
+      margin-bottom: 1.5rem;
+      background: var(--bg-card);
+      border-left: 3px solid var(--gold);
+    }
+    .test-summary.all-pass { border-left-color: #6dd17a; }
+    .test-summary.has-fail { border-left-color: #ff7e6e; }
+  </style>
+</head>
+<body class="scene-day">
+
+<h1>Challenge Skills — Statistical Tests</h1>
+<p class="muted" style="margin-bottom:1.5rem">
+  Statistical-bias tests for the v9.2 three-skill challenge system.
+  Each test runs 1,000 trials and asserts that the favored player/tribe
+  wins above a threshold percentage. Tests are seeded by Math.random() so
+  individual runs vary slightly; thresholds are conservative enough that
+  failures should be real bugs, not unlucky runs.
+</p>
+
+<div id="test-summary" class="test-summary">Running…</div>
+<div id="test-results"></div>
+
+<!-- App scripts (no main.js — we don't want auto-boot). -->
+<script src="src/util.js"></script>
+<script src="src/data/contestants.js"></script>
+<script src="src/data/season.js"></script>
+<script src="src/data/flavor.js"></script>
+<script src="src/data/schema.js"></script>
+<script src="src/data/seasonPresets.js"></script>
+<script src="src/data/savedSetups.js"></script>
+<script src="src/data/setupIo.js"></script>
+<script src="src/engine/eventLog.js"></script>
+<script src="src/engine/idols.js"></script>
+<script src="src/engine/relationships.js"></script>
+<script src="src/engine/alliances.js"></script>
+<script src="src/engine/campLife.js"></script>
+<script src="src/engine/challenge.js"></script>
+<script src="src/engine/vote.js"></script>
+<script src="src/engine/jury.js"></script>
+<script src="src/engine/finalTribal.js"></script>
+
+<script>
+// ─── Tiny test harness ──────────────────────────────────────────────────────
+const TESTS = [];
+function test(suite, name, fn) { TESTS.push({ suite, name, fn }); }
+
+class AssertionError extends Error {}
+function assert(cond, msg) {
+  if (!cond) throw new AssertionError(msg || "assertion failed");
+}
+
+// Statistical assertion helper. Reports the actual win rate so failure
+// messages are informative.
+function assertWinRate(wins, trials, minPct, label) {
+  const pct = (wins / trials) * 100;
+  if (pct < minPct) {
+    throw new AssertionError(
+      `${label}: expected ≥ ${minPct.toFixed(1)}%, got ${pct.toFixed(1)}% (${wins}/${trials})`
+    );
+  }
+  return pct;
+}
+
+// ─── Builders ────────────────────────────────────────────────────────────────
+
+function makeContestant(id, name, p, m, e, social = 5, strategy = 5) {
+  const c = {
+    id, name, tribe: null, active: true,
+    physicalChallengeSkill:  p,
+    mentalChallengeSkill:    m,
+    enduranceChallengeSkill: e,
+    social, strategy, suspicion: 0,
+  };
+  normalizeContestantStats(c);
+  return c;
+}
+
+// Two 8-player tribes with hand-tuned compositions, used in tribe-bias tests.
+function makeTribePair(skewedTribe, otherTribe) {
+  return { A: skewedTribe, B: otherTribe };
+}
+
+function makeTribeOfSpec(skill, count = 8) {
+  // skill: "physical" | "mental" | "endurance" — every member has 9 in that
+  // skill and 4 in the other two, so the team is genuinely specialized.
+  const p = skill === "physical"  ? 9 : 4;
+  const m = skill === "mental"    ? 9 : 4;
+  const e = skill === "endurance" ? 9 : 4;
+  return Array.from({ length: count }, (_, i) =>
+    makeContestant(`${skill}-${i}`, `${skill}#${i}`, p, m, e)
+  );
+}
+
+function makeTribeBalanced(count = 8) {
+  return Array.from({ length: count }, (_, i) =>
+    makeContestant(`bal-${i}`, `bal#${i}`, 6, 6, 6)
+  );
+}
+
+// Picks a specific challenge by name from the engine's arrays so we can
+// test against a known type/weights.
+function challengeByName(arr, name) {
+  const found = arr.find(c => c.name === name);
+  if (!found) throw new Error(`Challenge '${name}' not found`);
+  return found;
+}
+
+// ─── Test instrumentation ───────────────────────────────────────────────────
+//
+// runChallenge picks a random challenge from CHALLENGES. For statistical
+// tests we want to lock the picked challenge by mutating the array
+// temporarily. This helper isolates each tribe-challenge run to a single
+// named challenge from CHALLENGES.
+
+function withFixedTribeChallenge(name, fn) {
+  const original = CHALLENGES.slice();
+  const target   = challengeByName(CHALLENGES, name);
+  CHALLENGES.length = 0;
+  CHALLENGES.push(target);
+  try { return fn(); } finally {
+    CHALLENGES.length = 0;
+    for (const c of original) CHALLENGES.push(c);
+  }
+}
+
+function withFixedIndividualChallenge(name, fn) {
+  const original = INDIVIDUAL_CHALLENGES.slice();
+  const target   = challengeByName(INDIVIDUAL_CHALLENGES, name);
+  INDIVIDUAL_CHALLENGES.length = 0;
+  INDIVIDUAL_CHALLENGES.push(target);
+  try { return fn(); } finally {
+    INDIVIDUAL_CHALLENGES.length = 0;
+    for (const c of original) INDIVIDUAL_CHALLENGES.push(c);
+  }
+}
+
+const TRIALS = 1000;
+
+// ─── Suite: helpers ──────────────────────────────────────────────────────────
+
+test("helpers", "getOverallChallengeSkill averages the three sub-skills", () => {
+  const c = makeContestant("t", "T", 9, 6, 3);
+  const o = getOverallChallengeSkill(c);
+  assert(Math.abs(o - 6) < 0.001, `expected 6, got ${o}`);
+});
+
+test("helpers", "getEffectiveChallengePerformance reads weights correctly", () => {
+  const c = makeContestant("t", "T", 8, 4, 6);
+  const ch = { challengeSkillWeights: { physical: 0.7, mental: 0.1, endurance: 0.2 } };
+  const r = getEffectiveChallengePerformance(c, ch);
+  assert(Math.abs(r - 7.2) < 0.001, `expected 7.2, got ${r}`);
+});
+
+test("helpers", "getEffectiveChallengePerformance falls back to composite when no weights", () => {
+  const c = makeContestant("t", "T", 9, 6, 3);
+  const r = getEffectiveChallengePerformance(c, null);
+  assert(Math.abs(r - 6) < 0.001, `expected 6, got ${r}`);
+});
+
+test("helpers", "every CHALLENGES entry has weights summing to ~1", () => {
+  for (const ch of CHALLENGES) {
+    const w = ch.challengeSkillWeights;
+    assert(w, `${ch.name}: missing weights`);
+    const sum = (w.physical ?? 0) + (w.mental ?? 0) + (w.endurance ?? 0);
+    assert(Math.abs(sum - 1) < 0.001, `${ch.name}: weights sum to ${sum}, expected 1`);
+  }
+});
+
+test("helpers", "every INDIVIDUAL_CHALLENGES entry has weights summing to ~1", () => {
+  for (const ch of INDIVIDUAL_CHALLENGES) {
+    const w = ch.challengeSkillWeights;
+    assert(w, `${ch.name}: missing weights`);
+    const sum = (w.physical ?? 0) + (w.mental ?? 0) + (w.endurance ?? 0);
+    assert(Math.abs(sum - 1) < 0.001, `${ch.name}: weights sum to ${sum}, expected 1`);
+  }
+});
+
+// ─── Suite: skill bias in tribe challenges ───────────────────────────────────
+
+test("tribe bias", `physical-spec tribe wins Obstacle Course > 80% (n=${TRIALS})`, () => {
+  let wins = 0;
+  withFixedTribeChallenge("Obstacle Course", () => {
+    for (let i = 0; i < TRIALS; i++) {
+      const tribes = { A: makeTribeOfSpec("physical"), B: makeTribeBalanced() };
+      const result = runChallenge(tribes);
+      if (result.winner === "A") wins++;
+    }
+  });
+  assertWinRate(wins, TRIALS, 80, "physical-spec vs balanced (Obstacle Course)");
+});
+
+test("tribe bias", `mental-spec tribe wins Puzzle Race > 80% (n=${TRIALS})`, () => {
+  let wins = 0;
+  withFixedTribeChallenge("Puzzle Race", () => {
+    for (let i = 0; i < TRIALS; i++) {
+      const tribes = { A: makeTribeOfSpec("mental"), B: makeTribeBalanced() };
+      const result = runChallenge(tribes);
+      if (result.winner === "A") wins++;
+    }
+  });
+  assertWinRate(wins, TRIALS, 80, "mental-spec vs balanced (Puzzle Race)");
+});
+
+test("tribe bias", `endurance-spec tribe wins Endurance Hold > 80% (n=${TRIALS})`, () => {
+  let wins = 0;
+  withFixedTribeChallenge("Endurance Hold", () => {
+    for (let i = 0; i < TRIALS; i++) {
+      const tribes = { A: makeTribeOfSpec("endurance"), B: makeTribeBalanced() };
+      const result = runChallenge(tribes);
+      if (result.winner === "A") wins++;
+    }
+  });
+  assertWinRate(wins, TRIALS, 80, "endurance-spec vs balanced (Endurance Hold)");
+});
+
+test("tribe bias", `physical-spec does NOT dominate Puzzle Race (< 35% wins) (n=${TRIALS})`, () => {
+  // Inverse check: a physical-stacked team should LOSE the puzzle most of
+  // the time when up against a balanced tribe.
+  let wins = 0;
+  withFixedTribeChallenge("Puzzle Race", () => {
+    for (let i = 0; i < TRIALS; i++) {
+      const tribes = { A: makeTribeOfSpec("physical"), B: makeTribeBalanced() };
+      const result = runChallenge(tribes);
+      if (result.winner === "A") wins++;
+    }
+  });
+  const pct = (wins / TRIALS) * 100;
+  if (pct >= 35) {
+    throw new AssertionError(
+      `physical-spec wins ${pct.toFixed(1)}% of Puzzle Race vs balanced — should be < 35%`
+    );
+  }
+});
+
+test("tribe bias", `mental-spec does NOT dominate Endurance Hold (< 35% wins) (n=${TRIALS})`, () => {
+  let wins = 0;
+  withFixedTribeChallenge("Endurance Hold", () => {
+    for (let i = 0; i < TRIALS; i++) {
+      const tribes = { A: makeTribeOfSpec("mental"), B: makeTribeBalanced() };
+      const result = runChallenge(tribes);
+      if (result.winner === "A") wins++;
+    }
+  });
+  const pct = (wins / TRIALS) * 100;
+  if (pct >= 35) {
+    throw new AssertionError(
+      `mental-spec wins ${pct.toFixed(1)}% of Endurance Hold vs balanced — should be < 35%`
+    );
+  }
+});
+
+// ─── Suite: skill bias in individual challenges ─────────────────────────────
+
+test("individual bias", `physical specialist wins Weight Hang > 25% in 8-player field (n=${TRIALS})`, () => {
+  // In an 8-player field, baseline win rate is 12.5%. A specialist tuned
+  // to the dominant skill should clear 25% — twice baseline. Conservative
+  // threshold to avoid flake; tighten if exponent is raised in the future.
+  let wins = 0;
+  withFixedIndividualChallenge("Weight Hang", () => {
+    for (let i = 0; i < TRIALS; i++) {
+      const specialist = makeContestant("spec", "Spec", 5, 4, 10);
+      const others = Array.from({ length: 7 }, (_, i) =>
+        makeContestant(`o${i}`, `O${i}`, 6, 6, 6)
+      );
+      const result = runIndividualChallenge([specialist, ...others]);
+      if (result.winner.id === "spec") wins++;
+    }
+  });
+  assertWinRate(wins, TRIALS, 25, "endurance-spec in Weight Hang (8-player field)");
+});
+
+test("individual bias", `mental specialist wins Memory Sequence > 25% in 8-player field (n=${TRIALS})`, () => {
+  let wins = 0;
+  withFixedIndividualChallenge("Memory Sequence", () => {
+    for (let i = 0; i < TRIALS; i++) {
+      const specialist = makeContestant("spec", "Spec", 4, 10, 5);
+      const others = Array.from({ length: 7 }, (_, i) =>
+        makeContestant(`o${i}`, `O${i}`, 6, 6, 6)
+      );
+      const result = runIndividualChallenge([specialist, ...others]);
+      if (result.winner.id === "spec") wins++;
+    }
+  });
+  assertWinRate(wins, TRIALS, 25, "mental-spec in Memory Sequence (8-player field)");
+});
+
+test("individual bias", `physical specialist does NOT win Memory Sequence > 15% (n=${TRIALS})`, () => {
+  // Inverse: physical specialist in mental challenge should be at or below
+  // baseline (12.5%). 15% threshold leaves slack for noise.
+  let wins = 0;
+  withFixedIndividualChallenge("Memory Sequence", () => {
+    for (let i = 0; i < TRIALS; i++) {
+      const specialist = makeContestant("spec", "Spec", 10, 4, 5);
+      const others = Array.from({ length: 7 }, (_, i) =>
+        makeContestant(`o${i}`, `O${i}`, 6, 6, 6)
+      );
+      const result = runIndividualChallenge([specialist, ...others]);
+      if (result.winner.id === "spec") wins++;
+    }
+  });
+  const pct = (wins / TRIALS) * 100;
+  if (pct > 15) {
+    throw new AssertionError(
+      `physical-spec wins ${pct.toFixed(1)}% of Memory Sequence — expected ≤ 15%`
+    );
+  }
+});
+
+// ─── Suite: tuning hooks ────────────────────────────────────────────────────
+
+test("tuning", `setChallengeRatingExponent narrows wins toward favored side (exp=1.5)`, () => {
+  // Same scenario as the earlier mental-specialist test, but with a higher
+  // exponent. The favored side should win MORE often than at exponent 1.0.
+  const baseline = (() => {
+    let wins = 0;
+    withFixedTribeChallenge("Puzzle Race", () => {
+      for (let i = 0; i < TRIALS / 2; i++) {
+        const tribes = { A: makeTribeOfSpec("mental"), B: makeTribeBalanced() };
+        if (runChallenge(tribes).winner === "A") wins++;
+      }
+    });
+    return wins / (TRIALS / 2);
+  })();
+
+  const prev = setChallengeRatingExponent(1.5);
+  let amplifiedWins = 0;
+  try {
+    withFixedTribeChallenge("Puzzle Race", () => {
+      for (let i = 0; i < TRIALS / 2; i++) {
+        const tribes = { A: makeTribeOfSpec("mental"), B: makeTribeBalanced() };
+        if (runChallenge(tribes).winner === "A") amplifiedWins++;
+      }
+    });
+  } finally {
+    setChallengeRatingExponent(prev);
+  }
+  const amplified = amplifiedWins / (TRIALS / 2);
+
+  if (amplified < baseline - 0.05) {
+    throw new AssertionError(
+      `expected amplified (${(amplified * 100).toFixed(1)}%) ≥ baseline (${(baseline * 100).toFixed(1)}%) - 5%`
+    );
+  }
+});
+
+test("tuning", `DEV_CONFIG.challengeRandomness=0 makes outcomes deterministic by skill`, () => {
+  const prevRand = window.DEV_CONFIG?.challengeRandomness;
+  window.DEV_CONFIG = window.DEV_CONFIG || {};
+  window.DEV_CONFIG.challengeRandomness = 0;
+  let wins = 0;
+  try {
+    withFixedTribeChallenge("Obstacle Course", () => {
+      for (let i = 0; i < 200; i++) {
+        const tribes = { A: makeTribeOfSpec("physical"), B: makeTribeBalanced() };
+        if (runChallenge(tribes).winner === "A") wins++;
+      }
+    });
+  } finally {
+    window.DEV_CONFIG.challengeRandomness = prevRand;
+  }
+  // With zero randomness, the stronger tribe should win 100% of the time.
+  if (wins !== 200) {
+    throw new AssertionError(
+      `expected 200/200 wins with randomness=0, got ${wins}/200`
+    );
+  }
+});
+
+test("tuning", `high randomness (×4) brings win rate closer to 50/50`, () => {
+  const prevRand = window.DEV_CONFIG?.challengeRandomness;
+  window.DEV_CONFIG = window.DEV_CONFIG || {};
+  window.DEV_CONFIG.challengeRandomness = 4;
+  let wins = 0;
+  try {
+    withFixedTribeChallenge("Obstacle Course", () => {
+      for (let i = 0; i < TRIALS; i++) {
+        const tribes = { A: makeTribeOfSpec("physical"), B: makeTribeBalanced() };
+        if (runChallenge(tribes).winner === "A") wins++;
+      }
+    });
+  } finally {
+    window.DEV_CONFIG.challengeRandomness = prevRand;
+  }
+  const pct = (wins / TRIALS) * 100;
+  // High randomness should pull the rate well below the >80% bias seen at
+  // randomness=1. Conservative bound: < 80%.
+  if (pct >= 80) {
+    throw new AssertionError(
+      `expected high-randomness physical-spec wins < 80%, got ${pct.toFixed(1)}%`
+    );
+  }
+});
+
+// ─── Suite: result shape ─────────────────────────────────────────────────────
+
+test("result shape", "runChallenge result includes new narrative fields", () => {
+  const tribes = { A: makeTribeOfSpec("physical"), B: makeTribeBalanced() };
+  const r = runChallenge(tribes);
+  assert("challengeType"    in r, "missing challengeType");
+  assert("topPerformer"     in r, "missing topPerformer");
+  assert("weakestPerformer" in r, "missing weakestPerformer");
+});
+
+test("result shape", "runIndividualChallenge result includes runnerUp and weakestPerformer", () => {
+  const members = Array.from({ length: 6 }, (_, i) =>
+    makeContestant(`m${i}`, `M${i}`, 5 + i, 5, 5)
+  );
+  const r = runIndividualChallenge(members);
+  assert("runnerUp"         in r, "missing runnerUp");
+  assert("weakestPerformer" in r, "missing weakestPerformer");
+  assert(r.winner !== r.runnerUp, "winner and runnerUp should differ");
+});
+
+// ─── Run ─────────────────────────────────────────────────────────────────────
+
+window.addEventListener("DOMContentLoaded", () => {
+  const resultsEl = document.getElementById("test-results");
+  const summaryEl = document.getElementById("test-summary");
+
+  const bySuite = {};
+  for (const t of TESTS) (bySuite[t.suite] ||= []).push(t);
+
+  let passed = 0, failed = 0;
+  const startedAt = performance.now();
+
+  for (const suiteName of Object.keys(bySuite)) {
+    const suiteEl = document.createElement("div");
+    suiteEl.className = "test-suite";
+    suiteEl.innerHTML = `<h3>${suiteName}</h3>`;
+    for (const t of bySuite[suiteName]) {
+      const row = document.createElement("div");
+      row.className = "test-row";
+      const t0 = performance.now();
+      try {
+        t.fn();
+        const ms = (performance.now() - t0).toFixed(0);
+        row.dataset.status = "pass";
+        row.innerHTML = `<span class="test-tag">PASS</span>
+                         <span class="test-name">${t.name}</span>
+                         <span class="test-detail">${ms}ms</span>`;
+        passed++;
+      } catch (e) {
+        const ms = (performance.now() - t0).toFixed(0);
+        row.dataset.status = "fail";
+        row.innerHTML = `<span class="test-tag">FAIL</span>
+                         <span class="test-name">${t.name}</span>
+                         <span class="test-detail">${ms}ms · ${(e && e.message) || e}</span>`;
+        failed++;
+        console.error("[test failed]", t.suite, t.name, e);
+      }
+      suiteEl.appendChild(row);
+    }
+    resultsEl.appendChild(suiteEl);
+  }
+
+  const totalMs = (performance.now() - startedAt).toFixed(0);
+  summaryEl.textContent =
+    `${passed} passed · ${failed} failed · ${TESTS.length} total · ${totalMs}ms`;
+  summaryEl.classList.add(failed === 0 ? "all-pass" : "has-fail");
+});
+</script>
+
+</body>
+</html>

@@ -128,16 +128,34 @@ function getEffectiveChallengePerformance(contestant, challenge) {
   const e = contestant.enduranceChallengeSkill ?? contestant.challenge ?? 5;
 
   const weights = challenge && challenge.challengeSkillWeights;
+  let raw;
   if (!weights) {
     // No challenge metadata → fall back to the overall composite.
-    return (p + m + e) / 3;
+    raw = (p + m + e) / 3;
+  } else {
+    const wp = weights.physical  ?? 0;
+    const wm = weights.mental    ?? 0;
+    const we = weights.endurance ?? 0;
+    raw = p * wp + m * wm + e * we;
   }
 
-  const wp = weights.physical  ?? 0;
-  const wm = weights.mental    ?? 0;
-  const we = weights.endurance ?? 0;
+  // Optional non-linear scaling. Default exponent of 1 = no-op. See the
+  // CHALLENGE_RATING_EXPONENT tuning block above for what other values do.
+  if (CHALLENGE_RATING_EXPONENT === 1) return raw;
+  // Pow on a 1–10 input keeps output on a finite, monotonic curve. We
+  // re-scale so the maximum still lands at 10 — otherwise raising the
+  // exponent would silently amplify the noise term's relative weight.
+  const maxRaw = 10;
+  return Math.pow(raw / maxRaw, CHALLENGE_RATING_EXPONENT) * maxRaw;
+}
 
-  return p * wp + m * wm + e * we;
+// Test/tooling hook — set the exponent at runtime. Returns the previous
+// value so callers can restore it (used by the test suite to verify the
+// curve effect without leaking state into other tests).
+function setChallengeRatingExponent(value) {
+  const prev = CHALLENGE_RATING_EXPONENT;
+  CHALLENGE_RATING_EXPONENT = value;
+  return prev;
 }
 
 // ── Challenge typing (v9.2) ───────────────────────────────────────────────────
@@ -167,10 +185,59 @@ function getEffectiveChallengePerformance(contestant, challenge) {
 //   • The base multiplier on the dominant skill is still 7×; specialization
 //     wins clearly without reducing every challenge to a coin flip.
 
-// Convenience constants — pure-type weight presets.
-const CHALLENGE_WEIGHT_PHYSICAL  = { physical: 0.7, mental: 0.1, endurance: 0.2 };
-const CHALLENGE_WEIGHT_MENTAL    = { physical: 0.1, mental: 0.7, endurance: 0.2 };
-const CHALLENGE_WEIGHT_ENDURANCE = { physical: 0.2, mental: 0.1, endurance: 0.7 };
+// ─────────────────────────────────────────────────────────────────────────────
+// TUNING CONSTANTS — pure-type weight share presets.
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// The three "share" constants below define how a pure-type challenge splits
+// weight across the three sub-skills. Editing these three numbers re-tunes
+// every pure-type challenge (Obstacle Course, Puzzle Race, Endurance Hold,
+// Memory Test) at once — mixed challenges are written inline and unaffected.
+//
+// Must sum to 1.0 so the effective rating stays on the same 1–10 scale as
+// the underlying skills (and the existing noise / threshold tuning stays
+// calibrated).
+//
+//   PURE_DOMINANT_SHARE   — weight on the matching skill. Higher = sharper
+//                           specialization. 0.85 makes specialists almost
+//                           untouchable; 0.5 reverts to "mild specialty."
+//                           Default 0.7.
+//   PURE_SECONDARY_SHARE  — weight on the most-relevant cross-skill.
+//                           For physical challenges this is endurance; for
+//                           mental challenges, endurance again (long focus);
+//                           for endurance challenges, physical (raw strength
+//                           buys you the first stretch). Default 0.2.
+//   PURE_TERTIARY_SHARE   — weight on the least-relevant cross-skill.
+//                           Small floor (default 0.1) so balanced players
+//                           still beat one-trick specialists by a believable
+//                           margin even on pure challenges.
+const PURE_DOMINANT_SHARE  = 0.7;
+const PURE_SECONDARY_SHARE = 0.2;
+const PURE_TERTIARY_SHARE  = 0.1;
+
+// Convenience constants — pure-type weight presets, derived from the shares
+// above. Don't edit these inline; edit the three share constants and let the
+// presets follow.
+const CHALLENGE_WEIGHT_PHYSICAL  = { physical: PURE_DOMINANT_SHARE,  mental: PURE_TERTIARY_SHARE,  endurance: PURE_SECONDARY_SHARE };
+const CHALLENGE_WEIGHT_MENTAL    = { physical: PURE_TERTIARY_SHARE,  mental: PURE_DOMINANT_SHARE,  endurance: PURE_SECONDARY_SHARE };
+const CHALLENGE_WEIGHT_ENDURANCE = { physical: PURE_SECONDARY_SHARE, mental: PURE_TERTIARY_SHARE,  endurance: PURE_DOMINANT_SHARE  };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TUNING CONSTANTS — non-linear scaling hook.
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Optional exponent applied to the per-contestant effective rating before it
+// enters the score sum. Default 1 (linear, no effect). Raising this above 1
+// makes high-skill players disproportionately dominant; lowering it below 1
+// flattens the curve so even low-skill players have a real chance.
+//
+//   1.0  — linear (default; behavior identical to v9.2.0)
+//   1.5  — strong skill amplification: a 9-rated player swamps a 5-rated one
+//   0.7  — flatter curve: 9-rated still favored but 5-rated is competitive
+//
+// Defined as a let so dev panel / tests can override at runtime. Read once
+// per call — there's no caching, so live changes take effect immediately.
+let CHALLENGE_RATING_EXPONENT = 1.0;
 
 // ── Tribal challenges (pre-merge) ─────────────────────────────────────────────
 

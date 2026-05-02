@@ -72,6 +72,7 @@ Goal: Complete season with a winner.
 - [x] v2.8: Varied vote reveal intros, jury join messages, FTC ceremony/winner text
 - [x] v2.8: Merge screen tribe survivor count breakdown
 - [x] v9.0: Episode Recap screen — start-of-round summary with previously voted-out + current rosters; new state field `lastVotedOutPlayerId`; `tests-recap.html` runner
+- [x] v9.2: Three challenge sub-skills (physical / mental / endurance) with per-challenge weights, effective performance rating, type-aware resolution, tunable balance constants, `tests-challenges.html` runner, `docs/challenges.md`
 - [ ] Stats: challenges won, votes received, relationships
 
 ---
