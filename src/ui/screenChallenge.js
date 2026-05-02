@@ -121,13 +121,13 @@ function renderTribalChallengeScreen(container, state) {
       <h2>Immunity Challenge</h2>
       <p class="challenge-type-label">${result.name}</p>
 
-      <div class="event-log">
-        <p>${description}</p>
-      </div>
-
       <div class="challenge-roster-grid">
         ${rosterA}
         ${rosterB}
+      </div>
+
+      <div class="event-log">
+        <p>${description}</p>
       </div>
 
       <div class="challenge-outcome-grid">
@@ -194,12 +194,12 @@ function renderIndividualChallengeScreen(container, state) {
       <h2>Individual Immunity</h2>
       <p class="challenge-type-label">${result.name}</p>
 
-      <div class="event-log">
-        <p>${description}</p>
-      </div>
-
       <div class="challenge-roster-grid challenge-roster-grid-single">
         ${mergedRoster}
+      </div>
+
+      <div class="event-log">
+        <p>${description}</p>
       </div>
 
       <div class="indiv-immunity-winner">
