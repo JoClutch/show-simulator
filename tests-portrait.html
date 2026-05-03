@@ -104,6 +104,8 @@
 <script src="src/engine/jury.js"></script>
 <script src="src/engine/finalTribal.js"></script>
 <script src="src/ui/components/playerPortrait.js"></script>
+<script src="src/ui/components/contestantStats.js"></script>
+<script src="src/ui/screenSelect.js"></script>
 
 <script>
 // ─── Tiny test harness ──────────────────────────────────────────────────────
@@ -236,6 +238,57 @@ test("renderPlayerPortrait", "size modifier applied correctly", () => {
   assertNotContains(html, "player-portrait--md");
 });
 
+// ─── Suite: v9.12 canonical size aliases ─────────────────────────────────────
+
+test("size aliases", "\"small\" maps to player-portrait--sm", () => {
+  const html = renderPlayerPortrait(makePlayer("M Webb"), { size: "small" });
+  assertContains(html, "player-portrait--sm");
+  assertNotContains(html, "player-portrait--md");
+  assertNotContains(html, "player-portrait--lg");
+});
+
+test("size aliases", "\"medium\" maps to player-portrait--md", () => {
+  const html = renderPlayerPortrait(makePlayer("M Webb"), { size: "medium" });
+  assertContains(html, "player-portrait--md");
+  assertNotContains(html, "player-portrait--sm");
+  assertNotContains(html, "player-portrait--lg");
+});
+
+test("size aliases", "\"large\" maps to player-portrait--lg", () => {
+  const html = renderPlayerPortrait(makePlayer("M Webb"), { size: "large" });
+  assertContains(html, "player-portrait--lg");
+  assertNotContains(html, "player-portrait--sm");
+  assertNotContains(html, "player-portrait--md");
+});
+
+test("size aliases", "default size (no arg) is medium", () => {
+  const html = renderPlayerPortrait(makePlayer("M Webb"));
+  assertContains(html, "player-portrait--md");
+});
+
+test("size aliases", "legacy sm/md/lg still work unchanged", () => {
+  assertContains(renderPlayerPortrait(makePlayer("X"), { size: "sm" }), "player-portrait--sm");
+  assertContains(renderPlayerPortrait(makePlayer("X"), { size: "md" }), "player-portrait--md");
+  assertContains(renderPlayerPortrait(makePlayer("X"), { size: "lg" }), "player-portrait--lg");
+});
+
+test("size aliases", "unknown size falls back to medium (defensive)", () => {
+  // The component should never emit a `player-portrait--undefined` class.
+  const html = renderPlayerPortrait(makePlayer("X"), { size: "ginormous" });
+  assertContains(html, "player-portrait--md");
+  assertNotContains(html, "player-portrait--undefined");
+  assertNotContains(html, "player-portrait--ginormous");
+});
+
+test("size aliases", "real image branch also gets the alias-resolved class", () => {
+  const html = renderPlayerPortrait(
+    makePlayer("M Webb", { portraitUrl: "img/x.png" }),
+    { size: "large" }
+  );
+  assertContains(html, "player-portrait--lg");
+  assertContains(html, "<img");
+});
+
 test("renderPlayerPortrait", "circle modifier applied", () => {
   const html = renderPlayerPortrait(makePlayer("M Webb"), { shape: "circle" });
   assertContains(html, "player-portrait--circle");
@@ -361,6 +414,92 @@ test("schema", "validateContestant rejects non-string portraitUrl", () => {
     portraitUrl: 42,
   });
   assert(errs.some(e => /portraitUrl/.test(e)), "expected portraitUrl error");
+});
+
+// ─── Suite: character selection screen integration ─────────────────────────
+//
+// buildCard is the per-card render helper from src/ui/screenSelect.js. It's
+// loaded as a global by the script tag above. We call it directly with a
+// synthetic contestant + tribe color and inspect the resulting DOM.
+
+test("selection", "every selectable contestant card includes a portrait", () => {
+  const c = makePlayer("Marcus Webb", { originalTribe: "A" });
+  c.physicalChallengeSkill = 8; c.mentalChallengeSkill = 6;
+  c.enduranceChallengeSkill = 9; c.social = 5; c.strategy = 6;
+  normalizeContestantStats(c);
+  const card = buildCard(c, "#e87c2b");
+  const portrait = card.querySelector(".player-portrait");
+  assert(portrait, "card must contain a .player-portrait");
+});
+
+test("selection", "selection portrait uses the large size variant", () => {
+  const c = makePlayer("Marcus Webb", { originalTribe: "A" });
+  normalizeContestantStats(c);
+  const card = buildCard(c, "#e87c2b");
+  const portrait = card.querySelector(".player-portrait");
+  assert(portrait.classList.contains("player-portrait--lg"),
+    "expected --lg class (the canonical large size)");
+});
+
+test("selection", "portrait stacks above the name (player-portrait--stacked)", () => {
+  const c = makePlayer("Marcus Webb", { originalTribe: "A" });
+  normalizeContestantStats(c);
+  const card = buildCard(c, "#e87c2b");
+  const portrait = card.querySelector(".player-portrait");
+  assert(portrait.classList.contains("player-portrait--stacked"),
+    "stacked modifier is required so the portrait centers above the name");
+});
+
+test("selection", "card renders portrait BEFORE the name in the DOM", () => {
+  const c = makePlayer("Marcus Webb", { originalTribe: "A" });
+  normalizeContestantStats(c);
+  const card = buildCard(c, "#e87c2b");
+  const portraitIdx = Array.from(card.children).findIndex(el => el.classList.contains("player-portrait"));
+  const nameIdx     = Array.from(card.children).findIndex(el => el.classList.contains("card-name"));
+  assert(portraitIdx !== -1 && nameIdx !== -1, "both elements must exist");
+  assert(portraitIdx < nameIdx, "portrait should precede name in DOM order");
+});
+
+test("selection", "placeholder initials match the contestant's name", () => {
+  const c = makePlayer("Marcus Webb", { originalTribe: "A" });
+  normalizeContestantStats(c);
+  const card = buildCard(c, "#e87c2b");
+  const initialsEl = card.querySelector(".player-portrait__initials");
+  assert(initialsEl, "placeholder branch should render initials span");
+  assertEqual(initialsEl.textContent.trim(), "MW");
+});
+
+test("selection", "real portraitUrl on a contestant renders an <img> instead of initials", () => {
+  const c = makePlayer("Marcus Webb", {
+    originalTribe: "A",
+    portraitUrl:   "img/portraits/marcus.png",
+  });
+  normalizeContestantStats(c);
+  const card = buildCard(c, "#e87c2b");
+  const img = card.querySelector(".player-portrait__img");
+  const initialsEl = card.querySelector(".player-portrait__initials");
+  assert(img, "expected <img> for portraitUrl");
+  assert(!initialsEl, "expected no initials when portraitUrl is set");
+});
+
+test("selection", "portrait alt/aria-label carries the full name (a11y)", () => {
+  const c = makePlayer("Marcus Webb", { originalTribe: "A" });
+  normalizeContestantStats(c);
+  const card = buildCard(c, "#e87c2b");
+  const portrait = card.querySelector(".player-portrait");
+  // Placeholder branch uses aria-label; image branch uses <img alt>.
+  // Either way the full name must be exposed to assistive tech.
+  const exposed = portrait.getAttribute("aria-label") ||
+                  portrait.querySelector("img")?.getAttribute("alt");
+  assertEqual(exposed, "Marcus Webb");
+});
+
+test("selection", "card name text is the full name (selection screen uses 'full')", () => {
+  const c = makePlayer("Marcus Webb", { originalTribe: "A" });
+  normalizeContestantStats(c);
+  const card = buildCard(c, "#e87c2b");
+  const nameEl = card.querySelector(".card-name");
+  assertEqual(nameEl.textContent.trim(), "Marcus Webb");
 });
 
 // ─── Run ─────────────────────────────────────────────────────────────────────
