@@ -1,9 +1,12 @@
-// screenShowSeasons.js — show page (v10.0)
+// screenShowSeasons.js — show page (v10.1)
 //
-// Lists what's available within a specific show. v10.0 ships a minimal
-// version — show name, tagline, and two action buttons (Demo Season,
-// Build Your Own). The next phase will replace the buttons with a
-// proper grid of season cards driven by src/data/seasons.js.
+// Lists all seasons available within the show the user clicked into on
+// the landing page. Each season is a card driven by src/data/seasons.js.
+// Clicking a card branches on the season's `type`:
+//
+//   "demo" / "prebuilt"  → resolve templateRef, run boot-tail, → "select"
+//   "custom"             → apply default template as a starting point,
+//                          → "templates" (existing template/cast/rules flow)
 //
 // Module-local state tracks which show the user clicked into from the
 // landing page. Set by onShowSelected() before showScreen("showSeasons").
@@ -25,6 +28,9 @@ function renderShowSeasonsScreen(container, state) {
     return;
   }
 
+  const seasons = getSeasonsForShow(show.id);
+  const cards   = seasons.map(buildSeasonCardHTML).join("");
+
   container.innerHTML = `
     <div class="screen show-seasons-screen">
       <a href="#" class="back-link" id="back-to-landing">← All Shows</a>
@@ -37,13 +43,9 @@ function renderShowSeasonsScreen(container, state) {
         <p class="muted">${escapeHtml(show.description ?? "")}</p>
       </header>
 
-      <div class="show-seasons-actions">
-        <button id="start-demo-season-btn" class="show-season-btn show-season-btn-primary">
-          Play Demo Season →
-        </button>
-        <button id="start-custom-season-btn" class="show-season-btn">
-          Build Your Own Season
-        </button>
+      <h2 class="show-seasons-heading">Seasons</h2>
+      <div class="show-seasons-grid">
+        ${cards || `<p class="muted">No seasons available yet.</p>`}
       </div>
     </div>
   `;
@@ -53,23 +55,85 @@ function renderShowSeasonsScreen(container, state) {
     showScreen("landing");
   });
 
-  container.querySelector("#start-demo-season-btn").addEventListener("click", () => {
-    startDemoSeason();
-  });
-
-  container.querySelector("#start-custom-season-btn").addEventListener("click", () => {
-    startCustomSeasonSetup();
+  // Wire each season card's CTA button. Only available seasons get one.
+  container.querySelectorAll(".season-card-cta-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const seasonId = btn.dataset.seasonId;
+      onSeasonSelected(seasonId);
+    });
   });
 }
 
-// ── Season-start handlers ──────────────────────────────────────────────────
-//
-// These wrap the boot-tail steps that previously ran on DOMContentLoaded.
-// Same operations, same order, same result — just gated behind a season
-// pick instead of running unconditionally on app load.
+function buildSeasonCardHTML(season) {
+  const isAvailable = season.available !== false;
+  const isCustom    = season.type === "custom";
 
-function startDemoSeason() {
-  applyTemplate(DEFAULT_SEASON_TEMPLATE);
+  const cls = [
+    "season-card",
+    isCustom    ? "season-card--custom"      : "",
+    !isAvailable ? "season-card--unavailable" : "",
+  ].filter(Boolean).join(" ");
+
+  const ctaLabel = season.ctaLabel ?? "Play →";
+
+  const cta = isAvailable
+    ? `<button class="season-card-cta-btn ${isCustom ? "" : "season-card-cta-btn-primary"}"
+               data-season-id="${escapeHtmlAttr(season.id)}">
+         ${escapeHtml(ctaLabel)}
+       </button>`
+    : `<div class="season-card-coming-soon">Coming Soon</div>`;
+
+  return `
+    <div class="${cls}">
+      <div class="season-card-body">
+        <h3 class="season-card-name">${escapeHtml(season.name)}</h3>
+        <p class="season-card-description muted">${escapeHtml(season.description ?? "")}</p>
+        <div class="season-card-cta">${cta}</div>
+      </div>
+    </div>
+  `;
+}
+
+// ── Season-start dispatcher ────────────────────────────────────────────────
+//
+// Invoked when a user clicks a season card's CTA. Branches on the season's
+// `type` so each kind of season gets the right entry path. Demo and prebuilt
+// seasons share the same boot-tail (apply template → init game → select);
+// custom routes to the existing template/cast/rules editor flow.
+
+function onSeasonSelected(seasonId) {
+  const season = getSeasonById(seasonId);
+  if (!season) {
+    console.error(`[onSeasonSelected] unknown season '${seasonId}'`);
+    return;
+  }
+
+  switch (season.type) {
+    case "demo":
+    case "prebuilt": {
+      const template = resolveTemplate(season.templateRef);
+      if (!template) {
+        console.error(`[onSeasonSelected] season '${seasonId}' has no resolvable template`);
+        return;
+      }
+      startBundledSeason(template);
+      break;
+    }
+
+    case "custom":
+      startCustomSeasonSetup();
+      break;
+
+    default:
+      console.error(`[onSeasonSelected] unknown season type '${season.type}'`);
+  }
+}
+
+// Boot-tail for any bundled season (demo or prebuilt). Runs the same six
+// steps that previously ran unconditionally on DOMContentLoaded — they
+// just fire on demand now, with whichever template the user picked.
+function startBundledSeason(template) {
+  applyTemplate(template);
   normalizeAllContestants(CONTESTANTS);
   gameState = createSeasonState();
   assignTribes(CONTESTANTS, gameState);
@@ -77,10 +141,10 @@ function startDemoSeason() {
   showScreen("select");
 }
 
+// Custom-season entry: apply the default template as a starting point so
+// the existing setup screens (templates / cast editor / rules editor) have
+// a valid active template to read from, then route to the template picker.
 function startCustomSeasonSetup() {
-  // Apply the default template as a starting point so the existing
-  // setup screens (templates / cast editor / rules editor) have a valid
-  // active template to read from. Users can override anything from there.
   applyTemplate(DEFAULT_SEASON_TEMPLATE);
   normalizeAllContestants(CONTESTANTS);
   gameState = createSeasonState();
