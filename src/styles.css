@@ -791,12 +791,16 @@ select:focus {
 
 .target-row {
   display: grid;
-  grid-template-columns: 0.8rem 1fr;
+  /* v9.4: dot · portrait · name (added portrait column for the sm avatar). */
+  grid-template-columns: 0.8rem auto 1fr;
   align-items: center;
   gap: 0.55rem;
   padding: 0.25rem 0.15rem;
   font-size: 0.85rem;
 }
+/* The inline-portrait modifier adds margin-right for chip layouts; cancel
+   it inside .target-row so the grid gap is the single source of spacing. */
+.target-row .player-portrait--inline { margin-right: 0; }
 
 .target-row + .target-row {
   border-top: 1px solid rgba(255, 255, 255, 0.03);
@@ -3250,6 +3254,23 @@ select:focus {
 .player-portrait--md { width: 56px; height: 56px; }
 .player-portrait--lg { width: 96px; height: 96px; }
 .player-portrait--circle { border-radius: 50%; }
+
+/* v9.4: stacked layout — portrait sits ABOVE a name on focal-subject
+   cards (BrantSteele-style chyron). Used by elimination headlines,
+   vote-target picker cards, idol-reveal headlines, recap boot card.
+   For inline usage (portrait next to name in a row) the default
+   inline-flex behavior is what you want — no modifier needed. */
+.player-portrait--stacked {
+  display: block;
+  margin: 0 auto 0.45rem;
+}
+
+/* v9.4: small right-margin variant for inline row usage (portrait left,
+   name right). Keeps portrait flush with text and gives a consistent
+   gap that matches our 0.5rem chip spacing convention. */
+.player-portrait--inline {
+  margin-right: 0.5rem;
+}
 
 .player-portrait__img {
   width: 100%;

@@ -207,6 +207,7 @@ function renderIndividualChallengeScreen(container, state) {
 
       <div class="indiv-immunity-winner">
         <div class="immunity-necklace-icon">⬡</div>
+        ${renderPlayerPortrait(result.winner, { size: "lg", extraClass: "player-portrait--stacked" })}
         <div class="immunity-winner-name" style="color:${mergeColor}">${escapeHtml(getPlayerDisplayName(result.winner, FORMAT_BY_SCREEN.challenge))}</div>
         <div class="immunity-winner-sub">wins Individual Immunity</div>
       </div>

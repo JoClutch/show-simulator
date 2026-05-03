@@ -690,6 +690,7 @@ function renderCampLifeScreen(container, state) {
       return `
         <li class="target-row${isYou ? " target-row-you" : ""}">
           <span class="target-row-dot" aria-hidden="true">●</span>
+          ${renderPlayerPortrait(c, { size: "sm", extraClass: "player-portrait--inline" })}
           <span class="target-row-name">${escapeHtml(getPlayerDisplayName(c, FORMAT_BY_SCREEN.campLife))}${isYou ? " (you)" : ""}</span>
         </li>
       `;

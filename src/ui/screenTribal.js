@@ -297,6 +297,7 @@ function runRevotePhase(container, state, attendees, originalVotes, tiedIds, pro
     const card = document.createElement("div");
     card.className = "contestant-card";
     card.innerHTML = `
+      ${renderPlayerPortrait(c, { size: "md", extraClass: "player-portrait--stacked" })}
       <div class="card-name">${escapeHtml(getPlayerDisplayName(c, FORMAT_BY_SCREEN.tribal))}</div>
       <div class="card-stats">
         <div class="stat-row">
@@ -495,6 +496,7 @@ function buildVotingGrid(container, eligible, getVote, setVote) {
     const card = document.createElement("div");
     card.className = "contestant-card";
     card.innerHTML = `
+      ${renderPlayerPortrait(c, { size: "md", extraClass: "player-portrait--stacked" })}
       <div class="card-name">${escapeHtml(getPlayerDisplayName(c, FORMAT_BY_SCREEN.tribal))}</div>
       <div class="card-stats">
         <div class="stat-row">
@@ -684,6 +686,7 @@ function showAIIdolReveal(container, state, contestant, onContinue) {
 
       <div class="idol-reveal-card idol-reveal-ai">
         <div class="idol-reveal-icon">◆</div>
+        ${renderPlayerPortrait(contestant, { size: "lg", extraClass: "player-portrait--stacked" })}
         <div class="idol-reveal-headline">${escapeHtml(getPlayerDisplayName(contestant, FORMAT_BY_SCREEN.tribal))} plays an idol!</div>
         <p class="idol-reveal-line">${escapeHtml(announcement)}</p>
         <p class="idol-reveal-effect">${escapeHtml(effect)}</p>

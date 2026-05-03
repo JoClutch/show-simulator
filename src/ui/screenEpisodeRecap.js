@@ -117,6 +117,7 @@ function buildPrevBootCardHTML(boot, state) {
   return `
     <div class="recap-prev-boot-card">
       <div class="recap-prev-boot-eyebrow">Previously voted out</div>
+      ${renderPlayerPortrait(boot, { size: "lg", extraClass: "player-portrait--stacked is-eliminated" })}
       <div class="recap-prev-boot-name">${escapeHtml(getPlayerDisplayName(boot, FORMAT_BY_SCREEN.episodeRecap))}</div>
       <div class="recap-prev-boot-tribe" style="color:${origColor}">
         ${escapeHtml(origName)}
