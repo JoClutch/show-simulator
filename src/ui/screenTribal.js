@@ -302,26 +302,7 @@ function runRevotePhase(container, state, attendees, originalVotes, tiedIds, pro
     card.innerHTML = `
       ${renderPlayerPortrait(c, { size: "md", extraClass: "player-portrait--stacked" })}
       <div class="card-name">${escapeHtml(getPlayerDisplayName(c, FORMAT_BY_SCREEN.tribal))}</div>
-      <div class="card-stats">
-        <div class="stat-row">
-          <span class="stat-label" title="Avg of Physical / Mental / Endurance">Challenge</span>
-          <span class="stat-value">${c.challenge}</span>
-        </div>
-        <div class="stat-bar"><div class="stat-bar-fill" style="width:${c.challenge * 10}%"></div></div>
-        <div class="stat-substats" title="Physical · Mental · Endurance">
-          P ${c.physicalChallengeSkill} · M ${c.mentalChallengeSkill} · E ${c.enduranceChallengeSkill}
-        </div>
-        <div class="stat-row">
-          <span class="stat-label">Social</span>
-          <span class="stat-value">${c.social}</span>
-        </div>
-        <div class="stat-bar"><div class="stat-bar-fill" style="width:${c.social * 10}%"></div></div>
-        <div class="stat-row">
-          <span class="stat-label">Strategy</span>
-          <span class="stat-value">${c.strategy}</span>
-        </div>
-        <div class="stat-bar"><div class="stat-bar-fill" style="width:${c.strategy * 10}%"></div></div>
-      </div>
+      ${renderContestantStatsHTML(c)}
     `;
     card.addEventListener("click", () => {
       grid.querySelectorAll(".contestant-card").forEach(el => el.classList.remove("selected"));
@@ -504,26 +485,7 @@ function buildVotingGrid(container, eligible, getVote, setVote) {
     card.innerHTML = `
       ${renderPlayerPortrait(c, { size: "md", extraClass: "player-portrait--stacked" })}
       <div class="card-name">${escapeHtml(getPlayerDisplayName(c, FORMAT_BY_SCREEN.tribal))}</div>
-      <div class="card-stats">
-        <div class="stat-row">
-          <span class="stat-label" title="Avg of Physical / Mental / Endurance">Challenge</span>
-          <span class="stat-value">${c.challenge}</span>
-        </div>
-        <div class="stat-bar"><div class="stat-bar-fill" style="width:${c.challenge * 10}%"></div></div>
-        <div class="stat-substats" title="Physical · Mental · Endurance">
-          P ${c.physicalChallengeSkill} · M ${c.mentalChallengeSkill} · E ${c.enduranceChallengeSkill}
-        </div>
-        <div class="stat-row">
-          <span class="stat-label">Social</span>
-          <span class="stat-value">${c.social}</span>
-        </div>
-        <div class="stat-bar"><div class="stat-bar-fill" style="width:${c.social * 10}%"></div></div>
-        <div class="stat-row">
-          <span class="stat-label">Strategy</span>
-          <span class="stat-value">${c.strategy}</span>
-        </div>
-        <div class="stat-bar"><div class="stat-bar-fill" style="width:${c.strategy * 10}%"></div></div>
-      </div>
+      ${renderContestantStatsHTML(c)}
     `;
     card.addEventListener("click", () => {
       container.querySelectorAll("#vote-grid .contestant-card")

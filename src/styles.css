@@ -489,16 +489,6 @@ select:focus {
   margin-top: 0.2rem;
 }
 
-/* v9.1: compact sub-skill breakdown line ("P 8 · M 6 · E 9").
-   Used on tribal-cards where a full set of three bars per skill would
-   make the cards too tall. */
-.stat-substats {
-  font-size: 0.68rem;
-  color: var(--text-faint);
-  letter-spacing: 0.04em;
-  margin: 0.15rem 0 0.45rem;
-}
-
 .stat-bar-fill {
   height: 100%;
   background-color: #6a80cc;

@@ -179,33 +179,7 @@ function buildCard(contestant, tribeColor) {
     <div class="card-selected-indicator">▶ Your pick</div>
     <div class="card-tribe-pip" style="background-color: ${tribeColor}"></div>
     <div class="card-name">${escapeHtml(contestant.name)}</div>
-    <div class="card-stats">
-      <div class="stat-row">
-        <span class="stat-label">Physical</span>
-        <span class="stat-value">${contestant.physicalChallengeSkill}</span>
-      </div>
-      <div class="stat-bar"><div class="stat-bar-fill" style="width:${contestant.physicalChallengeSkill * 10}%"></div></div>
-      <div class="stat-row">
-        <span class="stat-label">Mental</span>
-        <span class="stat-value">${contestant.mentalChallengeSkill}</span>
-      </div>
-      <div class="stat-bar"><div class="stat-bar-fill" style="width:${contestant.mentalChallengeSkill * 10}%"></div></div>
-      <div class="stat-row">
-        <span class="stat-label">Endurance</span>
-        <span class="stat-value">${contestant.enduranceChallengeSkill}</span>
-      </div>
-      <div class="stat-bar"><div class="stat-bar-fill" style="width:${contestant.enduranceChallengeSkill * 10}%"></div></div>
-      <div class="stat-row">
-        <span class="stat-label">Social</span>
-        <span class="stat-value">${contestant.social}</span>
-      </div>
-      <div class="stat-bar"><div class="stat-bar-fill" style="width:${contestant.social * 10}%"></div></div>
-      <div class="stat-row">
-        <span class="stat-label">Strategy</span>
-        <span class="stat-value">${contestant.strategy}</span>
-      </div>
-      <div class="stat-bar"><div class="stat-bar-fill" style="width:${contestant.strategy * 10}%"></div></div>
-    </div>
+    ${renderContestantStatsHTML(contestant)}
   `;
 
   return card;
