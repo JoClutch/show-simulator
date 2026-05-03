@@ -3629,16 +3629,27 @@ select:focus {
   min-height: 3rem;
 }
 
+/* v9.16: reveal cards now contain a stacked portrait above the name.
+   Switched from horizontal chip layout to a vertical column so the
+   portrait + name stack is the visual anchor. The wrap-flow row of
+   multiple cards still works — each card just takes more vertical space. */
 .reveal-card {
   background-color: var(--bg-card);
   border: 1px solid var(--border-dim);
-  border-radius: 4px;
-  padding: 0.5rem 1rem;
-  font-size: 0.9rem;
+  border-radius: 5px;
+  padding: 0.65rem 0.85rem 0.6rem;
+  font-size: 0.95rem;
+  font-weight: bold;
   color: var(--text-primary);
   opacity: 0;
   transform: translateY(6px);
   transition: opacity 0.35s ease, transform 0.35s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  min-width: 5.5rem;
+  position: relative;
 }
 
 .reveal-card.revealed {
