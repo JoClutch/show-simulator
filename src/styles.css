@@ -3624,7 +3624,9 @@ select:focus {
 .reveal-cards {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  /* v9.17: gap bumped from 0.5rem so the now-taller portrait cards
+     breathe in the wrap-flow without feeling crowded. */
+  gap: 0.65rem;
   margin-bottom: 1.25rem;
   min-height: 3rem;
 }

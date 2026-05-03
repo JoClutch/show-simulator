@@ -747,21 +747,12 @@ function renderRevealPhase(container, state, revealOrder, eliminated, protectedI
       isVoided                     ? "reveal-card-voided"   : "",
       isDecisive                   ? "reveal-card-decisive" : "",
     ].filter(Boolean).join(" ");
-    // v9.16: portrait above the vote text. `target` is already the full
-    // contestant object (destructured from revealOrder above) — no lookup
-    // needed. The decisive (lock-in) card uses a slightly larger portrait
-    // so the final beat punches; non-decisive cards use medium so the
-    // wrap-flow of multiple cards stays readable.
-    const portraitSize = isDecisive ? "large" : "medium";
-    const portraitHTML = renderPlayerPortrait(target, {
-      size:       portraitSize,
-      extraClass: "player-portrait--stacked",
-    });
-    const nameHTML = `<span class="reveal-card-name">${escapeHtml(getPlayerDisplayName(target, FORMAT_BY_SCREEN.tribal))}</span>`;
-
-    card.innerHTML = isVoided
-      ? `${portraitHTML}${nameHTML}<span class="reveal-card-void-badge">VOID</span>`
-      : `${portraitHTML}${nameHTML}`;
+    // v9.17: reveal-card content extracted into renderVoteRevealCardHTML
+    // (companion to renderVoteTargetCardHTML used by the casting cards).
+    // The outer .reveal-card classes (danger / decisive / voided) and the
+    // reveal animation lifecycle stay here; the helper just composes the
+    // portrait + name + optional VOID badge.
+    card.innerHTML = renderVoteRevealCardHTML(target, { isDecisive, isVoided });
     cardsEl.appendChild(card);
 
     requestAnimationFrame(() => card.classList.add("revealed"));
