@@ -298,12 +298,8 @@ function runRevotePhase(container, state, attendees, originalVotes, tiedIds, pro
   const castBtn = container.querySelector("#revote-cast-btn");
   for (const c of tiedContestants) {
     const card = document.createElement("div");
-    card.className = "contestant-card";
-    card.innerHTML = `
-      ${renderPlayerPortrait(c, { size: "large", extraClass: "player-portrait--stacked" })}
-      <div class="card-name">${escapeHtml(getPlayerDisplayName(c, FORMAT_BY_SCREEN.tribal))}</div>
-      ${renderContestantStatsHTML(c)}
-    `;
+    card.className = "contestant-card contestant-card-vote";
+    card.innerHTML = renderVoteTargetCardHTML(c);
     card.addEventListener("click", () => {
       grid.querySelectorAll(".contestant-card").forEach(el => el.classList.remove("selected"));
       card.classList.add("selected");
@@ -479,14 +475,15 @@ function buildVotingGrid(container, eligible, getVote, setVote) {
   const grid    = container.querySelector("#vote-grid");
   const castBtn = container.querySelector("#cast-btn");
 
+  // v9.15: vote-casting cards intentionally show portrait + name ONLY — no
+  // stat block. Players shouldn't be reading challenge/social/strategy
+  // numbers while choosing whom to vote off; it pushes the choice toward
+  // a calculator instead of a read of the room. Stats remain on the
+  // Selection screen via screenSelect.js's renderContestantStatsHTML call.
   for (const c of eligible) {
     const card = document.createElement("div");
-    card.className = "contestant-card";
-    card.innerHTML = `
-      ${renderPlayerPortrait(c, { size: "large", extraClass: "player-portrait--stacked" })}
-      <div class="card-name">${escapeHtml(getPlayerDisplayName(c, FORMAT_BY_SCREEN.tribal))}</div>
-      ${renderContestantStatsHTML(c)}
-    `;
+    card.className = "contestant-card contestant-card-vote";
+    card.innerHTML = renderVoteTargetCardHTML(c);
     card.addEventListener("click", () => {
       container.querySelectorAll("#vote-grid .contestant-card")
         .forEach(el => el.classList.remove("selected"));
