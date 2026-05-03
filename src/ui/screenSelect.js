@@ -175,9 +175,15 @@ function buildCard(contestant, tribeColor) {
   card.className = "contestant-card";
   card.dataset.id = contestant.id;
 
+  // v9.11: portrait above the name on each cast card. Uses the same md
+  // stacked treatment as the Tribal Council vote-target cards so cast
+  // selection reads as the same visual family. Tinted by originalTribe
+  // color via the portrait component's default; falls back to a neutral
+  // dark surface if originalTribe isn't set yet at this point.
   card.innerHTML = `
     <div class="card-selected-indicator">▶ Your pick</div>
     <div class="card-tribe-pip" style="background-color: ${tribeColor}"></div>
+    ${renderPlayerPortrait(contestant, { size: "md", extraClass: "player-portrait--stacked" })}
     <div class="card-name">${escapeHtml(contestant.name)}</div>
     ${renderContestantStatsHTML(contestant)}
   `;
