@@ -900,6 +900,12 @@ select:focus {
 
 .camp-tribe-name {
   color: var(--text-primary);
+  /* v9.9: long names truncate cleanly inside the 4-track grid rather than
+     pushing the trailing tier label off-row at narrow widths. */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .camp-tribe-row-self .camp-tribe-name {
@@ -3448,6 +3454,15 @@ select:focus {
 }
 .challenge-roster-item:last-child {
   border-bottom: none;
+}
+/* v9.9: name span gets the remaining row width and truncates cleanly on
+   narrow viewports rather than pushing the "(you)" tag off-row. */
+.challenge-roster-item-name {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .challenge-roster-me {
   color: var(--text-primary);
