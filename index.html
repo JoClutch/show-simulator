@@ -23,6 +23,7 @@
   <!-- v4: schema definitions + season template architecture (groundwork) -->
   <script src="src/data/schema.js"></script>
   <script src="src/data/seasonPresets.js"></script>
+  <script src="src/data/shows.js"></script>
   <script src="src/data/savedSetups.js"></script>
   <script src="src/data/setupIo.js"></script>
 
@@ -38,6 +39,10 @@
   <script src="src/engine/finalTribal.js"></script>
 
   <!-- UI -->
+  <!-- v10.0 landing + show pages — load before screenSelect so the screen router can dispatch them -->
+  <script src="src/ui/screenLanding.js"></script>
+  <script src="src/ui/screenShowSeasons.js"></script>
+
   <!-- v9.3 reusable components (portrait, name format) — must load before any screen file that uses them -->
   <script src="src/ui/components/playerPortrait.js"></script>
   <script src="src/ui/components/contestantStats.js"></script>

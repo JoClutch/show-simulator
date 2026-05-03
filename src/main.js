@@ -543,6 +543,8 @@ function showScreen(name) {
   document.body.classList.toggle("scene-day",   !NIGHT_SCENES.has(name));
 
   switch (name) {
+    case "landing":      renderLandingScreen(app, gameState);      break;
+    case "showSeasons":  renderShowSeasonsScreen(app, gameState);  break;
     case "select":       renderSelectScreen(app, gameState);       break;
     case "castEditor":   renderCastEditorScreen(app, gameState);   break;
     case "rulesEditor":  renderRulesEditorScreen(app, gameState);  break;
@@ -651,22 +653,16 @@ function checkForMerge() {
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
 window.addEventListener("DOMContentLoaded", () => {
-  // v4 groundwork: apply the default season template before the runtime is
-  // built. SEASON_CONFIG and CONTESTANTS are populated/reaffirmed from the
-  // template — for the bundled default this is functionally a no-op (values
-  // already match the inline defaults in season.js / contestants.js), but it
-  // establishes the template as the source of truth and lets future code
-  // swap in a different template by calling applyTemplate(...) before boot.
-  applyTemplate(DEFAULT_SEASON_TEMPLATE);
-
-  // v9.1 safety net: applyTemplate normalizes contestant stats, but if a
-  // template path ever skips that, this guarantees the runtime cast has
-  // the three sub-skills + a coherent legacy `challenge` before any
-  // engine code reads them.
-  normalizeAllContestants(CONTESTANTS);
-
+  // v10.0: boot now lands on the new Show selector. The previous
+  // boot-tail (applyTemplate → normalize → createSeasonState → assignTribes
+  // → initIdols → showScreen("select")) moved into the season-start
+  // handlers in screenShowSeasons.js, so the engine only initializes when
+  // the user actually picks a season. The landing page is pure UI — it
+  // doesn't touch SEASON_CONFIG, CONTESTANTS, or gameState at all.
+  //
+  // gameState is initialized to an empty placeholder so any utility that
+  // checks `gameState?.something` doesn't blow up on the landing page.
+  // Real game state is created when a season is started.
   gameState = createSeasonState();
-  assignTribes(CONTESTANTS, gameState);
-  initIdols(gameState);      // places one idol per tribal camp + one for merge
-  showScreen("select");
+  showScreen("landing");
 });
