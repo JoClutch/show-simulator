@@ -104,10 +104,25 @@ const FORMAT_BY_SCREEN = {
 // The OUTER class list is identical in both cases (`player-portrait` plus
 // size/shape modifiers), so swapping the placeholder for real art later
 // requires no call-site changes — just set portraitUrl on the contestant.
+// v9.12: canonical size names. Pass any of:
+//   "small"  | "sm" → 32 px   (compact lists, dense rows)
+//   "medium" | "md" → 48 px   (per-row roster cards, default)
+//   "large"  | "lg" → 64 px   (focal/hero cards: selection, winner, boot, idol-reveal)
+// Aliases keep older opts.size: "sm"|"md"|"lg" callers working unchanged.
+const _SIZE_ALIAS = {
+  small:  "sm",
+  medium: "md",
+  large:  "lg",
+  sm: "sm", md: "md", lg: "lg",
+};
+
 function renderPlayerPortrait(contestant, opts = {}) {
   if (!contestant) return "";
 
-  const size       = opts.size       || "md";
+  // Default is "medium". Aliasing happens here so the rest of the function
+  // and the CSS rules can keep using the short suffixes.
+  const sizeRaw    = opts.size       || "medium";
+  const size       = _SIZE_ALIAS[sizeRaw] || "md";
   const shape      = opts.shape      || "square";
   const tintColor  = opts.tintColor  || _portraitTintFor(contestant);
   const extraClass = opts.extraClass || "";

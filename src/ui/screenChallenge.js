@@ -60,7 +60,7 @@ function buildTribeRosterHTML(tribeLabel, members, opts = {}) {
       : "";
     return `
       <div class="challenge-roster-item${meClass}" style="${inlineStyle}">
-        ${renderPlayerPortrait(m, { size: "sm" })}
+        ${renderPlayerPortrait(m, { size: "medium" })}
         <span class="challenge-roster-item-name">${escapeHtml(getPlayerDisplayName(m, nameFormat))}${youTag}</span>
       </div>
     `;
@@ -211,7 +211,7 @@ function renderIndividualChallengeScreen(container, state) {
 
       <div class="indiv-immunity-winner">
         <div class="immunity-necklace-icon">⬡</div>
-        ${renderPlayerPortrait(result.winner, { size: "lg", extraClass: "player-portrait--stacked" })}
+        ${renderPlayerPortrait(result.winner, { size: "large", extraClass: "player-portrait--stacked" })}
         <div class="immunity-winner-name" style="color:${mergeColor}">${escapeHtml(getPlayerDisplayName(result.winner, FORMAT_BY_SCREEN.challenge))}</div>
         <div class="immunity-winner-sub">wins Individual Immunity</div>
       </div>

@@ -3248,9 +3248,20 @@ select:focus {
   box-shadow: var(--shadow-low);
   position: relative;
 }
+/* ───────────────────────────────────────────────────────────────────────
+   v9.12: Player portrait size scale.
+   THIS IS THE ONE PLACE TO ADJUST PORTRAIT SIZES.
+   The component normalizes "small"/"medium"/"large" → "sm"/"md"/"lg"
+   before adding classes, so changing the pixel values below is the
+   only edit needed to retune the whole game.
+     small  = 32 px  — dense rows (Camp Life Your Tribe, target picker)
+     medium = 48 px  — roster cards (Recap, Challenge), default
+     large  = 64 px  — focal/hero cards (Selection, Tribal vote,
+                       boot, immunity winner, idol reveal)
+   Mobile (≤480 px) overrides at the bottom of this block. */
 .player-portrait--sm { width: 32px; height: 32px; }
-.player-portrait--md { width: 56px; height: 56px; }
-.player-portrait--lg { width: 96px; height: 96px; }
+.player-portrait--md { width: 48px; height: 48px; }
+.player-portrait--lg { width: 64px; height: 64px; }
 .player-portrait--circle { border-radius: 50%; }
 
 /* v9.4: stacked layout — portrait sits ABOVE a name on focal-subject
@@ -3298,9 +3309,11 @@ select:focus {
      all three size variants. Set base font-size on each size below. */
   font-size: 1em;
 }
+/* Initials scale with the box. Tuned so two letters comfortably fit
+   without crowding the edges at any size. */
 .player-portrait--sm .player-portrait__initials { font-size: 0.78rem; }
-.player-portrait--md .player-portrait__initials { font-size: 1.15rem; }
-.player-portrait--lg .player-portrait__initials { font-size: 2rem; }
+.player-portrait--md .player-portrait__initials { font-size: 1.1rem; }
+.player-portrait--lg .player-portrait__initials { font-size: 1.5rem; }
 
 /* Eliminated/jury chip variant — desaturate and dim so the portrait
    reads as "out of the game" without being distracting. */
@@ -3312,8 +3325,10 @@ select:focus {
 /* Mobile sanity — at very narrow widths the lg portrait should shrink so
    it doesn't dominate stacked elimination/recap cards. */
 @media (max-width: 480px) {
-  .player-portrait--lg { width: 72px; height: 72px; }
-  .player-portrait--lg .player-portrait__initials { font-size: 1.5rem; }
+  /* v9.12: under the new size scale (32/48/64) only large needs a small
+     mobile shrink. Small and medium are already mobile-appropriate. */
+  .player-portrait--lg { width: 56px; height: 56px; }
+  .player-portrait--lg .player-portrait__initials { font-size: 1.3rem; }
 }
 
 /* v9.0: Episode Recap screen.

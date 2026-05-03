@@ -601,7 +601,7 @@ function renderCampLifeScreen(container, state) {
     const playerRow = `
       <li class="camp-tribe-row camp-tribe-row-self">
         <span class="camp-tribe-self-icon" aria-hidden="true">★</span>
-        ${renderPlayerPortrait(player, { size: "sm" })}
+        ${renderPlayerPortrait(player, { size: "small" })}
         <span class="camp-tribe-name">You (${escapeHtml(getPlayerDisplayName(player, FORMAT_BY_SCREEN.campLife))})</span>
       </li>
     `;
@@ -626,7 +626,7 @@ function renderCampLifeScreen(container, state) {
       return `
         <li class="camp-tribe-row" data-tier="${tier.id}" title="${escapeHtmlAttr(tooltip)}">
           <span class="camp-tribe-dot" aria-hidden="true"></span>
-          ${renderPlayerPortrait(c, { size: "sm" })}
+          ${renderPlayerPortrait(c, { size: "small" })}
           <span class="camp-tribe-name">${escapeHtml(getPlayerDisplayName(c, FORMAT_BY_SCREEN.campLife))}${markerHTML}</span>
           <span class="camp-tribe-tier-label">${tier.label}</span>
         </li>
@@ -695,7 +695,7 @@ function renderCampLifeScreen(container, state) {
       return `
         <li class="target-row${isYou ? " target-row-you" : ""}">
           <span class="target-row-dot" aria-hidden="true">●</span>
-          ${renderPlayerPortrait(c, { size: "sm", extraClass: "player-portrait--inline" })}
+          ${renderPlayerPortrait(c, { size: "small", extraClass: "player-portrait--inline" })}
           <span class="target-row-name">${escapeHtml(getPlayerDisplayName(c, FORMAT_BY_SCREEN.campLife))}${isYou ? " (you)" : ""}</span>
         </li>
       `;

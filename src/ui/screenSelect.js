@@ -183,7 +183,7 @@ function buildCard(contestant, tribeColor) {
   card.innerHTML = `
     <div class="card-selected-indicator">▶ Your pick</div>
     <div class="card-tribe-pip" style="background-color: ${tribeColor}"></div>
-    ${renderPlayerPortrait(contestant, { size: "md", extraClass: "player-portrait--stacked" })}
+    ${renderPlayerPortrait(contestant, { size: "large", extraClass: "player-portrait--stacked" })}
     <div class="card-name">${escapeHtml(contestant.name)}</div>
     ${renderContestantStatsHTML(contestant)}
   `;
