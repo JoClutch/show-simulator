@@ -46,18 +46,22 @@ function buildTribeRosterHTML(tribeLabel, members, opts = {}) {
   // names were not visible — the most reliable hypothesis was list-style/
   // ul-padding interaction, so we sidestep it entirely). Inline color +
   // display fallbacks ensure names appear even if styles.css is stale-cached.
+  // v9.7: each item now leads with a small portrait. Layout switched from
+  // block to flex so the portrait + name align on a single row, while the
+  // existing cache-resilient color/weight styles stay inline.
   const items = members.map(m => {
     const isMe = playerId != null && m.id === playerId;
     const meClass = isMe ? " challenge-roster-me" : "";
     const inlineStyle = isMe
-      ? "display:block;color:#f6edd2;font-weight:bold"
-      : "display:block;color:#ddd1ae";
+      ? "display:flex;align-items:center;gap:0.5rem;color:#f6edd2;font-weight:bold"
+      : "display:flex;align-items:center;gap:0.5rem;color:#ddd1ae";
     const youTag = isMe
       ? ` <span class="challenge-roster-you" style="color:#e8b346;font-size:0.78rem">(you)</span>`
       : "";
     return `
       <div class="challenge-roster-item${meClass}" style="${inlineStyle}">
-        ${escapeHtml(getPlayerDisplayName(m, nameFormat))}${youTag}
+        ${renderPlayerPortrait(m, { size: "sm" })}
+        <span class="challenge-roster-item-name">${escapeHtml(getPlayerDisplayName(m, nameFormat))}${youTag}</span>
       </div>
     `;
   }).join("");

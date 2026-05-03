@@ -882,7 +882,9 @@ select:focus {
 
 .camp-tribe-row {
   display: grid;
-  grid-template-columns: 0.8rem 1fr auto;
+  /* v9.7: 4-track grid — dot/star · portrait · name · tier-label.
+     Was 0.8rem 1fr auto. */
+  grid-template-columns: 0.8rem auto 1fr auto;
   align-items: center;
   gap: 0.55rem;
   padding: 0.25rem 0.15rem;
