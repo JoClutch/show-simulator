@@ -3758,9 +3758,9 @@ select:focus {
 }
 
 .idol-reveal-icon {
-  font-size: 2.5rem;
+  font-size: 1.75rem;   /* v9.6: shrunk from 2.5rem; portrait now carries the visual weight */
   color: var(--gold);
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.35rem;
 }
 
 .idol-reveal-headline {
@@ -4222,9 +4222,9 @@ select:focus {
 }
 
 .immunity-necklace-icon {
-  font-size: 2rem;
+  font-size: 1.5rem;   /* v9.6: shrunk from 2rem now that a portrait sits below it */
   color: var(--gold);
-  margin-bottom: 0.35rem;
+  margin-bottom: 0.2rem;
   line-height: 1;
 }
 

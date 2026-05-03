@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Player Portrait & Name Helpers — Tests</title>
+  <link rel="stylesheet" href="src/styles.css" />
+  <style>
+    body { padding: 1.5rem; max-width: 1100px; margin: 0 auto; }
+    .test-suite { margin-bottom: 2rem; }
+    .test-suite h3 {
+      font-size: 1rem;
+      letter-spacing: 0.04em;
+      margin-bottom: 0.5rem;
+      color: var(--gold);
+    }
+    .test-row {
+      padding: 0.45rem 0.7rem;
+      border-bottom: 1px dotted var(--border-dim);
+      display: flex;
+      gap: 0.6rem;
+      align-items: baseline;
+      font-size: 0.88rem;
+    }
+    .test-row[data-status="pass"] .test-tag { color: #6dd17a; }
+    .test-row[data-status="fail"] .test-tag { color: #ff7e6e; font-weight: bold; }
+    .test-tag { font-family: monospace; font-size: 0.78rem; width: 4ch; flex-shrink: 0; }
+    .test-name { color: var(--text-primary); }
+    .test-detail { color: var(--text-faint); font-family: monospace; font-size: 0.78rem; }
+    .test-summary {
+      padding: 0.85rem 1.1rem;
+      border-radius: 5px;
+      margin-bottom: 1.5rem;
+      background: var(--bg-card);
+      border-left: 3px solid var(--gold);
+    }
+    .test-summary.all-pass { border-left-color: #6dd17a; }
+    .test-summary.has-fail { border-left-color: #ff7e6e; }
+    .render-frame {
+      margin-top: 0.6rem;
+      padding: 0.8rem;
+      background: var(--bg-base);
+      border: 1px dashed var(--border-dim);
+      border-radius: 4px;
+    }
+    .render-frame h4 {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-faint);
+      margin-bottom: 0.4rem;
+    }
+    .smoke-row { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
+  </style>
+</head>
+<body class="scene-day">
+
+<h1>Player Portrait & Name Helpers — Test Suite</h1>
+<p class="muted" style="margin-bottom:1.5rem">
+  Unit tests for v9.3+ portrait component and name-formatting helper. Visual
+  smoke renders are at the bottom — eyeball them to confirm placeholder
+  initials look correct across the three sizes and the eliminated dim variant.
+</p>
+
+<div id="test-summary" class="test-summary">Running…</div>
+<div id="test-results"></div>
+
+<div class="test-suite">
+  <h3>Visual smoke renders</h3>
+  <div class="render-frame">
+    <h4>Sizes (sm / md / lg)</h4>
+    <div id="smoke-sizes" class="smoke-row"></div>
+  </div>
+  <div class="render-frame">
+    <h4>Single-word, multi-word, three-word names</h4>
+    <div id="smoke-names" class="smoke-row"></div>
+  </div>
+  <div class="render-frame">
+    <h4>Eliminated variant (dimmed)</h4>
+    <div id="smoke-elim" class="smoke-row"></div>
+  </div>
+  <div class="render-frame">
+    <h4>Real portraitUrl (broken URL on purpose — should render &lt;img&gt; with alt)</h4>
+    <div id="smoke-img" class="smoke-row"></div>
+  </div>
+</div>
+
+<!-- App scripts (no main.js) -->
+<script src="src/util.js"></script>
+<script src="src/data/contestants.js"></script>
+<script src="src/data/season.js"></script>
+<script src="src/data/flavor.js"></script>
+<script src="src/data/schema.js"></script>
+<script src="src/data/seasonPresets.js"></script>
+<script src="src/data/savedSetups.js"></script>
+<script src="src/data/setupIo.js"></script>
+<script src="src/engine/eventLog.js"></script>
+<script src="src/engine/idols.js"></script>
+<script src="src/engine/relationships.js"></script>
+<script src="src/engine/alliances.js"></script>
+<script src="src/engine/campLife.js"></script>
+<script src="src/engine/challenge.js"></script>
+<script src="src/engine/vote.js"></script>
+<script src="src/engine/jury.js"></script>
+<script src="src/engine/finalTribal.js"></script>
+<script src="src/ui/components/playerPortrait.js"></script>
+
+<script>
+// ─── Tiny test harness ──────────────────────────────────────────────────────
+const TESTS = [];
+function test(suite, name, fn) { TESTS.push({ suite, name, fn }); }
+class AssertionError extends Error {}
+function assert(cond, msg) { if (!cond) throw new AssertionError(msg || "assertion failed"); }
+function assertEqual(actual, expected, msg) {
+  if (actual !== expected) {
+    throw new AssertionError(`${msg || "assertEqual"} — expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+  }
+}
+function assertContains(haystack, needle, msg) {
+  if (!String(haystack).includes(needle)) {
+    throw new AssertionError(`${msg || "assertContains"} — expected to find "${needle}" in:\n${haystack}`);
+  }
+}
+function assertNotContains(haystack, needle, msg) {
+  if (String(haystack).includes(needle)) {
+    throw new AssertionError(`${msg || "assertNotContains"} — found unexpected "${needle}"`);
+  }
+}
+
+function makePlayer(name, opts = {}) {
+  return {
+    id: `id-${name.replace(/\s+/g, "-")}`,
+    name,
+    originalTribe: opts.originalTribe ?? null,
+    portraitUrl:   opts.portraitUrl,
+  };
+}
+
+// ─── Suite: getPlayerDisplayName ─────────────────────────────────────────────
+
+test("getPlayerDisplayName", "full returns the verbatim name", () => {
+  assertEqual(getPlayerDisplayName(makePlayer("Marcus Webb"), "full"), "Marcus Webb");
+});
+
+test("getPlayerDisplayName", "first returns the first whitespace token", () => {
+  assertEqual(getPlayerDisplayName(makePlayer("Marcus Webb"), "first"), "Marcus");
+});
+
+test("getPlayerDisplayName", "first works on three-token names", () => {
+  assertEqual(getPlayerDisplayName(makePlayer("Mary Jo Doe"), "first"), "Mary");
+});
+
+test("getPlayerDisplayName", "first returns the only token for single-word names", () => {
+  assertEqual(getPlayerDisplayName(makePlayer("Madonna"), "first"), "Madonna");
+});
+
+test("getPlayerDisplayName", "first handles internal extra whitespace", () => {
+  assertEqual(getPlayerDisplayName(makePlayer("Marcus    Webb"), "first"), "Marcus");
+});
+
+test("getPlayerDisplayName", "first trims leading/trailing whitespace", () => {
+  assertEqual(getPlayerDisplayName(makePlayer("  Marcus Webb  "), "first"), "Marcus");
+});
+
+test("getPlayerDisplayName", "null contestant returns empty string", () => {
+  assertEqual(getPlayerDisplayName(null, "full"), "");
+  assertEqual(getPlayerDisplayName(undefined, "first"), "");
+});
+
+test("getPlayerDisplayName", "missing name returns empty string", () => {
+  assertEqual(getPlayerDisplayName({}, "full"), "");
+  assertEqual(getPlayerDisplayName({ name: "" }, "first"), "");
+});
+
+test("getPlayerDisplayName", "default format (no arg) is full", () => {
+  assertEqual(getPlayerDisplayName(makePlayer("Marcus Webb")), "Marcus Webb");
+});
+
+test("getPlayerDisplayName", "unknown format falls back to full", () => {
+  assertEqual(getPlayerDisplayName(makePlayer("Marcus Webb"), "shouty"), "Marcus Webb");
+});
+
+// ─── Suite: initials ─────────────────────────────────────────────────────────
+
+test("initials", "two-token name → first letter of first + last", () => {
+  assertEqual(getPlayerDisplayName(makePlayer("Marcus Webb"), "initials"), "MW");
+});
+
+test("initials", "three-token name → first letter of first + last", () => {
+  assertEqual(getPlayerDisplayName(makePlayer("Mary Jo Doe"), "initials"), "MD");
+});
+
+test("initials", "single-word name → single letter", () => {
+  assertEqual(getPlayerDisplayName(makePlayer("Madonna"), "initials"), "M");
+});
+
+test("initials", "lowercase input → uppercased initials", () => {
+  assertEqual(getPlayerDisplayName(makePlayer("marcus webb"), "initials"), "MW");
+});
+
+test("initials", "missing last name (trailing space) → first letter only", () => {
+  assertEqual(getPlayerDisplayName(makePlayer("Marcus  "), "initials"), "M");
+});
+
+test("initials", "empty name → empty string", () => {
+  assertEqual(getPlayerDisplayName(makePlayer(""), "initials"), "");
+});
+
+// ─── Suite: renderPlayerPortrait — placeholder fallback ─────────────────────
+
+test("renderPlayerPortrait", "no portraitUrl → placeholder div with initials", () => {
+  const html = renderPlayerPortrait(makePlayer("Marcus Webb"));
+  assertContains(html, "player-portrait--placeholder");
+  assertContains(html, "MW");
+  assertNotContains(html, "<img", "should not render an <img>");
+});
+
+test("renderPlayerPortrait", "single-word name → placeholder shows single letter", () => {
+  const html = renderPlayerPortrait(makePlayer("Madonna"));
+  assertContains(html, ">M<");
+});
+
+test("renderPlayerPortrait", "with portraitUrl → renders <img> tag, not initials box", () => {
+  const html = renderPlayerPortrait(makePlayer("Marcus Webb", {
+    portraitUrl: "img/portraits/marcus.png",
+  }));
+  assertContains(html, "<img");
+  assertContains(html, 'src="img/portraits/marcus.png"');
+  assertNotContains(html, "player-portrait--placeholder",
+    "should not render placeholder when portraitUrl is set");
+});
+
+test("renderPlayerPortrait", "size modifier applied correctly", () => {
+  const html = renderPlayerPortrait(makePlayer("M Webb"), { size: "lg" });
+  assertContains(html, "player-portrait--lg");
+  assertNotContains(html, "player-portrait--md");
+});
+
+test("renderPlayerPortrait", "circle modifier applied", () => {
+  const html = renderPlayerPortrait(makePlayer("M Webb"), { shape: "circle" });
+  assertContains(html, "player-portrait--circle");
+});
+
+test("renderPlayerPortrait", "extraClass passes through (e.g. is-eliminated)", () => {
+  const html = renderPlayerPortrait(makePlayer("M Webb"), { extraClass: "is-eliminated" });
+  assertContains(html, "is-eliminated");
+});
+
+test("renderPlayerPortrait", "tintColor overrides default tribe-derived color", () => {
+  const html = renderPlayerPortrait(makePlayer("M Webb"), { tintColor: "#abc123" });
+  assertContains(html, "#abc123");
+});
+
+test("renderPlayerPortrait", "default tint uses originalTribe color when present", () => {
+  const html = renderPlayerPortrait(makePlayer("M Webb", { originalTribe: "A" }));
+  // SEASON_CONFIG.tribeColors.A is "#e87c2b" by default — test against
+  // whatever the live config says rather than hard-coding.
+  const expected = SEASON_CONFIG.tribeColors.A;
+  assertContains(html, expected);
+});
+
+test("renderPlayerPortrait", "default tint falls back to neutral dark when no tribe", () => {
+  const html = renderPlayerPortrait(makePlayer("M Webb"));
+  assertContains(html, "#1a1a1a");
+});
+
+test("renderPlayerPortrait", "null contestant → empty string (defensive)", () => {
+  assertEqual(renderPlayerPortrait(null), "");
+  assertEqual(renderPlayerPortrait(undefined), "");
+});
+
+test("renderPlayerPortrait", "empty-name contestant → placeholder with '?'", () => {
+  const html = renderPlayerPortrait(makePlayer(""));
+  assertContains(html, ">?<");
+});
+
+// ─── Suite: accessibility ───────────────────────────────────────────────────
+
+test("a11y", "placeholder has role=\"img\" and aria-label with full name", () => {
+  const html = renderPlayerPortrait(makePlayer("Marcus Webb"));
+  assertContains(html, 'role="img"');
+  assertContains(html, 'aria-label="Marcus Webb"');
+});
+
+test("a11y", "image variant has alt text equal to full name", () => {
+  const html = renderPlayerPortrait(
+    makePlayer("Marcus Webb", { portraitUrl: "img/portraits/x.png" })
+  );
+  assertContains(html, 'alt="Marcus Webb"');
+});
+
+test("a11y", "alt override is honored", () => {
+  const html = renderPlayerPortrait(
+    makePlayer("Marcus Webb", { portraitUrl: "x.png" }),
+    { alt: "Voted out, episode 4" }
+  );
+  assertContains(html, 'alt="Voted out, episode 4"');
+});
+
+test("a11y", "image variant is lazy-loaded", () => {
+  const html = renderPlayerPortrait(
+    makePlayer("X", { portraitUrl: "img/x.png" })
+  );
+  assertContains(html, 'loading="lazy"');
+});
+
+test("a11y", "HTML-special characters in name are escaped in aria-label", () => {
+  const html = renderPlayerPortrait(makePlayer('Mar"cus & "Webb"'));
+  // The aria-label attribute should not contain raw quotes / ampersands
+  assertContains(html, "&quot;");
+  assertContains(html, "&amp;");
+  // ...and the markup should still be a single well-formed open/close span
+  assert(html.match(/<span/g).length === 2, "expected outer + inner spans");
+});
+
+// ─── Suite: FORMAT_BY_SCREEN ────────────────────────────────────────────────
+
+test("FORMAT_BY_SCREEN", "campLife and tribal are first", () => {
+  assertEqual(FORMAT_BY_SCREEN.campLife, "first");
+  assertEqual(FORMAT_BY_SCREEN.tribal,   "first");
+});
+
+test("FORMAT_BY_SCREEN", "episodeRecap and challenge are full", () => {
+  assertEqual(FORMAT_BY_SCREEN.episodeRecap, "full");
+  assertEqual(FORMAT_BY_SCREEN.challenge,    "full");
+});
+
+test("FORMAT_BY_SCREEN", "ceremonial screens are full", () => {
+  assertEqual(FORMAT_BY_SCREEN.elimination, "full");
+  assertEqual(FORMAT_BY_SCREEN.finalTribal, "full");
+  assertEqual(FORMAT_BY_SCREEN.results,     "full");
+});
+
+// ─── Suite: schema validation accepts portraitUrl ───────────────────────────
+
+test("schema", "validateContestant accepts portraitUrl when string", () => {
+  const errs = validateContestant({
+    id: "c", name: "Marcus Webb",
+    physicalChallengeSkill: 5, mentalChallengeSkill: 5, enduranceChallengeSkill: 5,
+    social: 5, strategy: 5,
+    portraitUrl: "img/portraits/marcus.png",
+  });
+  assertEqual(errs.length, 0, `unexpected errors: ${errs.join(", ")}`);
+});
+
+test("schema", "validateContestant rejects empty portraitUrl", () => {
+  const errs = validateContestant({
+    id: "c", name: "Marcus Webb",
+    physicalChallengeSkill: 5, mentalChallengeSkill: 5, enduranceChallengeSkill: 5,
+    social: 5, strategy: 5,
+    portraitUrl: "",
+  });
+  assert(errs.some(e => /portraitUrl/.test(e)), "expected portraitUrl error");
+});
+
+test("schema", "validateContestant rejects non-string portraitUrl", () => {
+  const errs = validateContestant({
+    id: "c", name: "Marcus Webb",
+    physicalChallengeSkill: 5, mentalChallengeSkill: 5, enduranceChallengeSkill: 5,
+    social: 5, strategy: 5,
+    portraitUrl: 42,
+  });
+  assert(errs.some(e => /portraitUrl/.test(e)), "expected portraitUrl error");
+});
+
+// ─── Run ─────────────────────────────────────────────────────────────────────
+
+window.addEventListener("DOMContentLoaded", () => {
+  const resultsEl = document.getElementById("test-results");
+  const summaryEl = document.getElementById("test-summary");
+
+  const bySuite = {};
+  for (const t of TESTS) (bySuite[t.suite] ||= []).push(t);
+
+  let passed = 0, failed = 0;
+  for (const suiteName of Object.keys(bySuite)) {
+    const suiteEl = document.createElement("div");
+    suiteEl.className = "test-suite";
+    suiteEl.innerHTML = `<h3>${suiteName}</h3>`;
+    for (const t of bySuite[suiteName]) {
+      const row = document.createElement("div");
+      row.className = "test-row";
+      try {
+        t.fn();
+        row.dataset.status = "pass";
+        row.innerHTML = `<span class="test-tag">PASS</span><span class="test-name">${t.name}</span>`;
+        passed++;
+      } catch (e) {
+        row.dataset.status = "fail";
+        row.innerHTML = `<span class="test-tag">FAIL</span>
+                         <span class="test-name">${t.name}</span>
+                         <span class="test-detail">${(e && e.message) || e}</span>`;
+        failed++;
+        console.error("[test failed]", t.suite, t.name, e);
+      }
+      suiteEl.appendChild(row);
+    }
+    resultsEl.appendChild(suiteEl);
+  }
+
+  summaryEl.textContent = `${passed} passed · ${failed} failed · ${TESTS.length} total`;
+  summaryEl.classList.add(failed === 0 ? "all-pass" : "has-fail");
+
+  // ─── Visual smoke renders ──────────────────────────────────────────────────
+  const sizesEl  = document.getElementById("smoke-sizes");
+  sizesEl.innerHTML =
+      renderPlayerPortrait(makePlayer("Marcus Webb"), { size: "sm" })
+    + renderPlayerPortrait(makePlayer("Marcus Webb"), { size: "md" })
+    + renderPlayerPortrait(makePlayer("Marcus Webb"), { size: "lg" });
+
+  const namesEl = document.getElementById("smoke-names");
+  namesEl.innerHTML =
+      renderPlayerPortrait(makePlayer("Madonna"))
+    + renderPlayerPortrait(makePlayer("Marcus Webb"))
+    + renderPlayerPortrait(makePlayer("Mary Jo Doe"));
+
+  const elimEl = document.getElementById("smoke-elim");
+  elimEl.innerHTML =
+      renderPlayerPortrait(makePlayer("Marcus Webb"), { extraClass: "is-eliminated" })
+    + renderPlayerPortrait(makePlayer("Dana Reyes"),  { size: "sm", extraClass: "is-eliminated" });
+
+  const imgEl = document.getElementById("smoke-img");
+  imgEl.innerHTML =
+    renderPlayerPortrait(
+      makePlayer("Marcus Webb", { portraitUrl: "img/portraits/does-not-exist.png" })
+    );
+});
+</script>
+
+</body>
+</html>
