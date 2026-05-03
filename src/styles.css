@@ -438,12 +438,15 @@ select:focus {
 }
 
 .card-name {
-  font-size: 0.95rem;
+  /* v9.13: bumped name slightly so it remains the primary text anchor
+     under the larger portrait. Was 0.95rem. */
+  font-size: 1.05rem;
   font-weight: bold;
   color: var(--text-primary);
   margin-bottom: 0.65rem;
-  margin-top: 0.25rem;
+  margin-top: 0.15rem;
   line-height: 1.2;
+  text-align: center;
 }
 
 /* Stats section inside each card */
@@ -3268,10 +3271,12 @@ select:focus {
    cards (BrantSteele-style chyron). Used by elimination headlines,
    vote-target picker cards, idol-reveal headlines, recap boot card.
    For inline usage (portrait next to name in a row) the default
-   inline-flex behavior is what you want — no modifier needed. */
+   inline-flex behavior is what you want — no modifier needed.
+   v9.13: bottom margin bumped from 0.45rem → 0.6rem so the larger
+   portraits don't crowd the name immediately below. */
 .player-portrait--stacked {
   display: block;
-  margin: 0 auto 0.45rem;
+  margin: 0 auto 0.6rem;
 }
 
 /* v9.4: small right-margin variant for inline row usage (portrait left,
@@ -3366,7 +3371,9 @@ select:focus {
   border-left: 3px solid var(--gold);
   border-right: 3px solid var(--gold);
   border-radius: 5px;
-  padding: 1.25rem 1rem;
+  /* v9.13: bumped vertical padding so the large portrait + name + tribe
+     + sub copy stack feels properly framed inside the plaque. */
+  padding: 1.5rem 1rem;
   text-align: center;
   box-shadow: var(--shadow-med);
 }
@@ -3462,9 +3469,11 @@ select:focus {
   display: block;
 }
 .challenge-roster-item {
-  font-size: 0.88rem;
+  font-size: 0.92rem;
   color: var(--text-dim);
-  padding: 0.18rem 0;
+  /* v9.13: vertical padding bumped (was 0.18rem) so the medium-sized
+     portrait isn't flush against the dotted divider above/below. */
+  padding: 0.35rem 0;
   border-bottom: 1px dotted var(--border-dim);
 }
 .challenge-roster-item:last-child {
@@ -4237,7 +4246,8 @@ select:focus {
 .indiv-immunity-winner {
   text-align: center;
   margin: 1.5rem 0;
-  padding: 1.25rem;
+  /* v9.13: bumped padding for the large portrait stack; was 1.25rem. */
+  padding: 1.5rem 1.25rem;
   background-color: var(--bg-card);
   border: 1px solid var(--border-dim);
   border-radius: 6px;
