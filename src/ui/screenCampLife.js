@@ -179,8 +179,11 @@ function renderCampLifeScreen(container, state) {
         if (id === player.id) {
           return `<span class="camp-alliance-chip camp-alliance-chip-you">You</span>`;
         }
-        const name = findContestant(state, id)?.name ?? "?";
-        return `<span class="camp-alliance-chip">${name}</span>`;
+        const member = findContestant(state, id);
+        const label  = member
+          ? getPlayerDisplayName(member, FORMAT_BY_SCREEN.campLife)
+          : "?";
+        return `<span class="camp-alliance-chip">${escapeHtml(label)}</span>`;
       }).join("");
 
       return `
@@ -1401,10 +1404,11 @@ function renderCampLifeScreen(container, state) {
 
     const rows = result.reads.map(r => {
       const f = READ_FLAVOR[r.kind] ?? READ_FLAVOR.vague;
+      const targetName = r.target ? getPlayerDisplayName(r.target, FORMAT_BY_SCREEN.campLife) : "";
       const detail =
-          r.kind === "aligned"    ? `leaning ${r.target.name}`
-        : r.kind === "hedged"     ? `hinted at ${r.target.name}`
-        : r.kind === "misleading" ? `named ${r.target.name}`
+          r.kind === "aligned"    ? `leaning ${targetName}`
+        : r.kind === "hedged"     ? `hinted at ${targetName}`
+        : r.kind === "misleading" ? `named ${targetName}`
         : "";
       return `
         <li class="vote-coord-row" data-response="${f.color}">
@@ -1544,7 +1548,10 @@ function renderCampLifeScreen(container, state) {
         "Weakened";
       const others = a.memberIds
         .filter(id => id !== player.id)
-        .map(id => findContestant(state, id)?.name ?? "?")
+        .map(id => {
+          const m = findContestant(state, id);
+          return m ? getPlayerDisplayName(m, FORMAT_BY_SCREEN.campLife) : "?";
+        })
         .map(n => `<span class="alliance-shell-chip">${escapeHtml(n)}</span>`)
         .join("");
       const strengthInt = Math.round(a.strength ?? 0);
@@ -1646,7 +1653,7 @@ function renderCampLifeScreen(container, state) {
     for (const mate of tribemates) {
       const chip = document.createElement("button");
       chip.className = "target-chip";
-      chip.textContent = mate.name;
+      chip.textContent = getPlayerDisplayName(mate, FORMAT_BY_SCREEN.campLife);
       chip.addEventListener("click", () => onTargetSelected(action, mate));
       chipRow.appendChild(chip);
     }

@@ -225,7 +225,10 @@ function runVoteResolution(container, state, attendees, originalVotes, protected
 
 function showTieAnnouncement(container, state, attendees, tiedIds, counts, onContinue) {
   const tiedNames = tiedIds
-    .map(id => attendees.find(c => c.id === id)?.name ?? "?")
+    .map(id => {
+      const c = attendees.find(c => c.id === id);
+      return c ? getPlayerDisplayName(c, FORMAT_BY_SCREEN.tribal) : "?";
+    })
     .filter(n => n !== "?");
   const voteCount = counts[tiedIds[0]] ?? 0;
 
@@ -384,7 +387,10 @@ function showRevoteResolvedBeat(container, state, onContinue) {
 
 function showPersistentTieAnnouncement(container, state, attendees, tiedIds, onContinue) {
   const tiedNames = tiedIds
-    .map(id => attendees.find(c => c.id === id)?.name ?? "?")
+    .map(id => {
+      const c = attendees.find(c => c.id === id);
+      return c ? getPlayerDisplayName(c, FORMAT_BY_SCREEN.tribal) : "?";
+    })
     .filter(n => n !== "?");
 
   // v6.7: variant rocks-rule lines so persistent ties don't all read
@@ -425,8 +431,8 @@ function runRocksPhase(container, state, attendees, tiedIds) {
   }
 
   // Render the rock-draw reveal.
-  const drawerNames = result.rockDrawers.map(c => c.name);
-  const eliminatedName = result.eliminated.name;
+  const drawerNames    = result.rockDrawers.map(c => getPlayerDisplayName(c, FORMAT_BY_SCREEN.tribal));
+  const eliminatedName = getPlayerDisplayName(result.eliminated, FORMAT_BY_SCREEN.tribal);
   const fallbackNote = result.eliminatedFromTied
     ? `<p class="tribal-tie-rule muted">There was no neutral pool to draw from at this stage. The tie was resolved by chance among the tied players.</p>`
     : "";
@@ -676,8 +682,9 @@ function runAIIdolDecisions(container, state, aiCandidates, attendees, protected
 
 // Shows the dramatic AI idol-play card and auto-advances after a beat.
 function showAIIdolReveal(container, state, contestant, onContinue) {
-  const announcement = getAIIdolPlayLine(contestant.name);
-  const effect       = getIdolPlayedEffectLine(contestant.name);
+  const displayName  = getPlayerDisplayName(contestant, FORMAT_BY_SCREEN.tribal);
+  const announcement = getAIIdolPlayLine(displayName);
+  const effect       = getIdolPlayedEffectLine(displayName);
 
   container.innerHTML = `
     <div class="screen">
