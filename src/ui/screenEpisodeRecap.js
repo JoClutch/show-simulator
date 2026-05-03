@@ -33,7 +33,7 @@ function renderEpisodeRecapScreen(container, state) {
   // The "previously on…" headline. Empty-state for Episode 1.
   const centerCardHTML = lastBoot
     ? buildPrevBootCardHTML(lastBoot, state)
-    : buildOpenerCardHTML();
+    : buildOpenerCardHTML(state);
 
   // ── Tribe roster section ────────────────────────────────────────────────────
   let rosterSectionHTML;
@@ -127,12 +127,21 @@ function buildPrevBootCardHTML(boot, state) {
   `;
 }
 
-// Empty-state card for Episode 1 (or any session where no one has been
-// voted out yet).
-function buildOpenerCardHTML() {
+// Empty-state card — rendered when state.eliminated is empty AND
+// state.lastVotedOutPlayerId is null. The center card is decided in
+// renderEpisodeRecapScreen via getLastEliminated(state); this helper is
+// only invoked when that check returns null.
+//
+// v9.10: day label now derived from state (was a hard-coded "Day 1"
+// string). On a true Episode 1 cold start the label still reads "Day 1"
+// because getDay(state) === 1 there; on later episodes that legitimately
+// reach this branch with no recorded boots, the label tracks the eyebrow
+// instead of going stale.
+function buildOpenerCardHTML(state) {
+  const day = state ? getDay(state) : 1;
   return `
     <div class="recap-prev-boot-card recap-opener-card">
-      <div class="recap-prev-boot-eyebrow">Day 1</div>
+      <div class="recap-prev-boot-eyebrow">Day ${day}</div>
       <div class="recap-opener-headline">The adventure begins.</div>
       <div class="recap-prev-boot-sub">All castaways remain.</div>
     </div>
