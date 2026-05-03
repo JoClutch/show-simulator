@@ -51,6 +51,7 @@ const BUNDLED_DEFAULT_CAST = CONTESTANTS.map(c => ({
   social:    c.social,
   strategy:  c.strategy,
   ...(c.description !== undefined ? { description: c.description } : {}),
+  ...(c.portraitUrl !== undefined ? { portraitUrl: c.portraitUrl } : {}),
 }));
 
 // ── Default season template ──────────────────────────────────────────────────
@@ -310,6 +311,7 @@ function applyTemplate(template) {
       active:    true,
       suspicion: 0,
       ...(c.description !== undefined ? { description: c.description } : {}),
+      ...(c.portraitUrl !== undefined ? { portraitUrl: c.portraitUrl } : {}),
     };
     // v9.1: backfill missing sub-skills from legacy `challenge` (or 5),
     // and recompute legacy `challenge` from the three sub-skills.

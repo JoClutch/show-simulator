@@ -34,7 +34,7 @@
 //                    physicalChallengeSkill, mentalChallengeSkill, enduranceChallengeSkill,
 //                    challenge,           // v9.1: legacy/derived; optional in new files
 //                    social, strategy,
-//                    description?, tribe? }, ...]
+//                    description?, tribe?, portraitUrl? }, ...]
 //
 // Stat fields (the three challenge sub-skills, social, strategy) are
 // integers 1–10. Legacy `challenge` is also accepted in 1–10 range; when

@@ -3221,6 +3221,82 @@ select:focus {
   margin: 1.25rem 0;
 }
 
+/* ────────────────────────────────────────────────────────────────────────
+   v9.3 — Player portrait component.
+   Reusable inline-block box that sits above a player's name. Two render
+   modes share the same outer class list:
+     • <img>  — when contestant.portraitUrl is set
+     • <div>  — placeholder with centered initials over a tinted background
+                (tint defaults to original-tribe color; can be overridden)
+   Use the size modifiers to fit the surrounding context:
+     • --sm  — chips, dense lists           (32 × 32)
+     • --md  — rosters, vote cards          (56 × 56)
+     • --lg  — headlines, elimination card  (96 × 96)
+   The --circle modifier swaps to a rounded portrait if a screen prefers it. */
+.player-portrait {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-mid);
+  border-radius: 4px;
+  overflow: hidden;
+  flex-shrink: 0;
+  box-shadow: var(--shadow-low);
+  position: relative;
+}
+.player-portrait--sm { width: 32px; height: 32px; }
+.player-portrait--md { width: 56px; height: 56px; }
+.player-portrait--lg { width: 96px; height: 96px; }
+.player-portrait--circle { border-radius: 50%; }
+
+.player-portrait__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Placeholder — dark box with centered initials. Initials use the warm
+   cream text token so they pop against the tribe-tinted background. A
+   slight inset shadow gives the box a stamped/embossed feel that matches
+   the wood-plaque aesthetic of the rest of the UI. */
+.player-portrait--placeholder {
+  background-color: #1a1a1a;   /* overridden by inline tint when present */
+  box-shadow:
+    var(--shadow-low),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 245, 220, 0.06);
+}
+.player-portrait__initials {
+  color: var(--text-primary);
+  font-weight: bold;
+  letter-spacing: 0.04em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+  user-select: none;
+  /* Scale initials with portrait size — using em so the same rule covers
+     all three size variants. Set base font-size on each size below. */
+  font-size: 1em;
+}
+.player-portrait--sm .player-portrait__initials { font-size: 0.78rem; }
+.player-portrait--md .player-portrait__initials { font-size: 1.15rem; }
+.player-portrait--lg .player-portrait__initials { font-size: 2rem; }
+
+/* Eliminated/jury chip variant — desaturate and dim so the portrait
+   reads as "out of the game" without being distracting. */
+.player-portrait.is-eliminated {
+  filter: grayscale(0.7) brightness(0.75);
+  opacity: 0.85;
+}
+
+/* Mobile sanity — at very narrow widths the lg portrait should shrink so
+   it doesn't dominate stacked elimination/recap cards. */
+@media (max-width: 480px) {
+  .player-portrait--lg { width: 72px; height: 72px; }
+  .player-portrait--lg .player-portrait__initials { font-size: 1.5rem; }
+}
+
 /* v9.0: Episode Recap screen.
    Pre-merge: 3-column grid with tribeA · centered prev-boot card · tribeB.
    Post-merge: stacked — center card on top, single merged roster below.

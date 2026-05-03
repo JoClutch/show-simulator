@@ -133,6 +133,10 @@ const SCHEMA_VERSION = 1;
  * @property {number}  social       1–10.
  * @property {number}  strategy     1–10.
  * @property {string}  [description]Optional flavor.
+ * @property {string}  [portraitUrl] Optional path/URL to a portrait image
+ *                                  (e.g. "img/portraits/c01.png" or a CDN URL).
+ *                                  When absent, renderPlayerPortrait falls
+ *                                  back to a placeholder initials box.
  * @property {string|null} [tribe]  Optional initial tribe label (e.g. "A").
  *                                  When null/undefined, assignTribes randomizes.
  *                                  When set, must match a label from tribes.initial.
@@ -210,6 +214,14 @@ function validateContestant(c) {
 
   if (c.description !== undefined && typeof c.description !== "string") {
     errors.push("description must be a string when provided");
+  }
+
+  // v9.3: optional portraitUrl. Browsers handle bad URLs gracefully so we
+  // only check that it's a non-empty string when present.
+  if (c.portraitUrl !== undefined) {
+    if (typeof c.portraitUrl !== "string" || c.portraitUrl.trim() === "") {
+      errors.push("portraitUrl must be a non-empty string when provided");
+    }
   }
 
   // tribe is optional; null/undefined means "to be assigned at game start".

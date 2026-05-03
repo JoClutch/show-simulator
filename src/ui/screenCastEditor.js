@@ -62,6 +62,7 @@ function renderCastEditorScreen(container, state) {
     strategy:    c.strategy,
     tribe:       c.tribe ?? null,
     description: c.description ?? "",
+    portraitUrl: c.portraitUrl,
   }));
   _editingContestantId = null;
 
