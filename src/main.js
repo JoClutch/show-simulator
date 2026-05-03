@@ -186,6 +186,12 @@ function onCampLifeDone() {
     spreadRumors(gameState, gameState.tribes.A);
     spreadRumors(gameState, gameState.tribes.B);
     applyRumorRoundEffects(gameState);
+    // v9.10: simulate the losing tribe's Tribal Council off-screen so
+    // state.eliminated stays in sync with the in-game day count even
+    // when the player's tribe wins immunity. Without this the recap
+    // stays on "all castaways remain" past Episode 1 in any season
+    // where the player wins their first challenge.
+    simulateOffscreenTribal(gameState, gameState.tribalTribe);
     advanceRound();
   }
 }
@@ -242,46 +248,95 @@ function onTribalDone(eliminatedContestant) {
   delete gameState._lastTribalRevoteVotes;
   delete gameState._lastTribalProtectedIds;
 
-  gameState.eliminated.push(eliminatedContestant);
+  recordElimination(gameState, eliminatedContestant);
+
+  showScreen("elimination");
+}
+
+// v9.10: shared elimination side-effects, called by both the live tribal
+// path (onTribalDone) and the off-screen tribal simulation
+// (simulateOffscreenTribal). Mutates state to reflect that this contestant
+// has been voted out:
+//   • pushed onto state.eliminated
+//   • removed from their tribe
+//   • state.lastVotedOutPlayerId set (drives Episode Recap)
+//   • event log entry written
+//   • removed from any alliances they were in
+//   • added to the jury if jury-eligible at this point
+//
+// Does NOT trigger fallout (live path handles that beforehand because it
+// has access to ballot metadata) and does NOT route to a screen.
+function recordElimination(state, eliminatedContestant) {
+  state.eliminated.push(eliminatedContestant);
   removeFromTribes(eliminatedContestant);
 
-  // v9.0: record the most-recent boot for the next Episode Recap screen.
-  // Read by renderEpisodeRecapScreen at the start of the following round.
-  gameState.lastVotedOutPlayerId = eliminatedContestant.id;
+  state.lastVotedOutPlayerId = eliminatedContestant.id;
 
-  // Event log: every elimination is recorded. The player sees only their own
-  // game-over (this stays out of dev panel as well-noised; AI-only eliminations
-  // are still recorded so dev panel can show full history).
-  const isPlayer = eliminatedContestant.id === gameState.player?.id;
-  logEvent(gameState, {
+  const isPlayer = eliminatedContestant.id === state.player?.id;
+  logEvent(state, {
     category: "tribal",
     type:     isPlayer ? "player-eliminated" : "contestant-eliminated",
     text: isPlayer
       ? "You were voted out."
       : `${eliminatedContestant.name} was voted out.`,
     playerVisible: isPlayer,
-    meta: { eliminatedId: eliminatedContestant.id, mergedAtTime: gameState.merged },
+    meta: { eliminatedId: eliminatedContestant.id, mergedAtTime: state.merged },
   });
 
-  // Prune the eliminated contestant from every alliance they were in.
-  // Alliances dropping below 2 members are dissolved automatically.
-  removeMemberFromAlliances(gameState, eliminatedContestant.id);
+  removeMemberFromAlliances(state, eliminatedContestant.id);
 
-  // Post-merge (or custom-trigger) eliminations are sent to the jury.
-  // removeFromTribes() has already run, so getAllActive() returns only survivors —
-  // that is the correct population for the sentiment snapshot.
-  // v4.2: jury start condition is configurable; see isJuryEligibleElim.
-  if (isJuryEligibleElim(gameState)) {
-    eliminatedContestant.juryNumber = gameState.jury.length + 1;
+  if (isJuryEligibleElim(state)) {
+    eliminatedContestant.juryNumber = state.jury.length + 1;
     eliminatedContestant.sentiment  = buildJurySentiment(
-      gameState,
+      state,
       eliminatedContestant,
       getAllActive()
     );
-    gameState.jury.push(eliminatedContestant);
+    state.jury.push(eliminatedContestant);
   }
+}
 
-  showScreen("elimination");
+// v9.10: simulates the losing tribe's Tribal Council off-screen when the
+// player's tribe wins immunity. Without this, only player-attended tribals
+// produce eliminations — the other tribe's losing rounds vanished from the
+// simulation, leaving the cast lopsided and Episode Recap stuck on
+// "all castaways remain" past the first couple of rounds.
+//
+// AI-only voting: each member of the losing tribe picks a target via
+// pickVoteTarget, ties broken randomly, no idol play (idols stay in
+// pockets when their holder isn't on screen — the played idol mechanic is
+// dramatic and player-facing only), no rocks (rare edge case; if a true
+// tie persists we randomly resolve it the same way drawRocks would).
+//
+// Calls recordElimination on the result so all downstream state
+// (eliminated[], lastVotedOutPlayerId, event log, alliance pruning,
+// jury) is identical to the live path.
+function simulateOffscreenTribal(state, tribeLabel) {
+  const tribe = state.tribes[tribeLabel];
+  if (!tribe || tribe.length === 0) return null;
+
+  // Each AI voter picks a target. No convergence pass needed — that's a
+  // small social-dynamics nicety only the live path uses.
+  const votes = tribe.map(voter => ({
+    voter,
+    target: pickVoteTarget(state, voter, tribe),
+  }));
+
+  // Tally; resolve ties randomly. Off-screen tribals don't drag through
+  // the rocks ceremony — a persistent tie picks a tied candidate at
+  // random, mirroring how drawRocks would resolve in the all-tied edge.
+  const result = tallyVotes(votes, state, new Set());
+  let eliminated = result.eliminated;
+  if (!eliminated && result.kind === "tied") {
+    const tiedTargets = result.tiedIds
+      .map(id => tribe.find(c => c.id === id))
+      .filter(Boolean);
+    eliminated = tiedTargets[Math.floor(Math.random() * tiedTargets.length)] ?? null;
+  }
+  if (!eliminated) return null;
+
+  recordElimination(state, eliminated);
+  return eliminated;
 }
 
 function onEliminationDone() {
