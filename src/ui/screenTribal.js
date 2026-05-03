@@ -123,7 +123,7 @@ function renderMergedTribalScreen(container, state) {
       ${holder ? `
         <div class="tribal-immunity-note">
           <span class="immunity-icon">⬡</span>
-          <strong>${holder.id === player.id ? "You hold" : `${escapeHtml(holder.name)} holds`}
+          <strong>${holder.id === player.id ? "You hold" : `${escapeHtml(getPlayerDisplayName(holder, FORMAT_BY_SCREEN.tribal))} holds`}
           Individual Immunity</strong> and cannot be voted out tonight.
         </div>
       ` : ""}
@@ -297,7 +297,7 @@ function runRevotePhase(container, state, attendees, originalVotes, tiedIds, pro
     const card = document.createElement("div");
     card.className = "contestant-card";
     card.innerHTML = `
-      <div class="card-name">${escapeHtml(c.name)}</div>
+      <div class="card-name">${escapeHtml(getPlayerDisplayName(c, FORMAT_BY_SCREEN.tribal))}</div>
       <div class="card-stats">
         <div class="stat-row">
           <span class="stat-label" title="Avg of Physical / Mental / Endurance">Challenge</span>
@@ -495,7 +495,7 @@ function buildVotingGrid(container, eligible, getVote, setVote) {
     const card = document.createElement("div");
     card.className = "contestant-card";
     card.innerHTML = `
-      <div class="card-name">${escapeHtml(c.name)}</div>
+      <div class="card-name">${escapeHtml(getPlayerDisplayName(c, FORMAT_BY_SCREEN.tribal))}</div>
       <div class="card-stats">
         <div class="stat-row">
           <span class="stat-label" title="Avg of Physical / Mental / Endurance">Challenge</span>
@@ -684,7 +684,7 @@ function showAIIdolReveal(container, state, contestant, onContinue) {
 
       <div class="idol-reveal-card idol-reveal-ai">
         <div class="idol-reveal-icon">◆</div>
-        <div class="idol-reveal-headline">${escapeHtml(contestant.name)} plays an idol!</div>
+        <div class="idol-reveal-headline">${escapeHtml(getPlayerDisplayName(contestant, FORMAT_BY_SCREEN.tribal))} plays an idol!</div>
         <p class="idol-reveal-line">${escapeHtml(announcement)}</p>
         <p class="idol-reveal-effect">${escapeHtml(effect)}</p>
       </div>
@@ -779,9 +779,9 @@ function renderRevealPhase(container, state, revealOrder, eliminated, protectedI
       isDecisive                   ? "reveal-card-decisive" : "",
     ].filter(Boolean).join(" ");
     card.innerHTML = isVoided
-      ? `<span class="reveal-card-name">${escapeHtml(target.name)}</span>
+      ? `<span class="reveal-card-name">${escapeHtml(getPlayerDisplayName(target, FORMAT_BY_SCREEN.tribal))}</span>
          <span class="reveal-card-void-badge">VOID</span>`
-      : `<span class="reveal-card-name">${escapeHtml(target.name)}</span>`;
+      : `<span class="reveal-card-name">${escapeHtml(getPlayerDisplayName(target, FORMAT_BY_SCREEN.tribal))}</span>`;
     cardsEl.appendChild(card);
 
     requestAnimationFrame(() => card.classList.add("revealed"));
@@ -789,7 +789,7 @@ function renderRevealPhase(container, state, revealOrder, eliminated, protectedI
     // Voided votes don't update the live tally — they don't count toward
     // the elimination at all. They still get the dramatic reveal moment.
     if (!isVoided) {
-      liveTally[target.id] ??= { name: target.name, count: 0 };
+      liveTally[target.id] ??= { name: getPlayerDisplayName(target, FORMAT_BY_SCREEN.tribal), count: 0 };
       liveTally[target.id].count++;
       renderTally(tallyEl, liveTally);
     }
@@ -902,7 +902,7 @@ function buildTribalAttendeesRibbonHTML(tribe, state) {
       : isYou             ? `<span class="tribal-attendee-marker" aria-hidden="true">★</span>`
       : isHolder          ? `<span class="tribal-attendee-marker" aria-hidden="true">⬡</span>`
       : "";
-    return `<span class="${cls.join(" ")}">${marker}<span class="tribal-attendee-name">${escapeHtml(c.name)}</span></span>`;
+    return `<span class="${cls.join(" ")}">${marker}<span class="tribal-attendee-name">${escapeHtml(getPlayerDisplayName(c, FORMAT_BY_SCREEN.tribal))}</span></span>`;
   }).join("");
 
   return `

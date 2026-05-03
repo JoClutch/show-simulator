@@ -327,42 +327,42 @@ function renderCampLifeScreen(container, state) {
       let line = null, weight = 0;
 
       if (!wasTrusted && isTrusted) {
-        line = `${escapeHtml(c.name)} feels like a real ally now — they've started trusting you in a way they didn't this morning.`;
+        line = `${escapeHtml(getPlayerDisplayName(c, FORMAT_BY_SCREEN.campLife))} feels like a real ally now — they've started trusting you in a way they didn't this morning.`;
         weight = 10;
       } else if (wasTrusted && !isTrusted) {
-        line = `Something cooled with ${escapeHtml(c.name)}. You don't have the same standing with them you did this morning.`;
+        line = `Something cooled with ${escapeHtml(getPlayerDisplayName(c, FORMAT_BY_SCREEN.campLife))}. You don't have the same standing with them you did this morning.`;
         weight = 9;
       } else if (!wasDistrusted && isDistrusted) {
-        line = `${escapeHtml(c.name)} pulled back hard. Whatever's between you, they're not extending you the benefit of the doubt anymore.`;
+        line = `${escapeHtml(getPlayerDisplayName(c, FORMAT_BY_SCREEN.campLife))} pulled back hard. Whatever's between you, they're not extending you the benefit of the doubt anymore.`;
         weight = 9;
       } else if (before.allyTier !== tierNow) {
         if (!before.allyTier && tierNow) {
-          line = `You and ${escapeHtml(c.name)} are now in something formal — a ${tierNow} alliance.`;
+          line = `You and ${escapeHtml(getPlayerDisplayName(c, FORMAT_BY_SCREEN.campLife))} are now in something formal — a ${tierNow} alliance.`;
           weight = 9;
         } else if (before.allyTier && !tierNow) {
-          line = `Your alliance with ${escapeHtml(c.name)} is no longer holding.`;
+          line = `Your alliance with ${escapeHtml(getPlayerDisplayName(c, FORMAT_BY_SCREEN.campLife))} is no longer holding.`;
           weight = 9;
         } else if (before.allyTier === "loose" && tierNow === "core") {
-          line = `Your bond with ${escapeHtml(c.name)} has hardened — that pact feels real now.`;
+          line = `Your bond with ${escapeHtml(getPlayerDisplayName(c, FORMAT_BY_SCREEN.campLife))} has hardened — that pact feels real now.`;
           weight = 8;
         } else if (before.allyTier === "core" && tierNow === "loose") {
-          line = `Your tie with ${escapeHtml(c.name)} loosened today. Still allies, but the certainty has gone out of it.`;
+          line = `Your tie with ${escapeHtml(getPlayerDisplayName(c, FORMAT_BY_SCREEN.campLife))} loosened today. Still allies, but the certainty has gone out of it.`;
           weight = 7;
         } else if (tierNow === "weakened") {
-          line = `Your alliance with ${escapeHtml(c.name)} is hanging on by a thread.`;
+          line = `Your alliance with ${escapeHtml(getPlayerDisplayName(c, FORMAT_BY_SCREEN.campLife))} is hanging on by a thread.`;
           weight = 8;
         }
       } else if (dRel >= 4) {
-        line = `You and ${escapeHtml(c.name)} got closer today. Real ground was covered.`;
+        line = `You and ${escapeHtml(getPlayerDisplayName(c, FORMAT_BY_SCREEN.campLife))} got closer today. Real ground was covered.`;
         weight = 5;
       } else if (dRel >= 2) {
-        line = `Things with ${escapeHtml(c.name)} feel a touch warmer than this morning.`;
+        line = `Things with ${escapeHtml(getPlayerDisplayName(c, FORMAT_BY_SCREEN.campLife))} feel a touch warmer than this morning.`;
         weight = 3;
       } else if (dRel <= -4) {
-        line = `${escapeHtml(c.name)} cooled on you noticeably. You'll feel that next time you talk.`;
+        line = `${escapeHtml(getPlayerDisplayName(c, FORMAT_BY_SCREEN.campLife))} cooled on you noticeably. You'll feel that next time you talk.`;
         weight = 6;
       } else if (dRel <= -2) {
-        line = `${escapeHtml(c.name)} seems a little wary of you compared to this morning.`;
+        line = `${escapeHtml(getPlayerDisplayName(c, FORMAT_BY_SCREEN.campLife))} seems a little wary of you compared to this morning.`;
         weight = 4;
       }
 
@@ -598,7 +598,7 @@ function renderCampLifeScreen(container, state) {
     const playerRow = `
       <li class="camp-tribe-row camp-tribe-row-self">
         <span class="camp-tribe-self-icon" aria-hidden="true">★</span>
-        <span class="camp-tribe-name">You (${escapeHtml(player.name)})</span>
+        <span class="camp-tribe-name">You (${escapeHtml(getPlayerDisplayName(player, FORMAT_BY_SCREEN.campLife))})</span>
       </li>
     `;
 
@@ -622,7 +622,7 @@ function renderCampLifeScreen(container, state) {
       return `
         <li class="camp-tribe-row" data-tier="${tier.id}" title="${escapeHtmlAttr(tooltip)}">
           <span class="camp-tribe-dot" aria-hidden="true"></span>
-          <span class="camp-tribe-name">${escapeHtml(c.name)}${markerHTML}</span>
+          <span class="camp-tribe-name">${escapeHtml(getPlayerDisplayName(c, FORMAT_BY_SCREEN.campLife))}${markerHTML}</span>
           <span class="camp-tribe-tier-label">${tier.label}</span>
         </li>
       `;
@@ -690,7 +690,7 @@ function renderCampLifeScreen(container, state) {
       return `
         <li class="target-row${isYou ? " target-row-you" : ""}">
           <span class="target-row-dot" aria-hidden="true">●</span>
-          <span class="target-row-name">${escapeHtml(c.name)}${isYou ? " (you)" : ""}</span>
+          <span class="target-row-name">${escapeHtml(getPlayerDisplayName(c, FORMAT_BY_SCREEN.campLife))}${isYou ? " (you)" : ""}</span>
         </li>
       `;
     }).join("");
@@ -1092,7 +1092,7 @@ function renderCampLifeScreen(container, state) {
         : `${getRelationshipTier(rel).label.toLowerCase()} · trust ${trust.toFixed(0)}/10`;
       memberList.innerHTML += `
         <li class="alliance-inspector-member${isYou ? " alliance-inspector-member-self" : ""}">
-          <span class="alliance-inspector-member-name">${escapeHtml(c.name)}</span>
+          <span class="alliance-inspector-member-name">${escapeHtml(getPlayerDisplayName(c, FORMAT_BY_SCREEN.campLife))}</span>
           <span class="alliance-inspector-member-sub">${escapeHtml(subline)}</span>
         </li>
       `;
@@ -1231,7 +1231,7 @@ function renderCampLifeScreen(container, state) {
       const chip = document.createElement("button");
       chip.className = "target-chip";
       chip.innerHTML = `
-        <span>${escapeHtml(c.name)}</span>
+        <span>${escapeHtml(getPlayerDisplayName(c, FORMAT_BY_SCREEN.campLife))}</span>
         <span class="target-chip-sub">${tier.label.toLowerCase()} · trust ${trust.toFixed(0)}</span>
       `;
       chip.addEventListener("click", () => {
@@ -1274,9 +1274,9 @@ function renderCampLifeScreen(container, state) {
 
     // Feedback log line — uses the same path as other actions.
     const labelText =
-      kind === "invite" ? `Bring in · ${escapeHtml(target.name)}` :
-      kind === "boot"   ? `Push out · ${escapeHtml(target.name)}` :
-      kind === "vote"   ? `Vote plan · ${escapeHtml(target.name)}` :
+      kind === "invite" ? `Bring in · ${escapeHtml(getPlayerDisplayName(target, FORMAT_BY_SCREEN.campLife))}` :
+      kind === "boot"   ? `Push out · ${escapeHtml(getPlayerDisplayName(target, FORMAT_BY_SCREEN.campLife))}` :
+      kind === "vote"   ? `Vote plan · ${escapeHtml(getPlayerDisplayName(target, FORMAT_BY_SCREEN.campLife))}` :
       kind === "read"   ? `Check alliance target · ${escapeHtml(alliance.name)}` :
       "Step away from alliance";
     const entry = document.createElement("div");
@@ -1324,7 +1324,7 @@ function renderCampLifeScreen(container, state) {
       return `<span class="feedback-text">${escapeHtml(result.error)}</span>`;
     }
     if (!result.responses || result.responses.length === 0) {
-      return `<span class="feedback-text">You laid out the plan against ${escapeHtml(target.name)}, but there was nobody else in "${escapeHtml(alliance.name)}" to respond.</span>`;
+      return `<span class="feedback-text">You laid out the plan against ${escapeHtml(getPlayerDisplayName(target, FORMAT_BY_SCREEN.campLife))}, but there was nobody else in "${escapeHtml(alliance.name)}" to respond.</span>`;
     }
 
     const RESPONSE_FLAVOR = {
@@ -1341,7 +1341,7 @@ function renderCampLifeScreen(container, state) {
       return `
         <li class="vote-coord-row" data-response="${f.color}">
           <span class="vote-coord-icon">${f.icon}</span>
-          <span class="vote-coord-name">${escapeHtml(r.name)}</span>
+          <span class="vote-coord-name">${escapeHtml(getPlayerDisplayName(r, FORMAT_BY_SCREEN.campLife))}</span>
           <span class="vote-coord-label">${f.label}</span>
         </li>
       `;
@@ -1356,13 +1356,13 @@ function renderCampLifeScreen(container, state) {
 
     let headline;
     if (totalYes === total && rejects === 0 && leaks === 0) {
-      headline = `The room was with you. "${alliance.name}" is locked in on ${target.name}.`;
+      headline = `The room was with you. "${alliance.name}" is locked in on ${getPlayerDisplayName(target, FORMAT_BY_SCREEN.campLife)}.`;
     } else if (totalYes >= Math.ceil(total / 2) && rejects === 0) {
-      headline = `Most of "${alliance.name}" came along. You have a majority pointing at ${target.name}.`;
+      headline = `Most of "${alliance.name}" came along. You have a majority pointing at ${getPlayerDisplayName(target, FORMAT_BY_SCREEN.campLife)}.`;
     } else if (rejects >= 2) {
-      headline = `The pitch hit a wall. "${alliance.name}" is fracturing — multiple members refused to commit to ${target.name}.`;
+      headline = `The pitch hit a wall. "${alliance.name}" is fracturing — multiple members refused to commit to ${getPlayerDisplayName(target, FORMAT_BY_SCREEN.campLife)}.`;
     } else if (leaks >= 1) {
-      headline = `The plan didn't stay in the room. Word about ${target.name} is going to travel.`;
+      headline = `The plan didn't stay in the room. Word about ${getPlayerDisplayName(target, FORMAT_BY_SCREEN.campLife)} is going to travel.`;
     } else if (fullAgree === 0) {
       headline = `Nobody fully committed. The pitch landed somewhere between "maybe" and "not yet."`;
     } else {
@@ -1408,7 +1408,7 @@ function renderCampLifeScreen(container, state) {
       return `
         <li class="vote-coord-row" data-response="${f.color}">
           <span class="vote-coord-icon">${f.icon}</span>
-          <span class="vote-coord-name">${escapeHtml(r.name)}${detail ? ` <span class="vote-coord-detail">— ${escapeHtml(detail)}</span>` : ""}</span>
+          <span class="vote-coord-name">${escapeHtml(getPlayerDisplayName(r, FORMAT_BY_SCREEN.campLife))}${detail ? ` <span class="vote-coord-detail">— ${escapeHtml(detail)}</span>` : ""}</span>
           <span class="vote-coord-label">${f.label}</span>
         </li>
       `;
@@ -1688,7 +1688,7 @@ function renderCampLifeScreen(container, state) {
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   function appendFeedback(action, target, text) {
-    const tag   = target ? `${action.label} · ${escapeHtml(target.name)}` : action.label;
+    const tag   = target ? `${action.label} · ${escapeHtml(getPlayerDisplayName(target, FORMAT_BY_SCREEN.campLife))}` : action.label;
     const entry = document.createElement("div");
     entry.className = "feedback-entry";
     entry.innerHTML = `

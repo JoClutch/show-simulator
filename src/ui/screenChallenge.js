@@ -21,7 +21,7 @@ function renderChallengeScreen(container, state) {
 // own tribe gets a gold left-stripe and the player's own name is bolded —
 // subtle, theme-consistent highlights only.
 function buildTribeRosterHTML(tribeLabel, members, opts = {}) {
-  const { isPlayerTribe = false, playerId = null, color, name } = opts;
+  const { isPlayerTribe = false, playerId = null, color, name, nameFormat = "full" } = opts;
 
   // Defensive: an empty tribe still renders the card with a placeholder so
   // it's obvious at a glance that nobody's left, rather than silently empty.
@@ -57,7 +57,7 @@ function buildTribeRosterHTML(tribeLabel, members, opts = {}) {
       : "";
     return `
       <div class="challenge-roster-item${meClass}" style="${inlineStyle}">
-        ${escapeHtml(m.name)}${youTag}
+        ${escapeHtml(getPlayerDisplayName(m, nameFormat))}${youTag}
       </div>
     `;
   }).join("");
@@ -177,7 +177,7 @@ function renderIndividualChallengeScreen(container, state) {
   // Status text — personal win vs watching someone else take it.
   const playerNote = playerWon
     ? pickFlavor(INDIV_WIN_LINES)
-    : getIndivLossLine(result.winner.name);
+    : getIndivLossLine(getPlayerDisplayName(result.winner, FORMAT_BY_SCREEN.challenge));
 
   const continueLabel = playerWon
     ? "Head Back to Camp →"
@@ -207,7 +207,7 @@ function renderIndividualChallengeScreen(container, state) {
 
       <div class="indiv-immunity-winner">
         <div class="immunity-necklace-icon">⬡</div>
-        <div class="immunity-winner-name" style="color:${mergeColor}">${result.winner.name}</div>
+        <div class="immunity-winner-name" style="color:${mergeColor}">${escapeHtml(getPlayerDisplayName(result.winner, FORMAT_BY_SCREEN.challenge))}</div>
         <div class="immunity-winner-sub">wins Individual Immunity</div>
       </div>
 
