@@ -86,7 +86,7 @@ function runAICampPhase(state) {
 //   applied=false → cancelled; no state changes; just route back.
 function onCastEditorDone(applied) {
   if (applied) {
-    gameState = createSeasonState();
+    gameState = createSeasonState(_carrySeasonIdentity());
     assignTribes(CONTESTANTS, gameState);
     initIdols(gameState);
   }
@@ -97,7 +97,7 @@ function onCastEditorDone(applied) {
 // Same shape as onCastEditorDone — rebuild state on apply, route back either way.
 function onRulesEditorDone(applied) {
   if (applied) {
-    gameState = createSeasonState();
+    gameState = createSeasonState(_carrySeasonIdentity());
     assignTribes(CONTESTANTS, gameState);
     initIdols(gameState);
   }
@@ -111,7 +111,7 @@ function onRulesEditorDone(applied) {
 //                   change); no state mutation needed, just route back.
 function onSavedSetupsDone(applied) {
   if (applied) {
-    gameState = createSeasonState();
+    gameState = createSeasonState(_carrySeasonIdentity());
     assignTribes(CONTESTANTS, gameState);
     initIdols(gameState);
   }
@@ -123,11 +123,22 @@ function onSavedSetupsDone(applied) {
 //   applied=false → user clicked Back without picking; no rebuild needed.
 function onTemplatesDone(applied) {
   if (applied) {
-    gameState = createSeasonState();
+    gameState = createSeasonState(_carrySeasonIdentity());
     assignTribes(CONTESTANTS, gameState);
     initIdols(gameState);
   }
   showScreen("select");
+}
+
+// v10.2: helper to carry the current season identity through any code path
+// that recreates gameState mid-setup (cast editor, rules editor, templates,
+// saved setups). Returns the opts object createSeasonState expects, or an
+// empty object if no identity has been set yet (defensive — callers don't
+// need to null-check).
+function _carrySeasonIdentity() {
+  const s = gameState && gameState.season;
+  if (!s) return {};
+  return { showId: s.showId, seasonId: s.seasonId, type: s.type };
 }
 
 // v4.2: returns true if the eliminated contestant should be added to the jury.
@@ -648,6 +659,92 @@ function checkForMerge() {
   const trigger = SEASON_CONFIG.mergeTriggerCount;
   if (!trigger) return false;
   return getAllActive().length <= trigger;
+}
+
+// ── Game start (v10.2) ────────────────────────────────────────────────────────
+//
+// Single canonical entry point for starting a season. Called by:
+//   • Demo / prebuilt season cards on the show page (screenShowSeasons.js)
+//   • The custom-season card (also via this function — branches on season type)
+//   • Future: deep links, replay buttons, dev panel "restart" tools
+//
+// opts:
+//   showId:   string  — defaults to "survivor"
+//   seasonId: string  — defaults to "survivor-demo" (the bundled demo season)
+//
+// When called with no arguments at all, starts the demo season — preserves the
+// pre-v10.0 "open the page, you're in the game" behavior for any code path that
+// bypasses the landing flow (tests, dev tools, future deep links).
+//
+// Branches by season type:
+//   "demo" / "prebuilt" → resolveTemplate → applyTemplate → init runtime
+//                         → assignTribes → initIdols → showScreen("select")
+//   "custom"            → applyTemplate(default) as starting point
+//                         → showScreen("templates") (existing custom flow)
+//
+// Stores { showId, seasonId, type } on gameState.season so future logic /
+// UI can branch on which season is actually being played.
+function startGame(opts = {}) {
+  const showId   = opts.showId   || "survivor";
+  const seasonId = opts.seasonId || "survivor-demo";
+
+  const season = getSeasonById(seasonId);
+  if (!season) {
+    // Unknown season id — fall back to demo. Guard against infinite recursion
+    // if the demo season itself isn't registered (would be a config error).
+    console.error(`[startGame] unknown season '${seasonId}', falling back to demo`);
+    if (seasonId === "survivor-demo") {
+      // Demo also unknown — last-resort hard fallback.
+      _bootDefaultDemoSeason();
+      return;
+    }
+    return startGame({ showId: "survivor", seasonId: "survivor-demo" });
+  }
+
+  if (season.type === "custom") {
+    // Custom: stage the default template so the existing template / cast /
+    // rules editors have something to read, record the season identity on
+    // state, route into the existing setup flow.
+    applyTemplate(DEFAULT_SEASON_TEMPLATE);
+    normalizeAllContestants(CONTESTANTS);
+    gameState = createSeasonState({ showId, seasonId, type: season.type });
+    showScreen("templates");
+    return;
+  }
+
+  // demo / prebuilt: resolve the season's template and start the game proper.
+  const template = resolveTemplate(season.templateRef);
+  if (!template) {
+    console.error(
+      `[startGame] season '${seasonId}' references missing template '${season.templateRef}', ` +
+      `falling back to default demo template`
+    );
+    _bootDefaultDemoSeason();
+    return;
+  }
+
+  applyTemplate(template);
+  normalizeAllContestants(CONTESTANTS);
+  gameState = createSeasonState({ showId, seasonId, type: season.type });
+  assignTribes(CONTESTANTS, gameState);
+  initIdols(gameState);
+  showScreen("select");
+}
+
+// Last-resort fallback when even the registered demo season can't resolve.
+// Boots the bundled DEFAULT_SEASON_TEMPLATE directly, marking the state's
+// season as "demo" so downstream code still sees a coherent shape.
+function _bootDefaultDemoSeason() {
+  applyTemplate(DEFAULT_SEASON_TEMPLATE);
+  normalizeAllContestants(CONTESTANTS);
+  gameState = createSeasonState({
+    showId:   "survivor",
+    seasonId: "survivor-demo",
+    type:     "demo",
+  });
+  assignTribes(CONTESTANTS, gameState);
+  initIdols(gameState);
+  showScreen("select");
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────

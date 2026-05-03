@@ -94,59 +94,14 @@ function buildSeasonCardHTML(season) {
   `;
 }
 
-// ── Season-start dispatcher ────────────────────────────────────────────────
+// ── Season-start handler ───────────────────────────────────────────────────
 //
-// Invoked when a user clicks a season card's CTA. Branches on the season's
-// `type` so each kind of season gets the right entry path. Demo and prebuilt
-// seasons share the same boot-tail (apply template → init game → select);
-// custom routes to the existing template/cast/rules editor flow.
+// v10.2: dispatcher logic moved into the canonical startGame({ showId,
+// seasonId }) API in main.js — that API is now the single entry point
+// for starting a season from any caller (this screen, dev tools,
+// hypothetical deep links). The screen just collects the season id from
+// the clicked card and hands off.
 
 function onSeasonSelected(seasonId) {
-  const season = getSeasonById(seasonId);
-  if (!season) {
-    console.error(`[onSeasonSelected] unknown season '${seasonId}'`);
-    return;
-  }
-
-  switch (season.type) {
-    case "demo":
-    case "prebuilt": {
-      const template = resolveTemplate(season.templateRef);
-      if (!template) {
-        console.error(`[onSeasonSelected] season '${seasonId}' has no resolvable template`);
-        return;
-      }
-      startBundledSeason(template);
-      break;
-    }
-
-    case "custom":
-      startCustomSeasonSetup();
-      break;
-
-    default:
-      console.error(`[onSeasonSelected] unknown season type '${season.type}'`);
-  }
-}
-
-// Boot-tail for any bundled season (demo or prebuilt). Runs the same six
-// steps that previously ran unconditionally on DOMContentLoaded — they
-// just fire on demand now, with whichever template the user picked.
-function startBundledSeason(template) {
-  applyTemplate(template);
-  normalizeAllContestants(CONTESTANTS);
-  gameState = createSeasonState();
-  assignTribes(CONTESTANTS, gameState);
-  initIdols(gameState);
-  showScreen("select");
-}
-
-// Custom-season entry: apply the default template as a starting point so
-// the existing setup screens (templates / cast editor / rules editor) have
-// a valid active template to read from, then route to the template picker.
-function startCustomSeasonSetup() {
-  applyTemplate(DEFAULT_SEASON_TEMPLATE);
-  normalizeAllContestants(CONTESTANTS);
-  gameState = createSeasonState();
-  showScreen("templates");
+  startGame({ showId: _selectedShowId, seasonId });
 }

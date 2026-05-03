@@ -51,11 +51,30 @@ const SEASON_CONFIG = {
 
 // Returns a brand-new season state object. All fields start at their
 // pre-game defaults. The game loop in main.js mutates this object as play progresses.
-function createSeasonState() {
+//
+// v10.2: optionally accepts a `season` descriptor so the game knows which
+// show + season was picked from the landing flow. Pass-through is the only
+// purpose — game logic doesn't read these fields yet, but future branching
+// (alternate season templates, custom-mode UI, save-game restoration) can
+// rely on them being present and correctly populated.
+function createSeasonState(opts = {}) {
   return {
     // ── Progress ───────────────────────────────────────────
     round:  1,       // increments after each Tribal Council
     phase: "select", // "select" | "campLife" | "challenge" | "tribal" | "elimination" | "merge"
+
+    // ── Season identification (v10.2) ──────────────────────
+    // Set by startGame() when the player picks a season from the show
+    // page. Null on "freshly constructed but unstarted" states (e.g. the
+    // placeholder gameState used while showing the landing screen).
+    //   showId:   "survivor"          — matches an entry in src/data/shows.js
+    //   seasonId: "survivor-demo"     — matches an entry in src/data/seasons.js
+    //   type:     "demo" | "prebuilt" | "custom"
+    season: {
+      showId:   opts.showId   ?? null,
+      seasonId: opts.seasonId ?? null,
+      type:     opts.type     ?? null,
+    },
 
     // ── People ─────────────────────────────────────────────
     player: null,    // the contestant object the human chose; set in onContestantSelected()
