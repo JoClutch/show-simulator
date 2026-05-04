@@ -3291,6 +3291,24 @@ select:focus {
   color: var(--text-faint);
 }
 
+/* v10.6: italic flavor sub-line below the outcome cards (pre-merge) or
+   below the winner card (post-merge). Carries the rewardSubcopy field
+   from the challenge entry — the richer one-line description of what
+   was actually won. */
+.reward-flavor-subcopy {
+  font-size: 0.88rem;
+  font-style: italic;
+  color: var(--text-dim);
+  text-align: center;
+  margin: 0.6rem auto 1.25rem;
+  max-width: 540px;
+  line-height: 1.5;
+}
+.reward-winner-flavor {
+  margin: 0.6rem 0 0;
+  max-width: none;
+}
+
 /* ────────────────────────────────────────────────────────────────────────
    v10.0 — Landing page (root /) and Show page.
    The site's new entry point. Lists the available reality shows;

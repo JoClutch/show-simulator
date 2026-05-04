@@ -174,6 +174,79 @@ function withFixedIndividualChallenge(name, fn) {
 
 const TRIALS = 1000;
 
+// ─── Suite: v10.6 — challenge purpose tagging + reward fields ──────────────
+
+test("v10.6 schema", "every CHALLENGES entry has purpose='immunity'", () => {
+  for (const c of CHALLENGES) {
+    assertEqual(c.purpose, "immunity", `${c.name}: missing or wrong purpose`);
+  }
+});
+
+test("v10.6 schema", "every INDIVIDUAL_CHALLENGES entry has purpose='immunity'", () => {
+  for (const c of INDIVIDUAL_CHALLENGES) {
+    assertEqual(c.purpose, "immunity", `${c.name}: missing or wrong purpose`);
+  }
+});
+
+test("v10.6 schema", "every REWARD_CHALLENGES entry has purpose='reward' + reward fields", () => {
+  for (const c of REWARD_CHALLENGES) {
+    assertEqual(c.purpose, "reward", `${c.name}: wrong purpose`);
+    assert(typeof c.rewardType    === "string" && c.rewardType.length > 0,    `${c.name}: rewardType required`);
+    assert(typeof c.rewardLabel   === "string" && c.rewardLabel.length > 0,   `${c.name}: rewardLabel required`);
+    assert(typeof c.rewardSubcopy === "string" && c.rewardSubcopy.length > 0, `${c.name}: rewardSubcopy required`);
+  }
+});
+
+test("v10.6 schema", "every INDIVIDUAL_REWARD_CHALLENGES entry has purpose='reward' + reward fields", () => {
+  for (const c of INDIVIDUAL_REWARD_CHALLENGES) {
+    assertEqual(c.purpose, "reward", `${c.name}: wrong purpose`);
+    assert(typeof c.rewardType    === "string" && c.rewardType.length > 0,    `${c.name}: rewardType required`);
+    assert(typeof c.rewardLabel   === "string" && c.rewardLabel.length > 0,   `${c.name}: rewardLabel required`);
+    assert(typeof c.rewardSubcopy === "string" && c.rewardSubcopy.length > 0, `${c.name}: rewardSubcopy required`);
+  }
+});
+
+test("v10.6 schema", "REWARD_TYPES vocabulary is exposed", () => {
+  assert(typeof REWARD_TYPES === "object", "REWARD_TYPES must be exposed");
+  assert(REWARD_TYPES.FOOD === "food");
+  assert(REWARD_TYPES.COMFORT === "comfort");
+  assert(REWARD_TYPES.SUPPLIES === "supplies");
+  assert(REWARD_TYPES.COMMUNICATION === "communication");
+  assert(REWARD_TYPES.LUXURY === "luxury");
+  assert(REWARD_TYPES.FAMILY === "family");
+});
+
+test("v10.6 schema", "every reward entry's rewardType is a registered REWARD_TYPES value", () => {
+  const valid = new Set(Object.values(REWARD_TYPES));
+  for (const c of [...REWARD_CHALLENGES, ...INDIVIDUAL_REWARD_CHALLENGES]) {
+    assert(valid.has(c.rewardType), `${c.name}: rewardType '${c.rewardType}' not in REWARD_TYPES`);
+  }
+});
+
+test("v10.6 result shape", "runChallenge with REWARD_CHALLENGES carries reward fields through", () => {
+  const tribes = { A: makeTribeOfSpec("physical"), B: makeTribeBalanced() };
+  const result = runChallenge(tribes, REWARD_CHALLENGES);
+  assertEqual(result.purpose, "reward", "result.purpose should be 'reward'");
+  assert(typeof result.rewardLabel === "string", "result.rewardLabel should be present");
+  assert(typeof result.rewardSubcopy === "string", "result.rewardSubcopy should be present");
+});
+
+test("v10.6 result shape", "runIndividualChallenge with INDIVIDUAL_REWARD_CHALLENGES carries reward fields", () => {
+  const members = Array.from({ length: 6 }, (_, i) => makeContestant(`m${i}`, `M${i}`, 6, 6, 6));
+  const result  = runIndividualChallenge(members, INDIVIDUAL_REWARD_CHALLENGES);
+  assertEqual(result.purpose, "reward");
+  assert(typeof result.rewardLabel === "string");
+  assert(typeof result.rewardSubcopy === "string");
+});
+
+test("v10.6 result shape", "runChallenge with default pool returns purpose='immunity', no reward fields", () => {
+  const tribes = { A: makeTribeBalanced(), B: makeTribeBalanced() };
+  const result = runChallenge(tribes);   // default = CHALLENGES (immunity pool)
+  assertEqual(result.purpose, "immunity");
+  assertEqual(result.rewardLabel, undefined, "immunity result should not have rewardLabel");
+  assertEqual(result.rewardSubcopy, undefined);
+});
+
 // ─── Suite: helpers ──────────────────────────────────────────────────────────
 
 test("helpers", "getOverallChallengeSkill averages the three sub-skills", () => {

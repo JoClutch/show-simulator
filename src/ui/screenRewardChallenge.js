@@ -41,11 +41,18 @@ function renderTribalRewardScreen(container, state) {
 
   // Persist for downstream display (Camp Life flavor, Episode Recap, etc.).
   // Display-only — never read by AI, vote, alliance, or idol code.
+  // v10.6: also carry rewardType / rewardLabel / rewardSubcopy so any later
+  // surface (Camp Life "your tribe still has the spice box from yesterday"
+  // line, dev panel, future camp resource system) can read what was won.
   state.rewardWinner    = result.winner;
   state.rewardChallenge = {
     name:          result.name,
     description:   result.description,
     challengeType: result.challengeType,
+    purpose:       "reward",
+    rewardType:    result.rewardType,
+    rewardLabel:   result.rewardLabel,
+    rewardSubcopy: result.rewardSubcopy,
   };
 
   const winnerName  = SEASON_CONFIG.tribeNames[result.winner];
@@ -98,7 +105,7 @@ function renderTribalRewardScreen(container, state) {
         <div class="challenge-outcome-cell outcome-reward-win">
           <div class="outcome-label">Reward</div>
           <div class="outcome-tribe" style="color:${winnerColor}">${escapeHtml(winnerName)}</div>
-          <div class="outcome-sub">Wins reward — comfort, food, or a glimpse of home</div>
+          <div class="outcome-sub">Wins ${escapeHtml(result.rewardLabel ?? "the reward")}</div>
         </div>
         <div class="challenge-outcome-cell outcome-reward-loss">
           <div class="outcome-label">No Reward</div>
@@ -106,6 +113,10 @@ function renderTribalRewardScreen(container, state) {
           <div class="outcome-sub">Heads back to camp empty-handed</div>
         </div>
       </div>
+
+      ${result.rewardSubcopy ? `
+        <p class="reward-flavor-subcopy">${escapeHtml(result.rewardSubcopy)}</p>
+      ` : ""}
 
       <div class="challenge-player-status ${playerWon ? "status-reward-win" : "status-reward-loss"}">
         <p>${escapeHtml(playerNote)}</p>
@@ -172,7 +183,12 @@ function renderIndividualRewardScreen(container, state) {
         <div class="reward-icon" aria-hidden="true">◈</div>
         ${renderPlayerPortrait(result.winner, { size: "large", extraClass: "player-portrait--stacked" })}
         <div class="reward-winner-name">${escapeHtml(getPlayerDisplayName(result.winner, FORMAT_BY_SCREEN.challenge))}</div>
-        <div class="reward-winner-sub">wins the reward</div>
+        <div class="reward-winner-sub">
+          wins ${escapeHtml(result.rewardLabel ?? "the reward")}
+        </div>
+        ${result.rewardSubcopy ? `
+          <p class="reward-flavor-subcopy reward-winner-flavor">${escapeHtml(result.rewardSubcopy)}</p>
+        ` : ""}
       </div>
 
       <div class="challenge-player-status ${playerWon ? "status-reward-win" : "status-reward-loss"}">

@@ -240,6 +240,30 @@ const CHALLENGE_WEIGHT_ENDURANCE = { physical: PURE_SECONDARY_SHARE, mental: PUR
 let CHALLENGE_RATING_EXPONENT = 1.0;
 
 // ── Tribal challenges (pre-merge) ─────────────────────────────────────────────
+//
+// v10.6 schema (additive — older callers ignore unknown fields):
+//   name                  string   Display name on the challenge type label.
+//   description           string   Physical description of what happened.
+//   challengeType         string   "physical" | "mental" | "endurance" | "mixed".
+//   challengeSkillWeights object   { physical, mental, endurance } summing to 1.
+//   purpose               string   "immunity" | "reward" — distinguishes the
+//                                  two pools at the data layer. Lets future
+//                                  code filter / assert / branch on category
+//                                  without inspecting which array an entry
+//                                  came from.
+//
+//   Reward-only fields (REWARD_CHALLENGES / INDIVIDUAL_REWARD_CHALLENGES):
+//   rewardType            string   Generic category — "food" | "comfort" |
+//                                  "supplies" | "communication" | "luxury" |
+//                                  "family". Used for sorting / filtering /
+//                                  future reward-system gating.
+//   rewardLabel           string   What the winner gets, written to fit a
+//                                  sentence: "Wins {rewardLabel}".
+//                                  Examples: "a beachside picnic",
+//                                  "letters from home", "fishing supplies".
+//   rewardSubcopy         string   One-line richer description shown under
+//                                  the winner. E.g. "Fresh fruit, grilled
+//                                  fish, cold drinks. Worth every step."
 
 const CHALLENGES = [
   {
@@ -247,18 +271,21 @@ const CHALLENGES = [
     description: "Both tribes crashed through a water obstacle course, hauling heavy crates across the finish line.",
     challengeType:         "physical",
     challengeSkillWeights: CHALLENGE_WEIGHT_PHYSICAL,
+    purpose:               "immunity",
   },
   {
     name: "Puzzle Race",
     description: "Tribes raced to assemble a massive puzzle under the blazing afternoon sun. Every second counted.",
     challengeType:         "mental",
     challengeSkillWeights: CHALLENGE_WEIGHT_MENTAL,
+    purpose:               "immunity",
   },
   {
     name: "Endurance Hold",
     description: "Contestants gripped a weighted log above their heads for as long as they could. One tribe held on longer.",
     challengeType:         "endurance",
     challengeSkillWeights: CHALLENGE_WEIGHT_ENDURANCE,
+    purpose:               "immunity",
   },
   {
     // Fire-making rewards steady technique under physical strain — equal parts
@@ -268,12 +295,14 @@ const CHALLENGES = [
     description: "A fire-making relay stretched every competitor to their limit. Technique and composure decided it.",
     challengeType:         "mixed",
     challengeSkillWeights: { physical: 0.4, mental: 0.4, endurance: 0.2 },
+    purpose:               "immunity",
   },
   {
     name: "Memory Test",
     description: "A sequence-based memory challenge where one costly mistake at the end spelled disaster.",
     challengeType:         "mental",
     challengeSkillWeights: CHALLENGE_WEIGHT_MENTAL,
+    purpose:               "immunity",
   },
   {
     // Rope maze is a pattern-recognition + spatial reasoning task with a
@@ -283,6 +312,7 @@ const CHALLENGES = [
     description: "Tribes untangled an enormous rope maze while keeping a ball suspended. Focus won the day.",
     challengeType:         "mental",
     challengeSkillWeights: { physical: 0.2, mental: 0.7, endurance: 0.1 },
+    purpose:               "immunity",
   },
   {
     // Balance beams over water are mostly endurance + body control; one slip
@@ -292,46 +322,122 @@ const CHALLENGES = [
     description: "Contestants moved across narrow balance beams over open water. One tribe kept their footing.",
     challengeType:         "endurance",
     challengeSkillWeights: { physical: 0.2, mental: 0.1, endurance: 0.7 },
+    purpose:               "immunity",
   },
 ];
 
-// ── Reward challenges (v10.4) ────────────────────────────────────────────────
+// ── Reward challenges (v10.4 → v10.6) ────────────────────────────────────────
 //
 // Reward challenges are a *flavor* phase added before each immunity
 // challenge. They use the same skill-weighting and noise math as immunity
 // challenges (the engine doesn't distinguish them), but the resolution
 // screen reads from this pool instead of CHALLENGES so the names + flavor
-// read as rewards (food, comfort, family visits) rather than immunity
-// stakes (obstacle courses, puzzles).
+// read as rewards (food, comfort, supplies, family visits) rather than
+// immunity stakes (obstacle courses, puzzles).
 //
-// DESIGN RULE: reward outcomes are FLAVOR ONLY in v10.4. They don't grant
-// idol clues, don't change immunity, don't affect alliances or AI. The
-// data field gameState.rewardWinner exists for the screen's display use
-// only and is cleared each round in advanceRound.
+// v10.6: each reward entry now also carries:
+//   purpose:       "reward"     — distinguishes from "immunity" pool entries
+//   rewardType:    string       — generic category (food / comfort / supplies
+//                                 / communication / luxury / family)
+//   rewardLabel:   string       — fits "Wins {rewardLabel}" in the outcome card
+//   rewardSubcopy: string       — richer one-line description below the winner
+//
+// DESIGN RULE: reward outcomes are FLAVOR ONLY through v10.6. They don't
+// grant idol clues, don't change immunity, don't affect alliances, don't
+// touch AI. The fields written to gameState.rewardWinner / rewardChallenge
+// exist for display purposes only.
+
+// Generic reward type vocabulary. Centralized so the screen / future
+// camp-resource system / dev panel filtering all share the same set.
+const REWARD_TYPES = {
+  FOOD:          "food",          // meals, snacks, comfort food
+  COMFORT:       "comfort",       // spa, rest, soft beds
+  SUPPLIES:      "supplies",      // tarp, fishing gear, spices, blankets
+  COMMUNICATION: "communication", // letters, video, calls home
+  LUXURY:        "luxury",        // sailing, helicopter, sunset cruise
+  FAMILY:        "family",        // family / loved one visit (rare)
+};
+
 const REWARD_CHALLENGES = [
   {
     name: "Beach Picnic",
     description: "Tribes raced through a sand-dune obstacle to a beachside spread of fresh fruit, grilled fish, and cold drinks.",
     challengeType:         "physical",
     challengeSkillWeights: CHALLENGE_WEIGHT_PHYSICAL,
+    purpose:               "reward",
+    rewardType:            REWARD_TYPES.FOOD,
+    rewardLabel:           "a beachside picnic",
+    rewardSubcopy:         "Fresh fruit, grilled fish, and cold drinks under a palm canopy.",
   },
   {
     name: "Sailboat Cruise",
     description: "A late-afternoon sailboat cruise around the bay was the prize — but only for the tribe that solved the navigation puzzle first.",
     challengeType:         "mental",
     challengeSkillWeights: CHALLENGE_WEIGHT_MENTAL,
+    purpose:               "reward",
+    rewardType:            REWARD_TYPES.LUXURY,
+    rewardLabel:           "an afternoon sailing the bay",
+    rewardSubcopy:         "Wind, salt spray, and a cooler of beers — three hours away from camp.",
   },
   {
     name: "Pizza Drop",
     description: "Stacked pizza boxes hung at the top of a slick pole. The tribe with the strongest climbers feasted first.",
     challengeType:         "physical",
     challengeSkillWeights: { physical: 0.65, mental: 0.1, endurance: 0.25 },
+    purpose:               "reward",
+    rewardType:            REWARD_TYPES.FOOD,
+    rewardLabel:           "a pizza-and-beer feast",
+    rewardSubcopy:         "Hot, greasy, exactly what nobody at camp has tasted in weeks.",
   },
   {
     name: "Letters from Home",
     description: "Tribes pulled rope through a gauntlet of stations. The first to deliver their tribemates' letters got the longest read.",
     challengeType:         "mixed",
     challengeSkillWeights: { physical: 0.5, mental: 0.3, endurance: 0.2 },
+    purpose:               "reward",
+    rewardType:            REWARD_TYPES.COMMUNICATION,
+    rewardLabel:           "letters from home",
+    rewardSubcopy:         "Pages of news from family, read aloud or in silent corners of camp.",
+  },
+  {
+    name: "Camp Upgrade",
+    description: "Tribes hauled crates of building supplies across a shallow channel. The faster tribe earned the better camp materials.",
+    challengeType:         "endurance",
+    challengeSkillWeights: { physical: 0.45, mental: 0.05, endurance: 0.5 },
+    purpose:               "reward",
+    rewardType:            REWARD_TYPES.SUPPLIES,
+    rewardLabel:           "a tarp, blankets, and a real cooking pot",
+    rewardSubcopy:         "Camp gets warmer, drier, and a meal feels like a meal again.",
+  },
+  {
+    name: "Spice Box Relay",
+    description: "A relay-and-puzzle hybrid. The tribe that finished both halves first claimed the prize box.",
+    challengeType:         "mixed",
+    challengeSkillWeights: { physical: 0.35, mental: 0.45, endurance: 0.2 },
+    purpose:               "reward",
+    rewardType:            REWARD_TYPES.SUPPLIES,
+    rewardLabel:           "a spice box and cooking oil",
+    rewardSubcopy:         "Fish stew with actual flavor tonight, instead of just rice and salt.",
+  },
+  {
+    name: "Fishing Gear Race",
+    description: "Tribes paddled out to retrieve crates from offshore buoys. Whoever reached camp first kept the gear.",
+    challengeType:         "physical",
+    challengeSkillWeights: { physical: 0.55, mental: 0.1, endurance: 0.35 },
+    purpose:               "reward",
+    rewardType:            REWARD_TYPES.SUPPLIES,
+    rewardLabel:           "a tackle box, fishing line, and a spear",
+    rewardSubcopy:         "Real gear means real protein for the rest of the season.",
+  },
+  {
+    name: "Sunset Helicopter",
+    description: "Tribes raced to assemble a flagged ladder up a sea cliff. The first to plant their banner caught the last seats out.",
+    challengeType:         "mixed",
+    challengeSkillWeights: { physical: 0.4, mental: 0.3, endurance: 0.3 },
+    purpose:               "reward",
+    rewardType:            REWARD_TYPES.LUXURY,
+    rewardLabel:           "a sunset helicopter ride",
+    rewardSubcopy:         "Forty-five minutes over the archipelago, then dinner waiting on the beach.",
   },
 ];
 
@@ -342,24 +448,80 @@ const INDIVIDUAL_REWARD_CHALLENGES = [
     description: "A guided trek up a coastal cliff to a private picnic with chilled wine and a sunset view.",
     challengeType:         "endurance",
     challengeSkillWeights: CHALLENGE_WEIGHT_ENDURANCE,
+    purpose:               "reward",
+    rewardType:            REWARD_TYPES.FOOD,
+    rewardLabel:           "a private cliff-top picnic",
+    rewardSubcopy:         "Chilled wine, a real meal, and a view that doesn't include a Tribal Council mat.",
   },
   {
     name: "Family Visit",
     description: "A loved one waited at a comfort camp on the far side of the island. Only one player would reach them today.",
     challengeType:         "mixed",
     challengeSkillWeights: { physical: 0.4, mental: 0.35, endurance: 0.25 },
+    purpose:               "reward",
+    rewardType:            REWARD_TYPES.FAMILY,
+    rewardLabel:           "an afternoon with a loved one",
+    rewardSubcopy:         "Three hours of being known again. Worth more than anything in the game.",
   },
   {
     name: "Helicopter Tour",
     description: "An aerial sightseeing tour over the archipelago — the first to thread a marble through a tilting maze claimed the seat.",
     challengeType:         "mental",
     challengeSkillWeights: CHALLENGE_WEIGHT_MENTAL,
+    purpose:               "reward",
+    rewardType:            REWARD_TYPES.LUXURY,
+    rewardLabel:           "a helicopter tour of the archipelago",
+    rewardSubcopy:         "An hour above the water, then dinner at a private overlook.",
   },
   {
     name: "Spa Reward",
     description: "A massage, a hot meal, and an actual bed. Contestants raced to be the one player who slept somewhere soft tonight.",
     challengeType:         "physical",
     challengeSkillWeights: { physical: 0.55, mental: 0.15, endurance: 0.3 },
+    purpose:               "reward",
+    rewardType:            REWARD_TYPES.COMFORT,
+    rewardLabel:           "a spa night with a hot meal and a real bed",
+    rewardSubcopy:         "Massage, shower, fresh sheets. Back to camp tomorrow as a different person.",
+  },
+  {
+    name: "Letters and Care Package",
+    description: "Players raced through a memory-sequence course. The first to recall every symbol earned a sealed package from home.",
+    challengeType:         "mental",
+    challengeSkillWeights: { physical: 0.1, mental: 0.7, endurance: 0.2 },
+    purpose:               "reward",
+    rewardType:            REWARD_TYPES.COMMUNICATION,
+    rewardLabel:           "a care package and a video from home",
+    rewardSubcopy:         "Photos, a hand-written note, and ten minutes of footage of people who love you.",
+  },
+  {
+    name: "Camp Resupply",
+    description: "A solo endurance hang. The longest hold won an island-wide supply drop for their personal use at camp.",
+    challengeType:         "endurance",
+    challengeSkillWeights: { physical: 0.25, mental: 0.05, endurance: 0.7 },
+    purpose:               "reward",
+    rewardType:            REWARD_TYPES.SUPPLIES,
+    rewardLabel:           "a tarp, blanket, and pillow for camp",
+    rewardSubcopy:         "Three things that make every remaining night easier.",
+  },
+  {
+    name: "Steak Dinner",
+    description: "A grueling water-balance task. Last player standing claimed a steak dinner with all the trimmings.",
+    challengeType:         "endurance",
+    challengeSkillWeights: { physical: 0.3, mental: 0.1, endurance: 0.6 },
+    purpose:               "reward",
+    rewardType:            REWARD_TYPES.FOOD,
+    rewardLabel:           "a steak dinner with all the sides",
+    rewardSubcopy:         "Real protein, real fat, real seasoning. The body remembers.",
+  },
+  {
+    name: "Sunset Cruise",
+    description: "A puzzle-and-paddle race to a moored sailboat. The first to board kept it for the evening.",
+    challengeType:         "mixed",
+    challengeSkillWeights: { physical: 0.4, mental: 0.4, endurance: 0.2 },
+    purpose:               "reward",
+    rewardType:            REWARD_TYPES.LUXURY,
+    rewardLabel:           "a sunset sailing trip",
+    rewardSubcopy:         "Two hours on open water with a meal, a drink, and quiet that camp never has.",
   },
 ];
 
@@ -372,6 +534,7 @@ const INDIVIDUAL_CHALLENGES = [
     description: "Players stood motionless on narrow perches above open water. Willpower and balance decided it.",
     challengeType:         "endurance",
     challengeSkillWeights: CHALLENGE_WEIGHT_ENDURANCE,
+    purpose:               "immunity",
   },
   {
     // Weight hang — pure endurance/grip strength. Slight physical weighting
@@ -380,6 +543,7 @@ const INDIVIDUAL_CHALLENGES = [
     description: "Players held their body weight suspended above the ground for as long as they could. One refused to let go.",
     challengeType:         "endurance",
     challengeSkillWeights: { physical: 0.25, mental: 0.05, endurance: 0.7 },
+    purpose:               "immunity",
   },
   {
     // Endurance Puzzle — long puzzle under brutal sun. Mental dominant but
@@ -388,12 +552,14 @@ const INDIVIDUAL_CHALLENGES = [
     description: "A grueling individual puzzle under the midday sun. One player solved it first.",
     challengeType:         "mixed",
     challengeSkillWeights: { physical: 0.05, mental: 0.55, endurance: 0.4 },
+    purpose:               "immunity",
   },
   {
     name: "Memory Sequence",
     description: "A long sequence of symbols, recalled under pressure. One player's memory didn't crack.",
     challengeType:         "mental",
     challengeSkillWeights: CHALLENGE_WEIGHT_MENTAL,
+    purpose:               "immunity",
   },
   {
     // Balance Maze — tilting maze controlled with the body / hands. Reads as
@@ -402,6 +568,7 @@ const INDIVIDUAL_CHALLENGES = [
     description: "Players navigated a ball through a tilting maze course. Only one made it to the end.",
     challengeType:         "mental",
     challengeSkillWeights: { physical: 0.25, mental: 0.6, endurance: 0.15 },
+    purpose:               "immunity",
   },
   {
     // Individual fire-making — speed under pressure. Like the relay variant
@@ -410,6 +577,7 @@ const INDIVIDUAL_CHALLENGES = [
     description: "Every player had to make fire from scratch, racing against each other and the clock. One flame burned brightest.",
     challengeType:         "mixed",
     challengeSkillWeights: { physical: 0.4, mental: 0.4, endurance: 0.2 },
+    purpose:               "immunity",
   },
   {
     // Simmotion Obstacle — physical obstacles + final puzzle, classic two-act
@@ -418,6 +586,7 @@ const INDIVIDUAL_CHALLENGES = [
     description: "Players pushed through a series of physical obstacles and a final puzzle. Strength and focus both mattered.",
     challengeType:         "mixed",
     challengeSkillWeights: { physical: 0.45, mental: 0.4, endurance: 0.15 },
+    purpose:               "immunity",
   },
 ];
 
@@ -487,6 +656,12 @@ function runChallenge(tribes, pool = CHALLENGES) {
     challengeType:    challenge.challengeType,
     topPerformer:     winningEval.top,        // for narrative hooks
     weakestPerformer: losingEval.weakest,     // for narrative hooks
+    // v10.6: pass-through fields for reward challenges. undefined when the
+    // pool is the immunity CHALLENGES array — reward consumers null-check.
+    purpose:          challenge.purpose,
+    rewardType:       challenge.rewardType,
+    rewardLabel:      challenge.rewardLabel,
+    rewardSubcopy:    challenge.rewardSubcopy,
   };
 }
 
@@ -577,5 +752,10 @@ function runIndividualChallenge(members, pool = INDIVIDUAL_CHALLENGES) {
     description:      challenge.description,
     challengeType:    challenge.challengeType,
     weakestPerformer,
+    // v10.6: reward pass-through fields (undefined for immunity pool).
+    purpose:          challenge.purpose,
+    rewardType:       challenge.rewardType,
+    rewardLabel:      challenge.rewardLabel,
+    rewardSubcopy:    challenge.rewardSubcopy,
   };
 }
