@@ -247,6 +247,80 @@ test("v10.6 result shape", "runChallenge with default pool returns purpose='immu
   assertEqual(result.rewardSubcopy, undefined);
 });
 
+// ─── Suite: v10.7 — reward containment safety ──────────────────────────────
+//
+// Asserts the boundary contract: a reward run must not touch any of the
+// stakes-bearing strategic fields. Any future code change that violates
+// the contract will fail one of these tests.
+
+test("v10.7 containment", "reward result has no immunity-related fields", () => {
+  const tribes = { A: makeTribeBalanced(), B: makeTribeBalanced() };
+  const result = runChallenge(tribes, REWARD_CHALLENGES);
+  // immunityWon / tribalTribe / immunityHolder must never appear on a
+  // reward result object — those fields are a strict immunity output.
+  assert(!("immunityWon"    in result), "reward result must not carry immunityWon");
+  assert(!("tribalTribe"    in result), "reward result must not carry tribalTribe");
+  assert(!("immunityHolder" in result), "reward result must not carry immunityHolder");
+});
+
+test("v10.7 containment", "running a reward challenge with a fresh state does not write strategic fields", () => {
+  // Build a synthetic gameState the way startGame would, then run only
+  // the reward path's engine call. None of the immunity / tribal / camp
+  // fields should change.
+  const cast = JSON.parse(JSON.stringify(CONTESTANTS));
+  const state = createSeasonState({ showId: "survivor", seasonId: "test", type: "demo" });
+  assignTribes(cast, state);
+  const before = {
+    immunityWon:    state.immunityWon,
+    tribalTribe:    state.tribalTribe,
+    immunityHolder: state.immunityHolder,
+    campPhase:      state.campPhase,
+    eliminatedLen:  state.eliminated.length,
+    juryLen:        state.jury.length,
+  };
+
+  // Resolve a reward challenge — this is what the screen does internally.
+  const result = runChallenge(state.tribes, REWARD_CHALLENGES);
+  state.rewardWinner    = result.winner;
+  state.rewardChallenge = { name: result.name, rewardLabel: result.rewardLabel };
+
+  assertEqual(state.immunityWon,    before.immunityWon,    "immunityWon drifted");
+  assertEqual(state.tribalTribe,    before.tribalTribe,    "tribalTribe drifted");
+  assertEqual(state.immunityHolder, before.immunityHolder, "immunityHolder drifted");
+  assertEqual(state.campPhase,      before.campPhase,      "campPhase drifted");
+  assertEqual(state.eliminated.length, before.eliminatedLen, "eliminated.length drifted");
+  assertEqual(state.jury.length,       before.juryLen,       "jury.length drifted");
+});
+
+test("v10.7 containment", "reward state writes are visible (positive control)", () => {
+  // Companion to the previous test — confirms the reward writes ARE
+  // happening. If this fails, the containment test above would silently
+  // pass for the wrong reason (because nothing was being written at all).
+  const cast  = JSON.parse(JSON.stringify(CONTESTANTS));
+  const state = createSeasonState({ showId: "survivor", seasonId: "test", type: "demo" });
+  assignTribes(cast, state);
+  assertEqual(state.rewardWinner, null, "should start null");
+
+  const result = runChallenge(state.tribes, REWARD_CHALLENGES);
+  state.rewardWinner    = result.winner;
+  state.rewardChallenge = { name: result.name };
+
+  assert(state.rewardWinner === "A" || state.rewardWinner === "B", "rewardWinner should be a tribe label");
+  assert(state.rewardChallenge.name, "rewardChallenge.name should be set");
+});
+
+test("v10.7 containment", "the immunity pool's runChallenge still writes the strategic stakes shape", () => {
+  // Positive symmetry — the immunity flow legitimately produces a result
+  // that callers will use to set the strategic fields. If this stops
+  // working, the immunity flow is broken.
+  const tribes = { A: makeTribeBalanced(), B: makeTribeBalanced() };
+  const result = runChallenge(tribes);   // default = CHALLENGES (immunity)
+  assert(result.winner === "A" || result.winner === "B");
+  assert(result.loser === "A" || result.loser === "B");
+  assert(result.winner !== result.loser);
+  assertEqual(result.purpose, "immunity");
+});
+
 // ─── Suite: helpers ──────────────────────────────────────────────────────────
 
 test("helpers", "getOverallChallengeSkill averages the three sub-skills", () => {

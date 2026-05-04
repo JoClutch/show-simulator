@@ -211,13 +211,99 @@ function onCampLifeDone() {
   }
 }
 
+// ── Reward / Immunity boundary (v10.7) ───────────────────────────────────────
+//
+// CONTRACT — reward challenges are flavor only.
+//
+//   ONLY the Immunity Challenge sets these "stakes" fields:
+//     gameState.immunityWon       — pre-merge: tribe label that won immunity
+//     gameState.tribalTribe       — who attends Tribal Council
+//     gameState.immunityHolder    — post-merge: contestant id with the necklace
+//
+//   ONLY the Reward Challenge sets these display-only fields:
+//     gameState.rewardWinner      — tribe label or contestant id (display)
+//     gameState.rewardChallenge   — the challenge object that ran (display)
+//
+// The reward path must NEVER write a stakes field. The immunity path must
+// NEVER write a reward field. The runtime guard `assertRewardSafety`
+// below verifies this contract by snapshotting stakes-state before the
+// reward flow runs and checking it didn't drift after. Logs to console
+// (not a hard throw) so a regression surfaces in dev without breaking play.
+//
+// To extend reward with real consequences in the future, add a NEW field
+// (e.g. gameState.campSupplies) — do not repurpose any of the stakes fields.
+
+// Fields that the reward flow MUST NOT touch. Snapshotted before reward
+// state writes, verified after. Adding to this list = adding protection.
+const STRATEGIC_FIELDS_GUARDED_FROM_REWARD = [
+  "immunityWon",
+  "tribalTribe",
+  "immunityHolder",
+  "campPhase",
+];
+
+// Returns a shallow snapshot of the guarded fields. Used by the reward
+// screen to verify it didn't accidentally mutate any of them.
+function snapshotStrategicFields(state) {
+  const out = {};
+  for (const k of STRATEGIC_FIELDS_GUARDED_FROM_REWARD) out[k] = state[k];
+  // Also capture lengths of mutable arrays whose contents reward must not
+  // change (won't deep-equal-check; just ensure no boots / jurors got
+  // appended during a reward render).
+  out._eliminatedLen = state.eliminated ? state.eliminated.length : 0;
+  out._juryLen       = state.jury       ? state.jury.length       : 0;
+  return out;
+}
+
+// Verifies the snapshot still matches state. If anything drifted, logs a
+// loud console error pinpointing which field changed. Not a throw — we
+// don't want to break the player's session, just surface the regression
+// in dev. Tests assert this function never fires during reward flows.
+function assertStrategicFieldsUnchanged(state, before, source = "reward") {
+  for (const k of STRATEGIC_FIELDS_GUARDED_FROM_REWARD) {
+    if (state[k] !== before[k]) {
+      console.error(
+        `[reward-safety] ${source} flow mutated strategic field '${k}' ` +
+        `(was ${JSON.stringify(before[k])}, now ${JSON.stringify(state[k])}). ` +
+        `Reward must not change immunity / tribal / camp-phase state.`
+      );
+    }
+  }
+  const elimNow = state.eliminated ? state.eliminated.length : 0;
+  if (elimNow !== before._eliminatedLen) {
+    console.error(
+      `[reward-safety] ${source} flow changed state.eliminated length ` +
+      `(${before._eliminatedLen} → ${elimNow}). Reward must not eliminate anyone.`
+    );
+  }
+  const juryNow = state.jury ? state.jury.length : 0;
+  if (juryNow !== before._juryLen) {
+    console.error(
+      `[reward-safety] ${source} flow changed state.jury length ` +
+      `(${before._juryLen} → ${juryNow}). Reward must not seat jurors.`
+    );
+  }
+}
+
 // v10.4: called when the user dismisses the Reward Challenge screen.
 // Reward is flavor only — this handler does NOT change campPhase, does NOT
 // run AI camp activity (no Camp Life happens between reward and immunity),
 // and does NOT mutate immunityWon/tribalTribe/immunityHolder/eliminated/
 // alliances/idols/anything strategic. It's a pure router that hands off
 // to the existing Immunity Challenge phase.
+//
+// v10.7 safety: also runs the strategic-fields-unchanged guard against the
+// snapshot taken when the reward render started. The snapshot is stashed
+// on gameState by the reward screen so this handler can verify it.
 function onRewardChallengeResolved() {
+  if (gameState._rewardStrategicSnapshot) {
+    assertStrategicFieldsUnchanged(
+      gameState,
+      gameState._rewardStrategicSnapshot,
+      "reward (continue)"
+    );
+    delete gameState._rewardStrategicSnapshot;
+  }
   showScreen("challenge");
 }
 

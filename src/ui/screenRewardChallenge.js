@@ -27,11 +27,24 @@
 //   pure flavor.
 
 function renderRewardChallengeScreen(container, state) {
+  // v10.7 safety: snapshot strategic fields BEFORE running the reward
+  // render. The renderer is allowed to write rewardWinner / rewardChallenge,
+  // but everything else must be unchanged when the user clicks Continue.
+  // The Continue handler in main.js (onRewardChallengeResolved) verifies
+  // the snapshot and logs a loud error if any strategic field drifted.
+  state._rewardStrategicSnapshot = snapshotStrategicFields(state);
+
   if (state.merged) {
     renderIndividualRewardScreen(container, state);
   } else {
     renderTribalRewardScreen(container, state);
   }
+
+  // Immediate post-render check — catches any sync mutations that happen
+  // during the render itself. The Continue check catches anything the
+  // user-facing render queues for later. Two checks ensure the boundary
+  // holds whether mutations are sync or async.
+  assertStrategicFieldsUnchanged(state, state._rewardStrategicSnapshot, "reward (render)");
 }
 
 // ── Pre-merge: tribal reward ────────────────────────────────────────────────
