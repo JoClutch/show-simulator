@@ -20,13 +20,23 @@ function onShowSelected(showId) {
 }
 
 function renderShowSeasonsScreen(container, state) {
-  const show = getShowById(_selectedShowId);
+  // v10.3: prefer the in-memory _selectedShowId (set when the user clicked
+  // a show card on landing). When unset — e.g., the user reached this
+  // screen via "Back to Seasons" from a game that was started programmatically
+  // through startGame() rather than via the landing flow — fall back to
+  // whichever show the active season belongs to.
+  const showId = _selectedShowId || (state && state.season && state.season.showId);
+  const show   = getShowById(showId);
   if (!show) {
-    // Defensive — should never fire because the landing page only routes
-    // here from a valid show card. If it does, send the user back.
+    // Truly no show context anywhere — return to landing so the user can
+    // pick. Should be very rare; happens only on direct programmatic
+    // navigation that bypasses both the landing flow AND any startGame call.
     showScreen("landing");
     return;
   }
+  // Cache for any subsequent re-render (e.g. after a returning visitor goes
+  // back to the cast picker and clicks "Back to Seasons" again).
+  _selectedShowId = show.id;
 
   const seasons = getSeasonsForShow(show.id);
   const cards   = seasons.map(buildSeasonCardHTML).join("");

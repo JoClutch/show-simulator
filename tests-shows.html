@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Shows + Seasons — Tests</title>
+  <link rel="stylesheet" href="src/styles.css" />
+  <style>
+    body { padding: 1.5rem; max-width: 1100px; margin: 0 auto; }
+    .test-suite { margin-bottom: 2rem; }
+    .test-suite h3 {
+      font-size: 1rem;
+      letter-spacing: 0.04em;
+      margin-bottom: 0.5rem;
+      color: var(--gold);
+    }
+    .test-row {
+      padding: 0.45rem 0.7rem;
+      border-bottom: 1px dotted var(--border-dim);
+      display: flex;
+      gap: 0.6rem;
+      align-items: baseline;
+      font-size: 0.88rem;
+    }
+    .test-row[data-status="pass"] .test-tag { color: #6dd17a; }
+    .test-row[data-status="fail"] .test-tag { color: #ff7e6e; font-weight: bold; }
+    .test-tag { font-family: monospace; font-size: 0.78rem; width: 4ch; flex-shrink: 0; }
+    .test-name { color: var(--text-primary); }
+    .test-detail { color: var(--text-faint); font-family: monospace; font-size: 0.78rem; }
+    .test-summary {
+      padding: 0.85rem 1.1rem;
+      border-radius: 5px;
+      margin-bottom: 1.5rem;
+      background: var(--bg-card);
+      border-left: 3px solid var(--gold);
+    }
+    .test-summary.all-pass { border-left-color: #6dd17a; }
+    .test-summary.has-fail { border-left-color: #ff7e6e; }
+  </style>
+</head>
+<body class="scene-day">
+
+<h1>Shows + Seasons — Test Suite</h1>
+<p class="muted" style="margin-bottom:1.5rem">
+  Validates the v10 Show → Season registries, dispatcher, and game-state
+  identity wiring. Tests do not boot the full game — they assert on the
+  data layer + helpers in isolation.
+</p>
+
+<div id="test-summary" class="test-summary">Running…</div>
+<div id="test-results"></div>
+
+<!-- App scripts (no main.js — we don't want auto-boot to fire). -->
+<script src="src/util.js"></script>
+<script src="src/data/contestants.js"></script>
+<script src="src/data/season.js"></script>
+<script src="src/data/flavor.js"></script>
+<script src="src/data/schema.js"></script>
+<script src="src/data/seasonPresets.js"></script>
+<script src="src/data/savedSetups.js"></script>
+<script src="src/data/setupIo.js"></script>
+<script src="src/data/shows.js"></script>
+<script src="src/data/seasons.js"></script>
+
+<script>
+const TESTS = [];
+function test(suite, name, fn) { TESTS.push({ suite, name, fn }); }
+class AssertionError extends Error {}
+function assert(cond, msg) { if (!cond) throw new AssertionError(msg || "assertion failed"); }
+function assertEqual(actual, expected, msg) {
+  if (actual !== expected) {
+    throw new AssertionError(`${msg || "assertEqual"} — expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+  }
+}
+
+// ─── Suite: shows registry ──────────────────────────────────────────────────
+
+test("shows", "SHOWS array contains at least one entry", () => {
+  assert(Array.isArray(SHOWS) && SHOWS.length > 0, "SHOWS must be a non-empty array");
+});
+
+test("shows", "Survivor is registered and available", () => {
+  const survivor = getShowById("survivor");
+  assert(survivor, "Survivor show should exist");
+  assert(survivor.available !== false, "Survivor should be available");
+  assert(typeof survivor.name === "string" && survivor.name.length > 0, "name required");
+});
+
+test("shows", "getShowById returns null for unknown ids", () => {
+  assertEqual(getShowById("does-not-exist"), null);
+});
+
+test("shows", "every SHOWS entry has the required fields", () => {
+  for (const s of SHOWS) {
+    assert(typeof s.id === "string"   && s.id.length > 0,   `${s.name}: id required`);
+    assert(typeof s.name === "string" && s.name.length > 0, `${s.id}: name required`);
+    assert(typeof s.available === "boolean",                `${s.id}: available must be boolean`);
+  }
+});
+
+// ─── Suite: seasons registry ────────────────────────────────────────────────
+
+test("seasons", "SEASONS array contains at least Survivor's demo + custom", () => {
+  const survivorSeasons = getSeasonsForShow("survivor");
+  assert(survivorSeasons.length >= 2, `expected ≥2 Survivor seasons, got ${survivorSeasons.length}`);
+});
+
+test("seasons", "demo season exists and points at DEFAULT_SEASON_TEMPLATE", () => {
+  const demo = getSeasonById("survivor-demo");
+  assert(demo, "demo season should exist");
+  assertEqual(demo.type, "demo");
+  assertEqual(demo.templateRef, "DEFAULT_SEASON_TEMPLATE");
+  assertEqual(demo.showId, "survivor");
+});
+
+test("seasons", "custom season exists, type='custom', no templateRef", () => {
+  const custom = getSeasonById("survivor-custom");
+  assert(custom, "custom season should exist");
+  assertEqual(custom.type, "custom");
+  assertEqual(custom.templateRef, null);
+});
+
+test("seasons", "getSeasonsForShow filters by showId", () => {
+  const all      = getSeasonsForShow("survivor");
+  const nothing  = getSeasonsForShow("nonexistent-show");
+  assert(all.length > 0, "should find Survivor seasons");
+  assert(nothing.length === 0, "should return [] for unknown show");
+  for (const s of all) assertEqual(s.showId, "survivor");
+});
+
+test("seasons", "getSeasonById returns null for unknown ids", () => {
+  assertEqual(getSeasonById("nonsense"), null);
+});
+
+test("seasons", "every SEASONS entry has the required fields", () => {
+  for (const s of SEASONS) {
+    assert(typeof s.id === "string"     && s.id.length > 0,     `${s.name}: id required`);
+    assert(typeof s.showId === "string" && s.showId.length > 0, `${s.id}: showId required`);
+    assert(typeof s.name === "string"   && s.name.length > 0,   `${s.id}: name required`);
+    assert(["demo", "prebuilt", "custom"].includes(s.type),     `${s.id}: type invalid`);
+    if (s.type !== "custom") {
+      assert(typeof s.templateRef === "string", `${s.id}: non-custom seasons need templateRef`);
+    }
+  }
+});
+
+test("seasons", "every season's showId references a registered show", () => {
+  for (const s of SEASONS) {
+    const show = getShowById(s.showId);
+    assert(show, `season '${s.id}' references unregistered show '${s.showId}'`);
+  }
+});
+
+// ─── Suite: resolveTemplate ─────────────────────────────────────────────────
+
+test("resolveTemplate", "returns the live DEFAULT_SEASON_TEMPLATE constant", () => {
+  const t = resolveTemplate("DEFAULT_SEASON_TEMPLATE");
+  assert(t, "should resolve");
+  assertEqual(t, DEFAULT_SEASON_TEMPLATE, "should be the same object reference");
+});
+
+test("resolveTemplate", "returns null for null/undefined ref", () => {
+  assertEqual(resolveTemplate(null), null);
+  assertEqual(resolveTemplate(undefined), null);
+});
+
+test("resolveTemplate", "returns null and logs error for unknown ref", () => {
+  // Suppress console.error during the test so it doesn't pollute output.
+  const orig = console.error;
+  let errMsg = "";
+  console.error = (msg) => { errMsg = msg; };
+  try {
+    const t = resolveTemplate("DEFINITELY_NOT_A_REAL_TEMPLATE");
+    assertEqual(t, null);
+    assert(/DEFINITELY_NOT_A_REAL_TEMPLATE/.test(errMsg), "should log error mentioning the missing ref");
+  } finally {
+    console.error = orig;
+  }
+});
+
+test("resolveTemplate", "every season's templateRef resolves (or is null for custom)", () => {
+  for (const s of SEASONS) {
+    if (s.type === "custom") continue;
+    const t = resolveTemplate(s.templateRef);
+    assert(t, `season '${s.id}' has unresolvable templateRef '${s.templateRef}'`);
+  }
+});
+
+// ─── Suite: createSeasonState season identity (v10.2) ───────────────────────
+
+test("season identity", "createSeasonState() with no opts has null season fields", () => {
+  const s = createSeasonState();
+  assert(s.season, "season object should exist");
+  assertEqual(s.season.showId, null);
+  assertEqual(s.season.seasonId, null);
+  assertEqual(s.season.type, null);
+});
+
+test("season identity", "createSeasonState carries opts into season object", () => {
+  const s = createSeasonState({ showId: "survivor", seasonId: "survivor-demo", type: "demo" });
+  assertEqual(s.season.showId, "survivor");
+  assertEqual(s.season.seasonId, "survivor-demo");
+  assertEqual(s.season.type, "demo");
+});
+
+test("season identity", "createSeasonState ignores extra opts", () => {
+  const s = createSeasonState({ seasonId: "survivor-custom", type: "custom", randomExtra: "ignored" });
+  assertEqual(s.season.seasonId, "survivor-custom");
+  assertEqual(s.season.type, "custom");
+  assert(!("randomExtra" in s), "extra opts must not leak onto state");
+});
+
+// ─── Suite: forward compatibility (architecture verify) ─────────────────────
+
+test("future-proofing", "adding a new SHOWS entry doesn't require code changes", () => {
+  const sentinel = {
+    id: "test-show", name: "Test", tagline: "...", description: "...",
+    accentColor: "#abcdef", available: false,
+  };
+  SHOWS.push(sentinel);
+  try {
+    const found = getShowById("test-show");
+    assertEqual(found, sentinel);
+    assertEqual(found.available, false);
+  } finally {
+    SHOWS.pop();
+  }
+});
+
+test("future-proofing", "adding a new SEASONS entry surfaces via getSeasonsForShow", () => {
+  const sentinel = {
+    id: "test-season", showId: "survivor", name: "Test Season",
+    description: "A test.", type: "prebuilt", templateRef: "DEFAULT_SEASON_TEMPLATE",
+    available: true,
+  };
+  SEASONS.push(sentinel);
+  try {
+    const survivorSeasons = getSeasonsForShow("survivor");
+    assert(survivorSeasons.find(s => s.id === "test-season"), "new season should appear");
+  } finally {
+    SEASONS.pop();
+  }
+});
+
+// ─── Run ────────────────────────────────────────────────────────────────────
+
+window.addEventListener("DOMContentLoaded", () => {
+  const resultsEl = document.getElementById("test-results");
+  const summaryEl = document.getElementById("test-summary");
+  const bySuite = {};
+  for (const t of TESTS) (bySuite[t.suite] ||= []).push(t);
+  let passed = 0, failed = 0;
+  for (const suiteName of Object.keys(bySuite)) {
+    const suiteEl = document.createElement("div");
+    suiteEl.className = "test-suite";
+    suiteEl.innerHTML = `<h3>${suiteName}</h3>`;
+    for (const t of bySuite[suiteName]) {
+      const row = document.createElement("div");
+      row.className = "test-row";
+      try {
+        t.fn();
+        row.dataset.status = "pass";
+        row.innerHTML = `<span class="test-tag">PASS</span><span class="test-name">${t.name}</span>`;
+        passed++;
+      } catch (e) {
+        row.dataset.status = "fail";
+        row.innerHTML = `<span class="test-tag">FAIL</span>
+                         <span class="test-name">${t.name}</span>
+                         <span class="test-detail">${(e && e.message) || e}</span>`;
+        failed++;
+        console.error("[test failed]", t.suite, t.name, e);
+      }
+      suiteEl.appendChild(row);
+    }
+    resultsEl.appendChild(suiteEl);
+  }
+  summaryEl.textContent = `${passed} passed · ${failed} failed · ${TESTS.length} total`;
+  summaryEl.classList.add(failed === 0 ? "all-pass" : "has-fail");
+});
+</script>
+
+</body>
+</html>

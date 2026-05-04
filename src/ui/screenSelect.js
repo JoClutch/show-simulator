@@ -23,6 +23,7 @@ function renderSelectScreen(container, state) {
           &nbsp;·&nbsp; ${SEASON_CONFIG.tribesCount} tribes
         </p>
         <p class="select-setup-links">
+          <button class="select-edit-cast-link" id="back-to-seasons-link" title="Pick a different season">← Back to Seasons</button>
           <button class="select-edit-cast-link" id="choose-template-link">Choose Template →</button>
           <button class="select-edit-cast-link" id="edit-cast-link">Edit Cast →</button>
           <button class="select-edit-cast-link" id="edit-rules-link">Edit Rules →</button>
@@ -113,6 +114,15 @@ function renderSelectScreen(container, state) {
   // so no need for a disabled state — the button is simply not visible yet.
   container.querySelector("#start-btn").addEventListener("click", () => {
     if (selected) onContestantSelected(selected);
+  });
+
+  // v10.3: "Back to Seasons" — change your mind before committing to a
+  // contestant. Routes back to the show page (which renders the season
+  // grid for whichever show was last selected). The cast pick screen is
+  // the natural cut-off because once a contestant is chosen, the player
+  // is committed to playing the season; mid-game we don't expose this.
+  container.querySelector("#back-to-seasons-link").addEventListener("click", () => {
+    showScreen("showSeasons");
   });
 
   // ── Edit Cast entry point ─────────────────────────────────────────────────
