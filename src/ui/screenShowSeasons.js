@@ -77,10 +77,12 @@ function renderShowSeasonsScreen(container, state) {
 function buildSeasonCardHTML(season) {
   const isAvailable = season.available !== false;
   const isCustom    = season.type === "custom";
+  const isPrebuilt  = season.type === "prebuilt";
 
   const cls = [
     "season-card",
     isCustom    ? "season-card--custom"      : "",
+    isPrebuilt  ? "season-card--prebuilt"    : "",
     !isAvailable ? "season-card--unavailable" : "",
   ].filter(Boolean).join(" ");
 
@@ -93,9 +95,17 @@ function buildSeasonCardHTML(season) {
        </button>`
     : `<div class="season-card-coming-soon">Coming Soon</div>`;
 
+  // v10.9: pre-built seasons get a small eyebrow tag so the category is
+  // legible at a glance — distinct from demo (the canonical default) and
+  // from build-your-own (the dashed-border open-ended option).
+  const eyebrow = isPrebuilt
+    ? `<div class="season-card-eyebrow">Pre-Built</div>`
+    : "";
+
   return `
     <div class="${cls}">
       <div class="season-card-body">
+        ${eyebrow}
         <h3 class="season-card-name">${escapeHtml(season.name)}</h3>
         <p class="season-card-description muted">${escapeHtml(season.description ?? "")}</p>
         <div class="season-card-cta">${cta}</div>

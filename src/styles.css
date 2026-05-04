@@ -3491,6 +3491,19 @@ select:focus {
   gap: 0.5rem;
   flex: 1;
 }
+/* v10.9: small eyebrow tag for pre-built season cards. Sits above the
+   season name. Uses the same uppercase + letter-spacing treatment as
+   other eyebrows in the design system so the category reads as a label,
+   not a heading. */
+.season-card-eyebrow {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--gold);
+  font-weight: bold;
+  margin: 0 0 0.2rem;
+}
+
 .season-card-name {
   font-size: 1.2rem;
   margin: 0;

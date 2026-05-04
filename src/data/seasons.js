@@ -42,6 +42,26 @@ const SEASONS = [
     templateRef: "DEFAULT_SEASON_TEMPLATE",
     available:   true,
   },
+  // v10.9: pre-built seasons. Authored season templates live one-per-file
+  // under src/data/seasons/ and are referenced here by their constant
+  // name. The dispatcher in startGame (src/main.js) treats type:"prebuilt"
+  // identically to type:"demo" — applies the template, runs the standard
+  // boot tail. The visual distinction (PRE-BUILT eyebrow tag on the
+  // season card) is added by the show page renderer, not by the registry.
+  //
+  // Currently only one placeholder is wired in to prove the framework.
+  // Real authored seasons (Borneo, Australia, etc.) will follow the
+  // same registry pattern.
+  {
+    id:          "sample-prebuilt",
+    showId:      "survivor",
+    name:        "Sample Pre-Built Season",
+    description: "A placeholder season to demonstrate the pre-built season pipeline. Sixteen castaways, two new tribes, standard rules, all stats pre-set to 5.",
+    type:        "prebuilt",
+    templateRef: "SAMPLE_PREBUILT_SEASON_TEMPLATE",
+    available:   true,
+  },
+
   {
     id:          "survivor-custom",
     showId:      "survivor",
