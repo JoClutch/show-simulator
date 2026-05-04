@@ -3227,6 +3227,43 @@ select:focus {
 }
 
 /* ────────────────────────────────────────────────────────────────────────
+   v10.4 — Reward Challenge phase (placeholder UI).
+   Sits between Camp Life phase 1 and the Immunity Challenge. Shares the
+   .event-log + .challenge-type-label patterns with the Immunity screen
+   so the visual family is consistent. The full BrantSteele-style polish
+   (rosters, portraits, dramatic outcome card) lands in the next phase. */
+.reward-outcome-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-mid);
+  border-left: 3px solid var(--gold);
+  border-radius: 5px;
+  padding: 1.1rem 1.25rem;
+  text-align: center;
+  margin: 1.25rem 0;
+}
+.reward-outcome-label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text-faint);
+  margin-bottom: 0.4rem;
+}
+.reward-outcome-winner {
+  font-size: 1.4rem;
+  font-weight: bold;
+  margin-bottom: 0.5rem;
+}
+.reward-outcome-winner-name {
+  color: var(--text-primary);
+}
+.reward-outcome-flavor {
+  font-size: 0.85rem;
+  font-style: italic;
+  margin: 0.35rem 0 0;
+  line-height: 1.45;
+}
+
+/* ────────────────────────────────────────────────────────────────────────
    v10.0 — Landing page (root /) and Show page.
    The site's new entry point. Lists the available reality shows;
    clicking one routes into the show page (showSeasons screen). Tokenized

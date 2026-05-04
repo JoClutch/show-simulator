@@ -162,7 +162,11 @@ function isJuryEligibleElim(state) {
 
 function onCampLifeDone() {
   if (gameState.campPhase === 1) {
-    showScreen("challenge");
+    // v10.4: Camp Life phase 1 now leads into the Reward Challenge instead
+    // of going straight to the Immunity Challenge. The reward screen runs
+    // its engine, shows the outcome, and on Continue routes to "challenge"
+    // (the existing immunity challenge) via onRewardChallengeResolved.
+    showScreen("rewardChallenge");
     return;
   }
 
@@ -205,6 +209,16 @@ function onCampLifeDone() {
     simulateOffscreenTribal(gameState, gameState.tribalTribe);
     advanceRound();
   }
+}
+
+// v10.4: called when the user dismisses the Reward Challenge screen.
+// Reward is flavor only — this handler does NOT change campPhase, does NOT
+// run AI camp activity (no Camp Life happens between reward and immunity),
+// and does NOT mutate immunityWon/tribalTribe/immunityHolder/eliminated/
+// alliances/idols/anything strategic. It's a pure router that hands off
+// to the existing Immunity Challenge phase.
+function onRewardChallengeResolved() {
+  showScreen("challenge");
 }
 
 // Pre-merge: losingTribeLabel is "A" or "B".
@@ -403,6 +417,10 @@ function advanceRound() {
   gameState.immunityWon     = null;
   gameState.tribalTribe     = null;
   gameState.immunityHolder  = null;
+  // v10.4: reward fields are display-only flavor; clear them each round so
+  // the next reward challenge starts from a clean slate.
+  gameState.rewardWinner    = null;
+  gameState.rewardChallenge = null;
 
   const remaining = getAllActive().length;
 
@@ -564,8 +582,9 @@ function showScreen(name) {
     case "swap":         renderSwapScreen(app, gameState);         break;
     case "merge":        renderMergeScreen(app, gameState);        break;
     case "episodeRecap": renderEpisodeRecapScreen(app, gameState);    break;
-    case "campLife":     renderCampLifeScreen(app, gameState);     break;
-    case "challenge":    renderChallengeScreen(app, gameState);    break;
+    case "campLife":        renderCampLifeScreen(app, gameState);        break;
+    case "rewardChallenge": renderRewardChallengeScreen(app, gameState); break;
+    case "challenge":       renderChallengeScreen(app, gameState);       break;
     case "tribal":       renderTribalScreen(app, gameState);       break;
     case "elimination":  renderEliminationScreen(app, gameState);  break;
     case "finalTribal":  renderFinalTribalScreen(app, gameState);  break;

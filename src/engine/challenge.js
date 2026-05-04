@@ -295,6 +295,74 @@ const CHALLENGES = [
   },
 ];
 
+// ── Reward challenges (v10.4) ────────────────────────────────────────────────
+//
+// Reward challenges are a *flavor* phase added before each immunity
+// challenge. They use the same skill-weighting and noise math as immunity
+// challenges (the engine doesn't distinguish them), but the resolution
+// screen reads from this pool instead of CHALLENGES so the names + flavor
+// read as rewards (food, comfort, family visits) rather than immunity
+// stakes (obstacle courses, puzzles).
+//
+// DESIGN RULE: reward outcomes are FLAVOR ONLY in v10.4. They don't grant
+// idol clues, don't change immunity, don't affect alliances or AI. The
+// data field gameState.rewardWinner exists for the screen's display use
+// only and is cleared each round in advanceRound.
+const REWARD_CHALLENGES = [
+  {
+    name: "Beach Picnic",
+    description: "Tribes raced through a sand-dune obstacle to a beachside spread of fresh fruit, grilled fish, and cold drinks.",
+    challengeType:         "physical",
+    challengeSkillWeights: CHALLENGE_WEIGHT_PHYSICAL,
+  },
+  {
+    name: "Sailboat Cruise",
+    description: "A late-afternoon sailboat cruise around the bay was the prize — but only for the tribe that solved the navigation puzzle first.",
+    challengeType:         "mental",
+    challengeSkillWeights: CHALLENGE_WEIGHT_MENTAL,
+  },
+  {
+    name: "Pizza Drop",
+    description: "Stacked pizza boxes hung at the top of a slick pole. The tribe with the strongest climbers feasted first.",
+    challengeType:         "physical",
+    challengeSkillWeights: { physical: 0.65, mental: 0.1, endurance: 0.25 },
+  },
+  {
+    name: "Letters from Home",
+    description: "Tribes pulled rope through a gauntlet of stations. The first to deliver their tribemates' letters got the longest read.",
+    challengeType:         "mixed",
+    challengeSkillWeights: { physical: 0.5, mental: 0.3, endurance: 0.2 },
+  },
+];
+
+// ── Individual reward challenges (post-merge) ────────────────────────────────
+const INDIVIDUAL_REWARD_CHALLENGES = [
+  {
+    name: "Solo Picnic",
+    description: "A guided trek up a coastal cliff to a private picnic with chilled wine and a sunset view.",
+    challengeType:         "endurance",
+    challengeSkillWeights: CHALLENGE_WEIGHT_ENDURANCE,
+  },
+  {
+    name: "Family Visit",
+    description: "A loved one waited at a comfort camp on the far side of the island. Only one player would reach them today.",
+    challengeType:         "mixed",
+    challengeSkillWeights: { physical: 0.4, mental: 0.35, endurance: 0.25 },
+  },
+  {
+    name: "Helicopter Tour",
+    description: "An aerial sightseeing tour over the archipelago — the first to thread a marble through a tilting maze claimed the seat.",
+    challengeType:         "mental",
+    challengeSkillWeights: CHALLENGE_WEIGHT_MENTAL,
+  },
+  {
+    name: "Spa Reward",
+    description: "A massage, a hot meal, and an actual bed. Contestants raced to be the one player who slept somewhere soft tonight.",
+    challengeType:         "physical",
+    challengeSkillWeights: { physical: 0.55, mental: 0.15, endurance: 0.3 },
+  },
+];
+
 // ── Individual challenges (post-merge) ───────────────────────────────────────
 
 const INDIVIDUAL_CHALLENGES = [
@@ -393,8 +461,11 @@ const INDIVIDUAL_CLOSE_FINISH_GAP = 1.5;
 // chosen challenge's per-skill weights drive the result. A tribe stacked
 // with mental specialists will reliably win Puzzle Race; an endurance-heavy
 // tribe will reliably win Endurance Hold.
-function runChallenge(tribes) {
-  const challenge = CHALLENGES[Math.floor(Math.random() * CHALLENGES.length)];
+// v10.4: optional `pool` argument lets reward challenges reuse this same
+// resolution math without duplicating the function. Default = CHALLENGES
+// (immunity), so existing callers are unchanged.
+function runChallenge(tribes, pool = CHALLENGES) {
+  const challenge = pool[Math.floor(Math.random() * pool.length)];
 
   const evalA = evaluateTribe(tribes.A, challenge);
   const evalB = evaluateTribe(tribes.B, challenge);
@@ -472,10 +543,9 @@ function calcTribeScore(members, challenge) {
 // v9.2: each player's score uses getEffectiveChallengePerformance against
 // the chosen challenge's weights, plus noise. Higher relevant skill = more
 // likely to win; upsets remain possible via the noise term.
-function runIndividualChallenge(members) {
-  const challenge = INDIVIDUAL_CHALLENGES[
-    Math.floor(Math.random() * INDIVIDUAL_CHALLENGES.length)
-  ];
+// v10.4: optional `pool` argument; default = INDIVIDUAL_CHALLENGES (immunity).
+function runIndividualChallenge(members, pool = INDIVIDUAL_CHALLENGES) {
+  const challenge = pool[Math.floor(Math.random() * pool.length)];
 
   const randomnessMul = window.DEV_CONFIG?.challengeRandomness ?? 1;
 

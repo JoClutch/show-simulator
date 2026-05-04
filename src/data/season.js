@@ -104,6 +104,16 @@ function createSeasonState(opts = {}) {
     tribalTribe:    null,  // "A" | "B" | "merged" — who attends Tribal Council this round
     immunityHolder: null,  // post-merge: contestant id who holds the necklace; reset each round
 
+    // ── Reward Challenge (v10.4) ───────────────────────────
+    // Set when the Reward Challenge resolves; read by the Reward screen
+    // for display only and cleared each round in advanceRound. NEVER read
+    // by AI / vote / alliance / idol logic — reward is flavor-only by
+    // design rule; we don't want it to leak into strategic state.
+    //   rewardWinner:  "A" | "B" | contestantId | null
+    //   rewardChallenge: the challenge object that ran (or null)
+    rewardWinner:    null,
+    rewardChallenge: null,
+
     // ── Tribe swap ─────────────────────────────────────────
     swapped:    false,   // true after swap fires (one-shot pre-merge event)
     swapRound:  null,    // round in which the swap occurred (for narrative/dev)
