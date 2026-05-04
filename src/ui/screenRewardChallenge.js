@@ -50,7 +50,10 @@ function renderRewardChallengeScreen(container, state) {
 // ── Pre-merge: tribal reward ────────────────────────────────────────────────
 
 function renderTribalRewardScreen(container, state) {
-  const result = runChallenge(state.tribes, REWARD_CHALLENGES);
+  // v10.11: scheduled reward override (if pre-built season pinned this
+  // episode's reward) or random from REWARD_CHALLENGES.
+  const scheduled = getScheduledChallenge(state, "reward");
+  const result    = runChallenge(state.tribes, REWARD_CHALLENGES, scheduled);
 
   // Persist for downstream display (Camp Life flavor, Episode Recap, etc.).
   // Display-only — never read by AI, vote, alliance, or idol code.
@@ -150,7 +153,10 @@ function renderTribalRewardScreen(container, state) {
 
 function renderIndividualRewardScreen(container, state) {
   const members = state.tribes.merged;
-  const result  = runIndividualChallenge(members, INDIVIDUAL_REWARD_CHALLENGES);
+  // v10.11: scheduled override (if pre-built season pinned this episode's
+  // reward) or random from INDIVIDUAL_REWARD_CHALLENGES.
+  const scheduled = getScheduledChallenge(state, "reward");
+  const result    = runIndividualChallenge(members, INDIVIDUAL_REWARD_CHALLENGES, scheduled);
 
   state.rewardWinner    = result.winner.id;
   state.rewardChallenge = {

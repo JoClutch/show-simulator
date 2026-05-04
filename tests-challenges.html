@@ -321,6 +321,178 @@ test("v10.7 containment", "the immunity pool's runChallenge still writes the str
   assertEqual(result.purpose, "immunity");
 });
 
+// ─── Suite: v10.11 — per-episode challenge schedule ──────────────────────
+//
+// Pre-built seasons can pin specific challenges to specific episodes via
+// gameState.season.episodes. The resolver getScheduledChallenge picks
+// the right pool based on pre/post-merge + reward/immunity, looks up
+// the named challengeRef, and returns the challenge object — or null
+// when no schedule exists / the lookup misses.
+
+test("v10.11 schedule", "no schedule → resolver returns null (random fallback)", () => {
+  const state = createSeasonState();   // no episodes
+  state.round = 1;
+  assertEqual(getScheduledChallenge(state, "reward"),   null);
+  assertEqual(getScheduledChallenge(state, "immunity"), null);
+});
+
+test("v10.11 schedule", "empty episodes array → resolver returns null", () => {
+  const state = createSeasonState({ episodes: [] });
+  state.round = 1;
+  assertEqual(getScheduledChallenge(state, "reward"),   null);
+  assertEqual(getScheduledChallenge(state, "immunity"), null);
+});
+
+test("v10.11 schedule", "scheduled immunity by challengeRef returns the pool entry (pre-merge)", () => {
+  const state = createSeasonState({
+    episodes: [
+      { number: 1, immunity: { challengeRef: "Obstacle Course" } },
+    ],
+  });
+  state.round  = 1;
+  state.merged = false;
+  const ch = getScheduledChallenge(state, "immunity");
+  assert(ch, "should resolve to a challenge");
+  assertEqual(ch.name, "Obstacle Course");
+  assertEqual(ch.purpose, "immunity");
+});
+
+test("v10.11 schedule", "scheduled reward by challengeRef returns the pool entry (pre-merge)", () => {
+  const state = createSeasonState({
+    episodes: [
+      { number: 1, reward: { challengeRef: "Beach Picnic" } },
+    ],
+  });
+  state.round  = 1;
+  state.merged = false;
+  const ch = getScheduledChallenge(state, "reward");
+  assertEqual(ch.name, "Beach Picnic");
+  assertEqual(ch.purpose, "reward");
+  assertEqual(ch.rewardLabel, "a beachside picnic");
+});
+
+test("v10.11 schedule", "post-merge schedule resolves from individual pools", () => {
+  const state = createSeasonState({
+    episodes: [
+      // Episode 7 — post-merge in this synthetic state.
+      null, null, null, null, null, null,
+      {
+        number: 7,
+        reward:   { challengeRef: "Family Visit" },
+        immunity: { challengeRef: "Memory Sequence" },
+      },
+    ],
+  });
+  state.round  = 7;
+  state.merged = true;
+  const reward   = getScheduledChallenge(state, "reward");
+  const immunity = getScheduledChallenge(state, "immunity");
+  assertEqual(reward.name, "Family Visit");
+  assertEqual(reward.rewardType, "family");
+  assertEqual(immunity.name, "Memory Sequence");
+});
+
+test("v10.11 schedule", "missing entry past last authored episode → null (partial authoring)", () => {
+  // Episode 1 scheduled, Episode 2 unscheduled.
+  const state = createSeasonState({
+    episodes: [
+      { number: 1, immunity: { challengeRef: "Obstacle Course" } },
+    ],
+  });
+  state.round = 2;
+  assertEqual(getScheduledChallenge(state, "immunity"), null,
+    "no entry for ep 2 should fall back");
+});
+
+test("v10.11 schedule", "entry with only one slot → other slot returns null", () => {
+  // Episode entry has only `immunity`, asking for `reward` → null.
+  const state = createSeasonState({
+    episodes: [
+      { number: 1, immunity: { challengeRef: "Obstacle Course" } },
+    ],
+  });
+  state.round = 1;
+  assertEqual(getScheduledChallenge(state, "reward"), null);
+});
+
+test("v10.11 schedule", "unknown challengeRef logs error and returns null", () => {
+  const state = createSeasonState({
+    episodes: [
+      { number: 1, immunity: { challengeRef: "Definitely Not A Real Challenge" } },
+    ],
+  });
+  state.round = 1;
+  // Suppress + capture console.error for the test.
+  const orig = console.error;
+  let errMsg = "";
+  console.error = (msg) => { errMsg = msg; };
+  try {
+    const ch = getScheduledChallenge(state, "immunity");
+    assertEqual(ch, null);
+    assert(/Definitely Not A Real Challenge/.test(errMsg),
+      "should log an error mentioning the bad challengeRef");
+  } finally {
+    console.error = orig;
+  }
+});
+
+test("v10.11 schedule", "inline custom challenge resolves with the inline fields", () => {
+  const state = createSeasonState({
+    episodes: [
+      {
+        number: 1,
+        reward: {
+          name:        "Custom Reward",
+          description: "Tribes did something custom.",
+          challengeType:         "physical",
+          challengeSkillWeights: { physical: 0.7, mental: 0.1, endurance: 0.2 },
+          rewardType:            "food",
+          rewardLabel:           "a custom prize",
+          rewardSubcopy:         "Custom subcopy.",
+        },
+      },
+    ],
+  });
+  state.round  = 1;
+  state.merged = false;
+  const ch = getScheduledChallenge(state, "reward");
+  assertEqual(ch.name, "Custom Reward");
+  assertEqual(ch.description, "Tribes did something custom.");
+  assertEqual(ch.purpose, "reward");
+  assertEqual(ch.rewardType, "food");
+  assertEqual(ch.rewardLabel, "a custom prize");
+});
+
+test("v10.11 schedule", "runChallenge with forceChallenge uses the forced entry", () => {
+  const tribes = { A: makeTribeBalanced(), B: makeTribeBalanced() };
+  const forced = CHALLENGES.find(c => c.name === "Endurance Hold");
+  const result = runChallenge(tribes, CHALLENGES, forced);
+  assertEqual(result.name, "Endurance Hold",
+    "forceChallenge must pin the result name regardless of random pick");
+});
+
+test("v10.11 schedule", "runIndividualChallenge with forceChallenge uses the forced entry", () => {
+  const members = Array.from({ length: 6 }, (_, i) => makeContestant(`m${i}`, `M${i}`, 6, 6, 6));
+  const forced  = INDIVIDUAL_CHALLENGES.find(c => c.name === "Memory Sequence");
+  const result  = runIndividualChallenge(members, INDIVIDUAL_CHALLENGES, forced);
+  assertEqual(result.name, "Memory Sequence");
+});
+
+test("v10.11 schedule", "scheduling an immunity does not affect strategic outcomes", () => {
+  // The schedule pins WHICH challenge runs, but skill-weighting + noise
+  // still determine the winner. Run the same scheduled challenge against
+  // a heavily mismatched setup; the stronger tribe should still win
+  // statistically, just like with a random pool pick.
+  const forced = CHALLENGES.find(c => c.name === "Obstacle Course");
+  let wins = 0;
+  for (let i = 0; i < 200; i++) {
+    const tribes = { A: makeTribeOfSpec("physical"), B: makeTribeBalanced() };
+    if (runChallenge(tribes, CHALLENGES, forced).winner === "A") wins++;
+  }
+  // Same > 80% threshold the random-pool tribe-bias tests use.
+  assertWinRate(wins, 200, 80, "physical-spec vs balanced (forced Obstacle Course)");
+});
+
 // ─── Suite: v10.8 — episode flow regression ───────────────────────────────
 //
 // Ordered tests that walk the reward → immunity sequence at the data layer

@@ -63,17 +63,23 @@ function createSeasonState(opts = {}) {
     round:  1,       // increments after each Tribal Council
     phase: "select", // "select" | "campLife" | "challenge" | "tribal" | "elimination" | "merge"
 
-    // ── Season identification (v10.2) ──────────────────────
+    // ── Season identification (v10.2 → v10.11) ─────────────
     // Set by startGame() when the player picks a season from the show
     // page. Null on "freshly constructed but unstarted" states (e.g. the
     // placeholder gameState used while showing the landing screen).
     //   showId:   "survivor"          — matches an entry in src/data/shows.js
     //   seasonId: "survivor-demo"     — matches an entry in src/data/seasons.js
     //   type:     "demo" | "prebuilt" | "custom"
+    //   episodes: array               — v10.11; per-episode schedule for
+    //                                   pre-built seasons. Pulled from
+    //                                   template.episodes by startGame.
+    //                                   Empty / missing → engine falls
+    //                                   back to random challenge picks.
     season: {
       showId:   opts.showId   ?? null,
       seasonId: opts.seasonId ?? null,
       type:     opts.type     ?? null,
+      episodes: opts.episodes ?? [],
     },
 
     // ── People ─────────────────────────────────────────────

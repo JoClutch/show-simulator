@@ -590,6 +590,91 @@ const INDIVIDUAL_CHALLENGES = [
   },
 ];
 
+// ── Per-episode challenge schedule (v10.11) ─────────────────────────────────
+//
+// Pre-built seasons can pin specific challenges to specific episodes via
+// gameState.season.episodes (which startGame copies from template.episodes).
+// This resolver looks up the current episode's entry, finds the named
+// challenge in the right pool, and returns the challenge object — which
+// the screen layer then passes to runChallenge / runIndividualChallenge
+// as a forced override of the random pick.
+//
+// Returns null when:
+//   • The current season has no schedule (gameState.season.episodes is
+//     empty or missing) — the demo case.
+//   • The current episode index has no entry in the schedule — partial
+//     authoring case (Episode 1 scheduled, Episode 2 unscheduled).
+//   • The entry doesn't carry a challenge for this purpose (e.g., an
+//     entry with only `immunity` set, asking for `reward`).
+//   • The named challengeRef can't be found in the appropriate pool —
+//     logs a console.error so misnamed refs surface in dev.
+//
+// Caller treats null as "fall back to random pick" — same behavior as
+// every season had before this resolver existed.
+//
+// Episode numbering: 1-indexed in the data layer (matches gameState.round).
+// We index into the array as round - 1.
+//
+//   purpose: "reward" | "immunity"
+function getScheduledChallenge(state, purpose) {
+  const episodes = state?.season?.episodes;
+  if (!Array.isArray(episodes) || episodes.length === 0) return null;
+
+  const round = state.round ?? 1;
+  const entry = episodes[round - 1];
+  if (!entry) return null;
+
+  const slot = entry[purpose];
+  if (!slot) return null;
+
+  const isMerged = !!state.merged;
+  const pool =
+    purpose === "reward"
+      ? (isMerged ? INDIVIDUAL_REWARD_CHALLENGES : REWARD_CHALLENGES)
+      : (isMerged ? INDIVIDUAL_CHALLENGES        : CHALLENGES);
+
+  // Inline custom challenge — slot has its own name + description (and
+  // optionally weights, reward labels). Used for one-off bespoke
+  // challenges that don't exist in any pool.
+  if (typeof slot.name === "string" && !slot.challengeRef) {
+    return _materializeInlineChallenge(slot, purpose);
+  }
+
+  // Reference into the engine pool by name.
+  const ref = slot.challengeRef;
+  if (typeof ref !== "string" || ref.trim() === "") return null;
+
+  const found = pool.find(c => c.name === ref);
+  if (!found) {
+    console.error(
+      `[getScheduledChallenge] season '${state.season?.seasonId}' episode ${round} ` +
+      `references unknown ${purpose} challengeRef '${ref}'. ` +
+      `Falling back to random pick.`
+    );
+    return null;
+  }
+  return found;
+}
+
+// Builds a complete challenge object from an inline schedule entry.
+// Fills in sensible defaults for any field the author left out so the
+// existing scoring + display code can consume it without special cases.
+function _materializeInlineChallenge(slot, purpose) {
+  const c = {
+    name:                  slot.name,
+    description:           slot.description ?? "",
+    challengeType:         slot.challengeType ?? "mixed",
+    challengeSkillWeights: slot.challengeSkillWeights ?? { physical: 1/3, mental: 1/3, endurance: 1/3 },
+    purpose,
+  };
+  if (purpose === "reward") {
+    c.rewardType    = slot.rewardType    ?? "supplies";
+    c.rewardLabel   = slot.rewardLabel   ?? "the reward";
+    c.rewardSubcopy = slot.rewardSubcopy ?? "";
+  }
+  return c;
+}
+
 // ── Tunable balance constants (v9.2) ─────────────────────────────────────────
 //
 // Centralized so designers can tweak feel without hunting through math.
@@ -633,8 +718,14 @@ const INDIVIDUAL_CLOSE_FINISH_GAP = 1.5;
 // v10.4: optional `pool` argument lets reward challenges reuse this same
 // resolution math without duplicating the function. Default = CHALLENGES
 // (immunity), so existing callers are unchanged.
-function runChallenge(tribes, pool = CHALLENGES) {
-  const challenge = pool[Math.floor(Math.random() * pool.length)];
+//
+// v10.11: optional `forceChallenge` argument lets a pre-built season pin
+// a specific challenge to this round. When non-null, the random pick is
+// skipped and the supplied challenge object is used. Skill-weighting +
+// noise math run identically — only the choice of which challenge is
+// fixed.
+function runChallenge(tribes, pool = CHALLENGES, forceChallenge = null) {
+  const challenge = forceChallenge ?? pool[Math.floor(Math.random() * pool.length)];
 
   const evalA = evaluateTribe(tribes.A, challenge);
   const evalB = evaluateTribe(tribes.B, challenge);
@@ -719,8 +810,10 @@ function calcTribeScore(members, challenge) {
 // the chosen challenge's weights, plus noise. Higher relevant skill = more
 // likely to win; upsets remain possible via the noise term.
 // v10.4: optional `pool` argument; default = INDIVIDUAL_CHALLENGES (immunity).
-function runIndividualChallenge(members, pool = INDIVIDUAL_CHALLENGES) {
-  const challenge = pool[Math.floor(Math.random() * pool.length)];
+// v10.11: optional `forceChallenge` argument; when supplied, pins the
+// challenge instead of picking randomly from the pool.
+function runIndividualChallenge(members, pool = INDIVIDUAL_CHALLENGES, forceChallenge = null) {
+  const challenge = forceChallenge ?? pool[Math.floor(Math.random() * pool.length)];
 
   const randomnessMul = window.DEV_CONFIG?.challengeRandomness ?? 1;
 

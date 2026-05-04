@@ -830,7 +830,16 @@ function startGame(opts = {}) {
 
   applyTemplate(template);
   normalizeAllContestants(CONTESTANTS);
-  gameState = createSeasonState({ showId, seasonId, type: season.type });
+  // v10.11: thread template.episodes through to gameState.season.episodes
+  // so the per-episode challenge resolver can read it. Empty / missing
+  // arrays mean "no schedule" — the engine falls back to random pool
+  // selection, which is the demo-season default behavior.
+  gameState = createSeasonState({
+    showId,
+    seasonId,
+    type:     season.type,
+    episodes: Array.isArray(template.episodes) ? template.episodes : [],
+  });
   assignTribes(CONTESTANTS, gameState);
   initIdols(gameState);
   showScreen("select");

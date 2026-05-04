@@ -81,7 +81,11 @@ function buildTribeRosterHTML(tribeLabel, members, opts = {}) {
 // ── Pre-merge: tribal immunity ────────────────────────────────────────────────
 
 function renderTribalChallengeScreen(container, state) {
-  const result = runChallenge(state.tribes);
+  // v10.11: if the season has a scheduled immunity challenge for this
+  // episode, pass it to runChallenge as a forced override; otherwise
+  // null falls back to the engine's random pick from CHALLENGES.
+  const scheduled = getScheduledChallenge(state, "immunity");
+  const result    = runChallenge(state.tribes, CHALLENGES, scheduled);
 
   const winnerName  = SEASON_CONFIG.tribeNames[result.winner];
   const loserName   = SEASON_CONFIG.tribeNames[result.loser];
@@ -168,8 +172,10 @@ function renderTribalChallengeScreen(container, state) {
 // ── Post-merge: individual immunity ──────────────────────────────────────────
 
 function renderIndividualChallengeScreen(container, state) {
-  const members   = state.tribes.merged;
-  const result    = runIndividualChallenge(members);
+  const members = state.tribes.merged;
+  // v10.11: scheduled override or random from INDIVIDUAL_CHALLENGES.
+  const scheduled = getScheduledChallenge(state, "immunity");
+  const result    = runIndividualChallenge(members, INDIVIDUAL_CHALLENGES, scheduled);
   const player    = state.player;
   const playerWon = result.winner.id === player.id;
 
