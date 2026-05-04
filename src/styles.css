@@ -3227,40 +3227,68 @@ select:focus {
 }
 
 /* ────────────────────────────────────────────────────────────────────────
-   v10.4 — Reward Challenge phase (placeholder UI).
-   Sits between Camp Life phase 1 and the Immunity Challenge. Shares the
-   .event-log + .challenge-type-label patterns with the Immunity screen
-   so the visual family is consistent. The full BrantSteele-style polish
-   (rosters, portraits, dramatic outcome card) lands in the next phase. */
-.reward-outcome-card {
+   v10.5 — Reward Challenge phase (polished UI).
+   Sits between Camp Life phase 1 and the Immunity Challenge. Reuses the
+   existing .challenge-outcome-grid / -cell / .challenge-player-status
+   layouts from the Immunity Challenge screen via new color variants,
+   so the two phases share a visual family while reading distinctly.
+
+   Color choice: reward win = warm green (positive, low-stakes); reward
+   loss = neutral muted (no danger framing, since reward is flavor only
+   and explicitly shouldn't imply Tribal Council risk). Compare with the
+   Immunity screen's .outcome-win (warm) + .outcome-loss (red) which
+   does signal danger. */
+.outcome-reward-win {
+  background-color: var(--green-bg);
+  border: 1px solid var(--green-border);
+}
+.outcome-reward-loss {
+  background-color: var(--bg-raised);
+  border: 1px solid var(--border-dim);
+}
+
+/* Reward-side player-status banner. Mirrors .status-safe / .status-danger
+   structure from the Immunity Challenge screen, but never uses red — a
+   reward loss is disappointing, not dangerous. */
+.status-reward-win {
+  background-color: var(--green-bg);
+  border: 1px solid var(--green-border);
+  color: var(--green-text);
+}
+.status-reward-loss {
   background-color: var(--bg-card);
-  border: 1px solid var(--border-mid);
-  border-left: 3px solid var(--gold);
-  border-radius: 5px;
-  padding: 1.1rem 1.25rem;
+  border: 1px solid var(--border-dim);
+  color: var(--text-dim);
+}
+
+/* Post-merge individual reward winner — mirrors .indiv-immunity-winner
+   structure but with a different glyph (basket / parcel ◈) instead of
+   the immunity necklace ⬡ so the screens read as distinct beats. */
+.indiv-reward-winner {
   text-align: center;
-  margin: 1.25rem 0;
+  margin: 1.5rem 0;
+  padding: 1.5rem 1.25rem;
+  background-color: var(--bg-card);
+  border: 1px solid var(--green-border);
+  border-radius: 6px;
 }
-.reward-outcome-label {
-  font-size: 0.68rem;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  color: var(--text-faint);
-  margin-bottom: 0.4rem;
+.reward-icon {
+  font-size: 1.5rem;
+  color: var(--green-text);
+  margin-bottom: 0.2rem;
+  line-height: 1;
 }
-.reward-outcome-winner {
-  font-size: 1.4rem;
+.reward-winner-name {
+  font-size: 1.5rem;
   font-weight: bold;
-  margin-bottom: 0.5rem;
+  color: var(--green-text);
+  margin-bottom: 0.25rem;
 }
-.reward-outcome-winner-name {
-  color: var(--text-primary);
-}
-.reward-outcome-flavor {
-  font-size: 0.85rem;
-  font-style: italic;
-  margin: 0.35rem 0 0;
-  line-height: 1.45;
+.reward-winner-sub {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-faint);
 }
 
 /* ────────────────────────────────────────────────────────────────────────
