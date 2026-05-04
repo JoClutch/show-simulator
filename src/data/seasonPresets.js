@@ -275,6 +275,14 @@ function applyTemplate(template) {
   SEASON_CONFIG.mergeTriggerCount   = template.merge.triggerCount;
   SEASON_CONFIG.mergeTribeName      = template.merge.tribeName;
   SEASON_CONFIG.mergeTribeColor     = template.merge.tribeColor;
+  // v10.12: optional episode-based merge override for pre-built seasons.
+  // When set to a positive integer N, merge fires when state.round
+  // reaches N — independent of the remaining cast count. Useful for
+  // canonical seasons with a fixed merge episode. Leave null/undefined
+  // to fall back to the count-based trigger above.
+  SEASON_CONFIG.mergeAtEpisode      = (typeof template.merge.atEpisode === "number" && template.merge.atEpisode > 0)
+    ? template.merge.atEpisode
+    : null;
   SEASON_CONFIG.finalCount          = template.finalTribal.finalists;
 
   // v4.2 additions — jury start configuration and idol system toggle.

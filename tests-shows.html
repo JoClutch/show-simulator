@@ -242,6 +242,135 @@ test("future-proofing", "adding a new SEASONS entry surfaces via getSeasonsForSh
   }
 });
 
+// ─── Suite: v10.12 — fixed season rules plumbing ───────────────────────────
+//
+// Verifies that template-level structural rules end up in SEASON_CONFIG
+// where the engine actually reads them. Each test applies a synthetic
+// template and asserts the right SEASON_CONFIG fields got set.
+
+function applyAndCapture(template) {
+  applyTemplate(template);
+  return {
+    name:                SEASON_CONFIG.name,
+    tribesCount:         SEASON_CONFIG.tribesCount,
+    tribeSize:           SEASON_CONFIG.tribeSize,
+    swapTriggerCount:    SEASON_CONFIG.swapTriggerCount,
+    mergeTriggerCount:   SEASON_CONFIG.mergeTriggerCount,
+    mergeTribeName:      SEASON_CONFIG.mergeTribeName,
+    mergeTribeColor:     SEASON_CONFIG.mergeTribeColor,
+    mergeAtEpisode:      SEASON_CONFIG.mergeAtEpisode,
+    finalCount:          SEASON_CONFIG.finalCount,
+    juryStartTrigger:    SEASON_CONFIG.juryStartTrigger,
+    juryStartCount:      SEASON_CONFIG.juryStartCount,
+    idolsEnabled:        SEASON_CONFIG.idolsEnabled,
+    campActionsPerRound: SEASON_CONFIG.campActionsPerRound,
+  };
+}
+
+// Build a template with overridable fields so each test can target one rule.
+function makeTestTemplate(overrides = {}) {
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    meta: {
+      id: "test", name: overrides.name ?? "Test Season", description: "..", isPrebuilt: true,
+    },
+    tribes: { initial: [
+      { label: "A", name: "TA", color: "#aaa", size: 8 },
+      { label: "B", name: "TB", color: "#bbb", size: 8 },
+    ] },
+    swap:  overrides.swap  ?? { enabled: false, triggerCount: null },
+    merge: overrides.merge ?? { triggerCount: 10, tribeName: "M", tribeColor: "#9b59b6" },
+    jury:  overrides.jury  ?? { startTrigger: "atMerge", customStartCount: null },
+    finalTribal: overrides.finalTribal ?? { finalists: 3 },
+    idols:  overrides.idols  ?? { enabled: true },
+    pacing: overrides.pacing ?? { campActionsPerRound: 3 },
+    cast: Array.from({ length: 16 }, (_, i) => ({
+      id: `t${i}`, name: `T${i}`,
+      physicalChallengeSkill: 5, mentalChallengeSkill: 5, enduranceChallengeSkill: 5,
+      social: 5, strategy: 5, suspicion: 0,
+      tribe: i < 8 ? "A" : "B",
+    })),
+  };
+}
+
+test("v10.12 rules", "merge.triggerCount is wired to SEASON_CONFIG.mergeTriggerCount", () => {
+  const cfg = applyAndCapture(makeTestTemplate({
+    merge: { triggerCount: 12, tribeName: "Custom", tribeColor: "#abc123" },
+  }));
+  assertEqual(cfg.mergeTriggerCount, 12);
+  assertEqual(cfg.mergeTribeName,  "Custom");
+  assertEqual(cfg.mergeTribeColor, "#abc123");
+});
+
+test("v10.12 rules", "merge.atEpisode is wired (when set)", () => {
+  const cfg = applyAndCapture(makeTestTemplate({
+    merge: { triggerCount: 10, tribeName: "M", tribeColor: "#9b59b6", atEpisode: 7 },
+  }));
+  assertEqual(cfg.mergeAtEpisode, 7);
+});
+
+test("v10.12 rules", "merge.atEpisode is null when omitted", () => {
+  const cfg = applyAndCapture(makeTestTemplate());
+  assertEqual(cfg.mergeAtEpisode, null);
+});
+
+test("v10.12 rules", "merge.atEpisode rejects non-positive / non-numeric values", () => {
+  // 0, -1, "5", null all become null in SEASON_CONFIG.
+  for (const bad of [0, -1, "5", null, undefined, NaN]) {
+    const cfg = applyAndCapture(makeTestTemplate({
+      merge: { triggerCount: 10, tribeName: "M", tribeColor: "#9b59b6", atEpisode: bad },
+    }));
+    assertEqual(cfg.mergeAtEpisode, null, `value ${JSON.stringify(bad)} should resolve to null`);
+  }
+});
+
+test("v10.12 rules", "finalTribal.finalists is wired to SEASON_CONFIG.finalCount", () => {
+  const cfg2 = applyAndCapture(makeTestTemplate({ finalTribal: { finalists: 2 } }));
+  assertEqual(cfg2.finalCount, 2);
+  const cfg3 = applyAndCapture(makeTestTemplate({ finalTribal: { finalists: 3 } }));
+  assertEqual(cfg3.finalCount, 3);
+});
+
+test("v10.12 rules", "swap.enabled controls swapTriggerCount (true → value, false → null)", () => {
+  const enabled  = applyAndCapture(makeTestTemplate({ swap: { enabled: true,  triggerCount: 12 } }));
+  assertEqual(enabled.swapTriggerCount, 12);
+  const disabled = applyAndCapture(makeTestTemplate({ swap: { enabled: false, triggerCount: 12 } }));
+  assertEqual(disabled.swapTriggerCount, null);
+});
+
+test("v10.12 rules", "jury.startTrigger and customStartCount round-trip", () => {
+  const atMerge = applyAndCapture(makeTestTemplate({
+    jury: { startTrigger: "atMerge", customStartCount: null },
+  }));
+  assertEqual(atMerge.juryStartTrigger, "atMerge");
+  assertEqual(atMerge.juryStartCount,   null);
+
+  const custom = applyAndCapture(makeTestTemplate({
+    jury: { startTrigger: "custom", customStartCount: 9 },
+  }));
+  assertEqual(custom.juryStartTrigger, "custom");
+  assertEqual(custom.juryStartCount,   9);
+});
+
+test("v10.12 rules", "idols.enabled is wired to SEASON_CONFIG.idolsEnabled", () => {
+  const on  = applyAndCapture(makeTestTemplate({ idols: { enabled: true  } }));
+  const off = applyAndCapture(makeTestTemplate({ idols: { enabled: false } }));
+  assertEqual(on.idolsEnabled,  true);
+  assertEqual(off.idolsEnabled, false);
+});
+
+test("v10.12 rules", "pacing.campActionsPerRound round-trips", () => {
+  const cfg = applyAndCapture(makeTestTemplate({ pacing: { campActionsPerRound: 5 } }));
+  assertEqual(cfg.campActionsPerRound, 5);
+});
+
+// Restore the default template so subsequent test files / smoke tests
+// don't see this synthetic configuration.
+test("v10.12 rules", "(cleanup) restores DEFAULT_SEASON_TEMPLATE", () => {
+  applyTemplate(DEFAULT_SEASON_TEMPLATE);
+  assertEqual(SEASON_CONFIG.name, DEFAULT_SEASON_TEMPLATE.meta.name);
+});
+
 // ─── Run ────────────────────────────────────────────────────────────────────
 
 window.addEventListener("DOMContentLoaded", () => {

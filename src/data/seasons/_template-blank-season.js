@@ -108,10 +108,18 @@ const BLANK_SEASON_TEMPLATE = {
   // Required. Merge fires when remaining cast falls to triggerCount.
   // Standard Survivor merge is at 10–13 remaining; tune to match the
   // season being recreated.
+  //
+  // Optional v10.12 field: `atEpisode` — when set to a positive integer,
+  // merge fires the moment gameState.round reaches that number, regardless
+  // of remaining cast count. Useful for canonical seasons with a fixed
+  // merge episode. Either trigger fires first wins, so leaving both set
+  // (atEpisode: 7, triggerCount: 10) is safe — they'll align in a normal
+  // 1-boot-per-episode flow.
   merge: {
     triggerCount: 10,
     tribeName:    "TODO Merge Tribe Name",
     tribeColor:   "#9b59b6",
+    // atEpisode: 7,        // optional — merge AT Episode 7 regardless of count
   },
 
   // ── Jury ────────────────────────────────────────────────────────────────

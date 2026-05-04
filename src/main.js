@@ -759,8 +759,22 @@ function removeFromTribes(contestant) {
 
 // Returns true the one time remaining players hit or fall below the merge
 // trigger. The state.merged guard prevents it from firing again after merge.
+//
+// v10.12: pre-built seasons can additionally specify mergeAtEpisode — an
+// explicit "merge at Episode N" override. When set, merge fires the
+// moment gameState.round reaches that number, regardless of remaining
+// cast count. Useful for canonical seasons with a fixed merge episode.
+// When unset (null/undefined), the count-based trigger below is the
+// only mechanism. Both checks run in advanceRound, so whichever fires
+// first wins.
 function checkForMerge() {
   if (gameState.merged) return false;
+
+  const atEpisode = SEASON_CONFIG.mergeAtEpisode;
+  if (typeof atEpisode === "number" && atEpisode > 0 && gameState.round >= atEpisode) {
+    return true;
+  }
+
   const trigger = SEASON_CONFIG.mergeTriggerCount;
   if (!trigger) return false;
   return getAllActive().length <= trigger;
