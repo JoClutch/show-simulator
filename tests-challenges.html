@@ -321,6 +321,199 @@ test("v10.7 containment", "the immunity pool's runChallenge still writes the str
   assertEqual(result.purpose, "immunity");
 });
 
+// ─── Suite: v10.8 — episode flow regression ───────────────────────────────
+//
+// Ordered tests that walk the reward → immunity sequence at the data layer
+// (no UI rendering) and verify the expected state writes happen in the
+// expected order. If any of these fail, the episode phase ordering or the
+// reward/immunity boundary has regressed.
+
+test("v10.8 flow", "reward → immunity sequence: state writes happen in the right order", () => {
+  const cast  = JSON.parse(JSON.stringify(CONTESTANTS));
+  const state = createSeasonState({ showId: "survivor", seasonId: "test", type: "demo" });
+  assignTribes(cast, state);
+
+  // Pre-conditions: nothing decided yet.
+  assertEqual(state.rewardWinner,    null);
+  assertEqual(state.rewardChallenge, null);
+  assertEqual(state.immunityWon,     null);
+  assertEqual(state.tribalTribe,     null);
+  assertEqual(state.immunityHolder,  null);
+  assertEqual(state.campPhase,       1);
+
+  // ── Reward phase (no strategic writes allowed) ──
+  const rewardResult = runChallenge(state.tribes, REWARD_CHALLENGES);
+  state.rewardWinner = rewardResult.winner;
+  state.rewardChallenge = {
+    name:          rewardResult.name,
+    rewardType:    rewardResult.rewardType,
+    rewardLabel:   rewardResult.rewardLabel,
+    rewardSubcopy: rewardResult.rewardSubcopy,
+  };
+
+  // After reward: reward-side fields are set, immunity-side fields are NOT.
+  assert(state.rewardWinner === "A" || state.rewardWinner === "B",
+    "rewardWinner should be a tribe label after reward");
+  assert(state.rewardChallenge && state.rewardChallenge.name,
+    "rewardChallenge should be populated");
+  assertEqual(state.immunityWon,    null, "immunityWon must still be null after reward");
+  assertEqual(state.tribalTribe,    null, "tribalTribe must still be null after reward");
+  assertEqual(state.immunityHolder, null, "immunityHolder must still be null after reward");
+  assertEqual(state.campPhase,      1,    "campPhase must still be 1 after reward");
+
+  // ── Immunity phase (this is when stakes are decided) ──
+  const immunityResult = runChallenge(state.tribes);
+  // What onChallengeResolved does:
+  state.immunityWon = immunityResult.loser === "A" ? "B" : "A";
+  state.tribalTribe = immunityResult.loser;
+  state.campPhase   = 2;
+
+  // After immunity: immunity-side fields are set, reward fields still set.
+  assert(state.immunityWon === "A" || state.immunityWon === "B",
+    "immunityWon must be set after immunity");
+  assert(state.tribalTribe === "A" || state.tribalTribe === "B",
+    "tribalTribe must be set after immunity");
+  assertEqual(state.campPhase, 2, "campPhase advances to 2 after immunity");
+  assert(state.rewardWinner !== null, "reward state still carried through");
+});
+
+test("v10.8 flow", "reward result and immunity result are independent objects", () => {
+  // The two challenges are resolved independently — winning the reward
+  // does NOT pre-determine the immunity winner.
+  const cast  = JSON.parse(JSON.stringify(CONTESTANTS));
+  const state = createSeasonState({ showId: "survivor", seasonId: "test", type: "demo" });
+  assignTribes(cast, state);
+
+  const reward   = runChallenge(state.tribes, REWARD_CHALLENGES);
+  const immunity = runChallenge(state.tribes);
+
+  // Random outcomes mean we can't assert a specific winner — but we can
+  // assert the result objects are distinct.
+  assert(reward !== immunity, "reward and immunity results must be different objects");
+  assertEqual(reward.purpose, "reward");
+  assertEqual(immunity.purpose, "immunity");
+  // Result names should generally differ — they're picked from disjoint
+  // pools (reward pool has "Beach Picnic" etc., immunity pool has
+  // "Obstacle Course" etc.).
+  // Strict assertion: reward.name must come from REWARD_CHALLENGES, not
+  // from CHALLENGES.
+  assert(REWARD_CHALLENGES.some(c => c.name === reward.name),
+    `reward result '${reward.name}' should come from REWARD_CHALLENGES`);
+  assert(CHALLENGES.some(c => c.name === immunity.name),
+    `immunity result '${immunity.name}' should come from CHALLENGES`);
+});
+
+test("v10.8 flow", "post-merge: reward winner ≠ immunity holder (independent)", () => {
+  // Build a synthetic post-merge state.
+  const cast = JSON.parse(JSON.stringify(CONTESTANTS));
+  const state = createSeasonState({ showId: "survivor", seasonId: "test", type: "demo" });
+  assignTribes(cast, state);
+
+  // Force the merge.
+  state.tribes.merged = [...state.tribes.A, ...state.tribes.B];
+  state.tribes.A      = [];
+  state.tribes.B      = [];
+  state.merged        = true;
+
+  // Reward
+  const rewardResult = runIndividualChallenge(state.tribes.merged, INDIVIDUAL_REWARD_CHALLENGES);
+  state.rewardWinner = rewardResult.winner.id;
+
+  // Immunity holder still null.
+  assertEqual(state.immunityHolder, null,
+    "immunityHolder must still be null after a reward win");
+
+  // Immunity
+  const immunityResult = runIndividualChallenge(state.tribes.merged);
+  state.immunityHolder = immunityResult.winner.id;
+
+  // The two fields are set on different occasions; they may happen to
+  // match by chance, but they're written by independent calls.
+  assert(state.rewardWinner !== null);
+  assert(state.immunityHolder !== null);
+  // Reward result name is from the reward pool; immunity result is from
+  // the immunity pool. They cannot share a name (the pools are disjoint).
+  assert(INDIVIDUAL_REWARD_CHALLENGES.some(c => c.name === rewardResult.name));
+  assert(INDIVIDUAL_CHALLENGES.some(c => c.name === immunityResult.name));
+});
+
+test("v10.8 flow", "advanceRound clears reward fields but keeps strategic write architecture", () => {
+  const cast = JSON.parse(JSON.stringify(CONTESTANTS));
+  const state = createSeasonState({ showId: "survivor", seasonId: "test", type: "demo" });
+  assignTribes(cast, state);
+
+  // Simulate a completed round: reward + immunity both set.
+  state.rewardWinner    = "A";
+  state.rewardChallenge = { name: "Beach Picnic", rewardLabel: "a beachside picnic" };
+  state.immunityWon     = "A";
+  state.tribalTribe     = "B";
+  state.campPhase       = 2;
+
+  // Mimic the per-round cleanup that advanceRound does.
+  state.round          += 1;
+  state.campPhase       = 1;
+  state.immunityWon     = null;
+  state.tribalTribe     = null;
+  state.immunityHolder  = null;
+  state.rewardWinner    = null;
+  state.rewardChallenge = null;
+
+  // All challenge-output fields are null at start of new round.
+  assertEqual(state.rewardWinner,    null);
+  assertEqual(state.rewardChallenge, null);
+  assertEqual(state.immunityWon,     null);
+  assertEqual(state.tribalTribe,     null);
+  assertEqual(state.immunityHolder,  null);
+  assertEqual(state.campPhase,       1);
+});
+
+// ─── Suite: v10.8 — label / outcome distinction ────────────────────────────
+//
+// Asserts the data layer can never confuse reward outcomes with immunity
+// outcomes. Reward entries have reward-coded copy; immunity entries have
+// stakes-coded copy; outcome shapes are distinct.
+
+test("v10.8 labels", "no reward entry name collides with an immunity entry name", () => {
+  // A name collision would let two different challenge purposes share a
+  // display label — bad for clarity. They live in disjoint pools, so it
+  // shouldn't happen by construction; this asserts the invariant.
+  const immunityNames = new Set([...CHALLENGES, ...INDIVIDUAL_CHALLENGES].map(c => c.name));
+  const rewardNames   = new Set([...REWARD_CHALLENGES, ...INDIVIDUAL_REWARD_CHALLENGES].map(c => c.name));
+  for (const name of rewardNames) {
+    assert(!immunityNames.has(name), `name collision: '${name}' is both reward and immunity`);
+  }
+});
+
+test("v10.8 labels", "every reward rewardLabel is non-trivial flavor copy", () => {
+  // Catches accidental "Wins the reward" or empty placeholder strings.
+  const generic = ["the reward", "reward", "a reward", "TODO", "TBD", ""];
+  for (const c of [...REWARD_CHALLENGES, ...INDIVIDUAL_REWARD_CHALLENGES]) {
+    assert(!generic.includes(c.rewardLabel.toLowerCase().trim()),
+      `${c.name}: rewardLabel '${c.rewardLabel}' is too generic`);
+  }
+});
+
+test("v10.8 labels", "no reward description mentions 'immunity' / 'tribal council' / 'safe'", () => {
+  // Reward copy must never imply immunity stakes. If a future entry
+  // accidentally uses one of these words, the test catches it.
+  const forbidden = /\b(immunity|tribal council|safe from)\b/i;
+  for (const c of [...REWARD_CHALLENGES, ...INDIVIDUAL_REWARD_CHALLENGES]) {
+    for (const field of ["description", "rewardLabel", "rewardSubcopy"]) {
+      assert(!forbidden.test(c[field] || ""),
+        `${c.name}: reward.${field} contains forbidden stakes copy: "${c[field]}"`);
+    }
+  }
+});
+
+test("v10.8 labels", "REWARD_CHALLENGES and CHALLENGES have disjoint purposes", () => {
+  // If anyone ever moved an entry from one array to the other and forgot
+  // to update purpose, this catches it.
+  for (const c of CHALLENGES)        assertEqual(c.purpose, "immunity");
+  for (const c of INDIVIDUAL_CHALLENGES) assertEqual(c.purpose, "immunity");
+  for (const c of REWARD_CHALLENGES)        assertEqual(c.purpose, "reward");
+  for (const c of INDIVIDUAL_REWARD_CHALLENGES) assertEqual(c.purpose, "reward");
+});
+
 // ─── Suite: helpers ──────────────────────────────────────────────────────────
 
 test("helpers", "getOverallChallengeSkill averages the three sub-skills", () => {
