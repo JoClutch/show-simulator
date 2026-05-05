@@ -166,7 +166,19 @@ function onCampLifeDone() {
     // of going straight to the Immunity Challenge. The reward screen runs
     // its engine, shows the outcome, and on Continue routes to "challenge"
     // (the existing immunity challenge) via onRewardChallengeResolved.
-    showScreen("rewardChallenge");
+    //
+    // v10.12: pre-built seasons can opt out of the Reward Challenge for
+    // a specific episode by setting skipRewardChallenge:true on the
+    // episode entry. Used for historical seasons that didn't run a
+    // reward challenge that week (e.g., Survivor Borneo Episode 1).
+    // The flag is per-episode — other episodes still run reward as
+    // normal. Demo + custom seasons (no episodes[]) are unaffected.
+    const ep = gameState.season?.episodes?.[gameState.round - 1];
+    if (ep?.skipRewardChallenge) {
+      showScreen("challenge");
+    } else {
+      showScreen("rewardChallenge");
+    }
     return;
   }
 

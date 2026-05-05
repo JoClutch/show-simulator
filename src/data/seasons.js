@@ -62,6 +62,20 @@ const SEASONS = [
     available:   true,
   },
 
+  // v10.12: Survivor Borneo — being authored one episode at a time.
+  // Currently Episode 1 is filled in (Quest for Fire immunity, no
+  // reward challenge). Episodes 2+ fall back to random challenges
+  // until further authoring lands.
+  {
+    id:          "survivor-borneo",
+    showId:      "survivor",
+    name:        "Borneo",
+    description: "The original sixteen. Pagong vs. Tagi, no idols, no swap, Final 2.",
+    type:        "prebuilt",
+    templateRef: "SURVIVOR_BORNEO_SEASON_TEMPLATE",
+    available:   true,
+  },
+
   {
     id:          "survivor-custom",
     showId:      "survivor",
